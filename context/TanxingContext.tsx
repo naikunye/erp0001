@@ -4,8 +4,12 @@ import { Product, Order, Transaction, PurchaseOrder, Toast, Customer, Shipment, 
 import { MOCK_PRODUCTS, MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SHIPMENTS, MOCK_SUPPLIERS, MOCK_INBOUND_SHIPMENTS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS } from '../constants';
 import Logger from '../utils/logger';
 
+// --- Theme Types ---
+export type Theme = 'ios' | 'cyber' | 'obsidian';
+
 // --- State Interface ---
 interface AppState {
+    theme: Theme; // NEW
     products: Product[];
     orders: Order[];
     transactions: Transaction[];
@@ -23,6 +27,7 @@ interface AppState {
 
 // --- Action Types ---
 type Action =
+    | { type: 'SET_THEME'; payload: Theme } // NEW
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
@@ -64,6 +69,7 @@ type Action =
 
 // --- Initial State ---
 const initialState: AppState = {
+    theme: 'ios', // Default Theme
     products: MOCK_PRODUCTS,
     orders: MOCK_ORDERS.map(o => ({
         ...o,
@@ -78,16 +84,16 @@ const initialState: AppState = {
     suppliers: MOCK_SUPPLIERS,
     inboundShipments: MOCK_INBOUND_SHIPMENTS,
     adCampaigns: MOCK_AD_CAMPAIGNS,
-    influencers: MOCK_INFLUENCERS, // NEW
+    influencers: MOCK_INFLUENCERS,
     toasts: [],
     isMobileMenuOpen: false
 };
 
 // --- Reducer ---
 const appReducer = (state: AppState, action: Action): AppState => {
-    // Logger.debug('Dispatching action', action.type); // Optional verbose logging
-    
     switch (action.type) {
+        case 'SET_THEME':
+            return { ...state, theme: action.payload };
         case 'ADD_TOAST':
             return {
                 ...state,
@@ -296,8 +302,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
                 influencers: state.influencers.filter(i => i.id !== action.payload)
             };
         case 'INIT_DATA':
-            Logger.info('Initializing App State');
-            return state;
+            // Load saved theme
+            const savedTheme = localStorage.getItem('tanxing_theme') as Theme;
+            return {
+                ...state,
+                theme: savedTheme || 'ios'
+            };
         default:
             return state;
     }
@@ -320,9 +330,15 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         dispatch({ type: 'INIT_DATA' });
-        // Check for trash cleanup on mount
         dispatch({ type: 'CLEANUP_TRASH' });
     }, []);
+
+    // Persist theme changes
+    useEffect(() => {
+        localStorage.setItem('tanxing_theme', state.theme);
+        // Apply theme class to body
+        document.body.className = `theme-${state.theme}`;
+    }, [state.theme]);
 
     const showToast = (message: string, type: Toast['type']) => {
         dispatch({ type: 'ADD_TOAST', payload: { message, type } });

@@ -83,27 +83,27 @@ const MainLayout: React.FC = () => {
   };
 
   if (authChecking) {
-      return <div className="min-h-screen flex items-center justify-center bg-black"><Loader2 className="w-8 h-8 animate-spin text-cyan-500" /></div>;
+      return <div className="min-h-screen flex items-center justify-center bg-black"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
   }
 
   if (!isAuthenticated) {
       return (
           <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
-              <div className="glass-panel w-full max-w-[380px] p-10 rounded-2xl relative z-10 border border-white/10 shadow-2xl">
+              <div className="ios-glass-panel w-full max-w-[400px] p-10 rounded-3xl relative z-10 border border-white/10 shadow-2xl">
                   <div className="flex flex-col items-center mb-10">
-                      <div className="w-16 h-16 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-xl flex items-center justify-center shadow-[0_0_40px_rgba(0,240,255,0.4)] mb-6 text-white rotate-45 border border-white/20">
-                          <Hexagon className="w-8 h-8 fill-current -rotate-45" />
+                      <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center shadow-2xl mb-6 text-white border border-white/10 backdrop-blur-md">
+                          <Hexagon className="w-8 h-8 fill-current text-blue-400" />
                       </div>
                       <h1 className="text-3xl font-display font-bold text-white tracking-widest uppercase">TANXING</h1>
-                      <p className="text-[10px] text-cyan-400 font-mono mt-1 tracking-[0.3em] uppercase">Quantum OS v5.0</p>
+                      <p className="text-xs text-white/40 font-mono mt-2 tracking-[0.3em] uppercase">Enterprise OS</p>
                   </div>
                   <form onSubmit={handleLogin} className="space-y-6">
                       <div className="space-y-4">
-                          <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all outline-none font-mono" placeholder="OPERATOR ID" />
-                          <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full px-4 py-3 bg-black/30 border border-white/10 rounded-lg text-sm text-white placeholder-slate-500 focus:border-cyan-500 focus:ring-1 focus:ring-cyan-500/50 transition-all outline-none font-mono" placeholder="ACCESS KEY" />
+                          <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="ID" />
+                          <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="PASSWORD" />
                       </div>
-                      <button type="submit" disabled={loginLoading} className="w-full py-3.5 bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98] border border-white/10">
-                          {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>INITIALIZE LINK <ArrowRight className="w-4 h-4" /></>}
+                      <button type="submit" disabled={loginLoading} className="w-full py-3.5 bg-white text-black hover:bg-slate-200 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98]">
+                          {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Login <ArrowRight className="w-4 h-4" /></>}
                       </button>
                   </form>
               </div>
@@ -112,20 +112,25 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden p-2 gap-2 bg-transparent font-sans">
+    <div className="flex h-screen w-screen overflow-hidden p-6 gap-6 font-sans">
       <ToastContainer />
       <GlobalSearch />
       
+      {/* Sidebar */}
       <Sidebar activePage={activePage} onNavigate={setActivePage} onLogout={handleLogout} />
       
-      <div className="flex-1 flex flex-col relative h-full min-w-0 glass-panel rounded-xl shadow-2xl overflow-hidden">
-        <div className="relative z-10">
+      {/* Main Content Area */}
+      <div className="flex-1 flex flex-col relative h-full min-w-0 ios-glass-panel rounded-3xl shadow-2xl overflow-hidden">
+        
+        {/* Header sits on top */}
+        <div className="relative z-20">
             <Header title={getPageTitle(activePage)} />
         </div>
         
-        <main className="flex-1 overflow-y-auto scroll-smooth p-6 relative z-10">
+        {/* Scrollable Content */}
+        <main className="flex-1 overflow-y-auto scroll-smooth p-8 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           <ErrorBoundary>
-            <div className="max-w-[1800px] mx-auto h-full flex flex-col">
+            <div className="max-w-[1600px] mx-auto h-full flex flex-col">
                 {renderContent()}
             </div>
           </ErrorBoundary>

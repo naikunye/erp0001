@@ -239,6 +239,13 @@ const Analytics: React.FC = () => {
           { name: '净利润', value: Math.max(0, dynamicEconomics.profit), fill: '#10b981' },
       ];
 
+      const handleChartClick = (data: any) => {
+          if (data && data.activePayload) {
+              const payload = data.activePayload[0].payload;
+              handleAiAnalysis(`Analyze financial data for Day ${payload.day}: Cash Balance ${payload.balance}, Daily Burn ${payload.burn}. Is the trend sustainable?`);
+          }
+      };
+
       return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
           <div className="lg:col-span-2 holo-card p-6 flex flex-col hud-card scanline-overlay">
@@ -256,7 +263,11 @@ const Analytics: React.FC = () => {
               </div>
               <div className="flex-1 min-h-[300px]">
                   <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={CASH_FLOW_DATA}>
+                      <AreaChart 
+                          data={CASH_FLOW_DATA}
+                          onClick={handleChartClick}
+                          style={{ cursor: 'pointer' }}
+                      >
                           <defs>
                               <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
                                   <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
@@ -271,6 +282,7 @@ const Analytics: React.FC = () => {
                           <Line type="monotone" dataKey="burn" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" name="支出/Burn" />
                       </AreaChart>
                   </ResponsiveContainer>
+                  <p className="text-[10px] text-center text-slate-500 mt-2">点击图表数据点以获取 AI 单日分析</p>
               </div>
           </div>
 

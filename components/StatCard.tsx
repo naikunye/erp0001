@@ -27,39 +27,39 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subValue, trend, tren
   const TrendIcon = trendUp ? ArrowUpRight : ArrowDownRight;
   
   return (
-    <div className="glass-card p-5 flex flex-col justify-between h-full group">
+    <div className="glass-card p-6 flex flex-col justify-between h-full group transition-all hover:scale-[1.02]">
       
       <div className="flex justify-between items-start mb-4 relative z-10">
         <div className="flex flex-col">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                <Activity className="w-3 h-3 opacity-50" />
+            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                <Activity className="w-3.5 h-3.5 opacity-50" />
                 {title}
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-                <h3 className="text-3xl font-display font-bold text-white tracking-wide text-glow">
+                <h3 className="text-4xl font-display font-bold text-white tracking-wide text-glow">
                     {value}
                 </h3>
-                {subValue && <span className="text-xs text-slate-500 font-mono self-end mb-1">{subValue}</span>}
+                {subValue && <span className="text-sm text-slate-500 font-mono self-end mb-1.5 font-bold">{subValue}</span>}
             </div>
         </div>
         
         {Icon && (
-            <div className={`w-10 h-10 rounded-xl bg-gradient-to-br ${colors[accentColor].replace('text-', '').replace('border-', '')} flex items-center justify-center border ${colors[accentColor].split(' ')[2]} opacity-80 group-hover:opacity-100 transition-all shadow-[0_0_15px_rgba(0,0,0,0.2)] group-hover:scale-110`}>
-                <Icon className={`w-5 h-5 ${colors[accentColor].split(' ')[0]}`} />
+            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colors[accentColor].replace('text-', '').replace('border-', '')} flex items-center justify-center border ${colors[accentColor].split(' ')[2]} opacity-80 group-hover:opacity-100 transition-all shadow-[0_0_15px_rgba(0,0,0,0.2)] group-hover:scale-110`}>
+                <Icon className={`w-6 h-6 ${colors[accentColor].split(' ')[0]}`} />
             </div>
         )}
       </div>
       
-      <div className="relative z-10 pt-3 border-t border-white/5 flex items-center justify-between">
+      <div className="relative z-10 pt-4 border-t border-white/5 flex items-center justify-between">
          {trend && (
-            <div className={`flex items-center gap-1 ${trendColor} text-xs font-bold bg-black/30 px-2 py-1 rounded border border-white/5`}>
-                <TrendIcon className="w-3 h-3" /> 
+            <div className={`flex items-center gap-1 ${trendColor} text-sm font-bold bg-black/30 px-2.5 py-1 rounded border border-white/5`}>
+                <TrendIcon className="w-3.5 h-3.5" /> 
                 {trend}
             </div>
          )}
          {/* Simple sparkline or bar */}
-         <div className="h-1 flex-1 mx-3 bg-slate-800 rounded-full overflow-hidden">
-             <div className={`h-full w-2/3 bg-current opacity-60 ${colors[accentColor].split(' ')[0]}`}></div>
+         <div className="h-1.5 flex-1 mx-4 bg-slate-800 rounded-full overflow-hidden">
+             <div className={`h-full w-2/3 bg-current opacity-80 ${colors[accentColor].split(' ')[0]}`}></div>
          </div>
       </div>
     </div>

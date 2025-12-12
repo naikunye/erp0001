@@ -9,7 +9,7 @@ import {
   Sparkles, Calculator, 
   Box, DollarSign, Save,
   Plane, Ship, Info, Factory, Image as ImageIcon, History, FileText, Loader2, Bot,
-  AlertCircle, Trash2
+  AlertCircle, Trash2, RotateCcw
 } from 'lucide-react';
 
 // --- Components ---
@@ -47,9 +47,6 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
         </div>
     );
 };
-
-// ... EditModal Component (Keeping content same, just omitting from this replacement block to keep focus on Inventory list update, assuming EditModal is separate or I can replace the whole file)
-// To ensure integrity, I will include the EditModal in the output but focus changes on the Inventory Component logic.
 
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void }> = ({ product, onClose }) => {
     // Local State for inputs
@@ -202,6 +199,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void }> =
                     </div>
 
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        
                         {/* SECTION 2: Procurement */}
                         <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 relative overflow-hidden shadow-sm">
                             <div className="absolute top-4 left-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-10">2</div>
@@ -243,7 +241,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void }> =
 
                         {/* SECTION 3: Box Specs */}
                         <div className="bg-amber-50/50 dark:bg-amber-950/10 border border-amber-200 dark:border-amber-900/30 rounded-xl p-5 relative overflow-hidden shadow-sm flex flex-col">
-                            {/* ... Box Specs content ... */}
                             <div className="absolute top-4 left-4 bg-amber-100 dark:bg-amber-900 text-amber-600 dark:text-amber-500 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-10">3</div>
                             <div className="flex justify-between items-center mb-6 pl-8">
                                 <h4 className="text-sm font-bold text-amber-900 dark:text-amber-500">箱规设置</h4>
@@ -286,8 +283,170 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void }> =
                         </div>
                     </div>
 
-                    {/* SECTION 4 & 5... (Truncated for brevity but included in output if needed, keeping structure) */}
-                    {/* Assuming rest of EditModal is same as original */}
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* SECTION 4: Logistics */}
+                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 relative overflow-hidden shadow-sm">
+                            <div className="absolute top-4 left-4 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-10">4</div>
+                            <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-6 pl-8">头程物流 (First Leg)</h4>
+                            
+                            <div className="space-y-5 pl-2">
+                                <div className="space-y-1">
+                                    <label className="text-xs font-medium text-slate-500">运输渠道</label>
+                                    <div className="grid grid-cols-2 gap-4">
+                                        <button 
+                                            onClick={() => updateNested('logistics', 'method', 'Air')}
+                                            className={`py-2 text-sm font-medium rounded border flex items-center justify-center gap-2 transition-all ${formData.logistics.method === 'Air' ? 'bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-400' : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                        >
+                                            <Plane className="w-4 h-4" /> 空运 (Air)
+                                        </button>
+                                        <button 
+                                            onClick={() => updateNested('logistics', 'method', 'Sea')}
+                                            className={`py-2 text-sm font-medium rounded border flex items-center justify-center gap-2 transition-all ${formData.logistics.method === 'Sea' ? 'bg-indigo-50 dark:bg-indigo-900/20 border-indigo-200 dark:border-indigo-800 text-indigo-600 dark:text-indigo-400' : 'bg-white dark:bg-slate-950 border-slate-200 dark:border-slate-700 text-slate-500'}`}
+                                        >
+                                            <Ship className="w-4 h-4" /> 海运 (Sea)
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">承运商 / 船司</label>
+                                        <input type="text" value={formData.logistics.carrier || 'Matson/UPS'} onChange={e => updateNested('logistics', 'carrier', e.target.value)} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" placeholder="Matson/UPS" />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">物流追踪号</label>
+                                        <div className="relative">
+                                            <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
+                                            <input type="text" value={formData.logistics.trackingNo} onChange={e => updateNested('logistics', 'trackingNo', e.target.value)} className="w-full pl-9 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" placeholder="Tracking No." />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">空运单价 (CNY/KG)</label>
+                                        <div className="flex">
+                                            <span className="bg-slate-100 dark:bg-slate-800 border border-r-0 border-slate-200 dark:border-slate-700 rounded-l px-2 py-2 text-xs text-slate-500 flex items-center">¥</span>
+                                            <input type="number" value={formData.logistics.unitFreightCost} onChange={e => updateNested('logistics', 'unitFreightCost', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-r px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">计费总重 (Manual)</label>
+                                        <div className="relative">
+                                            <span className="absolute left-3 top-2.5 text-xs text-slate-400">⚖️</span>
+                                            <input type="number" className="w-full pl-9 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" placeholder="0" />
+                                            <span className="absolute right-2 top-2.5 text-[10px] text-slate-400">理论实重: {((formData.suggestedReorder||150) * formData.unitWeight).toFixed(2)}kg</span>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">耗材/贴标费 (¥)</label>
+                                        <input type="number" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" defaultValue={30} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">报关费 (¥)</label>
+                                        <input type="number" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" defaultValue={0} />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">港口/操作费 (¥)</label>
+                                        <input type="number" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" defaultValue={0} />
+                                    </div>
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">目的仓库</label>
+                                        <input type="text" className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-blue-500" defaultValue="火星/休斯顿/美中" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SECTION 5: TikTok / Economics */}
+                        <div className="bg-purple-50/50 dark:bg-purple-900/10 border border-purple-200 dark:border-purple-500/20 rounded-xl p-5 relative overflow-hidden shadow-sm">
+                            <div className="absolute top-4 left-4 bg-purple-100 dark:bg-purple-900 text-purple-600 dark:text-purple-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-10">5</div>
+                            <h4 className="text-sm font-bold text-purple-900 dark:text-purple-100 mb-6 pl-8">TikTok 销售与竞品 (Market Intel)</h4>
+
+                            <div className="space-y-5 pl-2">
+                                <div className="space-y-1">
+                                    <div className="flex justify-between items-center mb-1">
+                                        <label className="text-xs font-bold text-slate-500 uppercase">我方销售价格 ($)</label>
+                                        <button 
+                                            onClick={handleAnalyzePricing}
+                                            disabled={isAnalyzingPrice}
+                                            className="text-[10px] bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-300 px-2 py-0.5 rounded border border-purple-200 dark:border-purple-800 flex items-center gap-1 transition-all disabled:opacity-50 hover:bg-purple-200 dark:hover:bg-purple-900/50"
+                                        >
+                                            {isAnalyzingPrice ? <Loader2 className="w-3 h-3 animate-spin"/> : <Sparkles className="w-3 h-3"/>}
+                                            智能定价
+                                        </button>
+                                    </div>
+                                    <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} className="w-full bg-white dark:bg-slate-950 border border-purple-300 dark:border-purple-500/30 rounded px-3 py-3 text-2xl font-bold text-slate-800 dark:text-white outline-none focus:ring-2 focus:ring-purple-500 shadow-sm" />
+                                    
+                                    {pricingAnalysis && (
+                                        <div className="mt-3 p-3 bg-white dark:bg-purple-900/20 border border-purple-200 dark:border-purple-500/30 rounded-lg animate-in fade-in slide-in-from-top-2 relative shadow-sm">
+                                            <button onClick={() => setPricingAnalysis(null)} className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:text-purple-400 dark:hover:text-white"><X className="w-3 h-3"/></button>
+                                            <div className="flex items-center gap-2 mb-2 text-purple-600 dark:text-purple-300 text-xs font-bold">
+                                                <Bot className="w-3.5 h-3.5" /> AI 定价建议
+                                            </div>
+                                            <div className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed" dangerouslySetInnerHTML={{ __html: pricingAnalysis }}></div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                <div className="space-y-1">
+                                    <div className="flex justify-between">
+                                        <label className="text-xs font-medium text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3"/> 竞品监控</label>
+                                        <span className="text-[10px] bg-slate-800 text-white px-2 py-0.5 rounded cursor-pointer font-medium shadow">AI 攻防分析</span>
+                                    </div>
+                                    <div className="flex gap-2">
+                                        <input type="text" className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-xs dark:text-white outline-none focus:border-red-400" placeholder="竞品链接/ASIN" />
+                                        <div className="flex items-center bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-3 text-xs text-slate-400 min-w-[60px] justify-center">$ 0.00</div>
+                                    </div>
+                                </div>
+
+                                <div className="pt-4 border-t border-purple-200 dark:border-purple-500/20">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Sparkles className="w-4 h-4 text-purple-500" />
+                                        <span className="text-xs font-bold text-purple-900 dark:text-purple-200 uppercase tracking-wider">TikTok 成本结构</span>
+                                    </div>
+                                    
+                                    <div className="grid grid-cols-2 gap-4 mb-3">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-500">平台佣金 (%)</label>
+                                            <input type="number" value={formData.economics.platformFeePercent} onChange={e => updateNested('economics', 'platformFeePercent', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-purple-500" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-500">达人佣金 (%)</label>
+                                            <input type="number" value={formData.economics.creatorFeePercent} onChange={e => updateNested('economics', 'creatorFeePercent', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-purple-500" />
+                                        </div>
+                                    </div>
+                                    
+                                    <div className="space-y-1 mb-3">
+                                        <label className="text-xs font-medium text-slate-500">每单固定费 ($)</label>
+                                        <input type="number" value={formData.economics.fixedCost} onChange={e => updateNested('economics', 'fixedCost', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-purple-500" />
+                                    </div>
+
+                                    <div className="grid grid-cols-2 gap-4 mb-3">
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-500">预估退货率 (%)</label>
+                                            <input type="number" value={formData.economics.refundRatePercent} onChange={e => updateNested('economics', 'refundRatePercent', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-purple-500" />
+                                        </div>
+                                        <div className="space-y-1">
+                                            <label className="text-xs font-medium text-slate-500">尾程派送费 ($)</label>
+                                            <input type="number" value={formData.economics.lastLegShipping} onChange={e => updateNested('economics', 'lastLegShipping', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-purple-500" />
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                        <label className="text-xs font-medium text-slate-500">预估广告费 ($)</label>
+                                        <input type="number" value={formData.economics.adCost} onChange={e => updateNested('economics', 'adCost', parseFloat(e.target.value))} className="w-full bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded px-3 py-2 text-sm dark:text-white outline-none focus:border-purple-500" />
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
                 {/* Footer Actions */}
@@ -370,23 +529,6 @@ const Inventory: React.FC = () => {
                   </div>
                   
                   <div className="flex gap-4 items-center">
-                      {/* AI Strategy Toggle */}
-                      <div className="flex items-center gap-3 bg-indigo-900/20 border border-indigo-500/30 px-4 py-2 rounded-xl">
-                          <div className="p-1.5 bg-indigo-500 rounded-lg text-white shadow-lg shadow-indigo-500/50">
-                              <Sparkles className="w-4 h-4" />
-                          </div>
-                          <div>
-                              <div className="text-xs font-bold text-indigo-300">AI 生命周期待略</div>
-                              <div className="text-[10px] text-indigo-400/60">已启用: 动态调整备货天数</div>
-                          </div>
-                          <div 
-                              className={`w-10 h-5 rounded-full relative cursor-pointer transition-colors ${aiEnabled ? 'bg-indigo-500' : 'bg-slate-700'}`}
-                              onClick={() => setAiEnabled(!aiEnabled)}
-                          >
-                              <div className={`absolute top-1 w-3 h-3 bg-white rounded-full shadow-md transition-all ${aiEnabled ? 'right-1' : 'left-1'}`}></div>
-                          </div>
-                      </div>
-
                       {/* Summary Card */}
                       <div className="bg-white text-slate-900 px-6 py-2 rounded-xl shadow-lg flex items-center gap-6 min-w-[280px]">
                           <div>
@@ -462,7 +604,7 @@ const Inventory: React.FC = () => {
                               </button>
                               <button 
                                   onClick={(e) => handleDelete(e, item.id)}
-                                  className="p-2 hover:bg-red-500/20 rounded text-slate-500 hover:text-red-400 transition-colors"
+                                  className="p-2 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded transition-all shadow-sm"
                                   title="移至回收站"
                               >
                                   <Trash2 className="w-4 h-4" />

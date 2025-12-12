@@ -212,12 +212,16 @@ const Finance: React.FC = () => {
   // --- Custom Tooltips ---
   const CustomAreaTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
+      const net = (payload[0].value - payload[1].value);
       return (
-        <div className="bg-[#090C14] border border-slate-700 p-3 rounded-lg shadow-xl text-xs">
-          <p className="font-bold text-slate-300 mb-1">{label}</p>
-          <div className="flex gap-4">
-             <div className="text-emerald-400">收入: {formatMoney(payload[0].value)}</div>
-             <div className="text-red-400">支出: {formatMoney(payload[1].value)}</div>
+        <div className="bg-[#090C14] border border-slate-700 p-3 rounded-lg shadow-xl text-xs backdrop-blur-md">
+          <p className="font-bold text-slate-300 mb-2 border-b border-slate-700 pb-1">{label}</p>
+          <div className="flex flex-col gap-1">
+             <div className="flex justify-between gap-4 text-emerald-400"><span>收入</span> <span className="font-mono">{formatMoney(payload[0].value)}</span></div>
+             <div className="flex justify-between gap-4 text-red-400"><span>支出</span> <span className="font-mono">{formatMoney(payload[1].value)}</span></div>
+             <div className={`flex justify-between gap-4 pt-1 mt-1 border-t border-slate-800 ${net >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
+                 <span>结余</span> <span className="font-mono">{formatMoney(net)}</span>
+             </div>
           </div>
         </div>
       );
@@ -352,7 +356,7 @@ const Finance: React.FC = () => {
                                 <PieIcon className="w-4 h-4 text-blue-500" /> 支出结构 (Breakdown)
                             </h3>
                             {filterCategory !== 'All' && (
-                                <button onClick={() => setFilterCategory('All')} className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-300 hover:text-white flex items-center gap-1">
+                                <button onClick={() => setFilterCategory('All')} className="text-[10px] bg-slate-800 px-2 py-1 rounded text-slate-300 hover:text-white flex items-center gap-1 transition-all">
                                     <X className="w-3 h-3" /> 清除筛选
                                 </button>
                             )}
@@ -377,6 +381,8 @@ const Finance: React.FC = () => {
                                                 key={`cell-${index}`} 
                                                 fill={PIE_COLORS[index % PIE_COLORS.length]} 
                                                 opacity={filterCategory === 'All' || filterCategory === entry.name ? 1 : 0.3}
+                                                stroke={filterCategory === entry.name ? '#fff' : 'none'}
+                                                strokeWidth={filterCategory === entry.name ? 2 : 0}
                                             />
                                         ))}
                                     </Pie>
