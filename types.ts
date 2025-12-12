@@ -77,6 +77,7 @@ export interface Product {
   id: string;
   name: string;
   sku: string;
+  image?: string; // NEW: Product Image
   tags?: string[]; 
   category: string;
   stock: number; 

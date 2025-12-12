@@ -3,85 +3,43 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  BarChart, Bar, Legend, AreaChart, Area, PieChart, Pie, Cell, 
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis, LabelList
+  BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis
 } from 'recharts';
 import { 
-  TrendingDown, DollarSign, Box, Activity, AlertTriangle, Layers, Zap, 
-  Wallet, Truck, Users, Calculator, Sliders, RefreshCw, Eye, ThumbsDown, ThumbsUp,
-  BrainCircuit, Loader2, Sparkles, X, ChevronRight, Megaphone, Target, 
-  MousePointerClick, Play, Pause, RotateCcw, Map as MapIcon, Globe,
-  Video, Image as ImageIcon, MessageSquare, Search, Tag, ArrowRight,
-  TrendingUp, ShoppingCart, Star, Filter
+  DollarSign, Activity, Truck, Calculator, RefreshCw, 
+  BrainCircuit, Loader2, Sparkles, X, Megaphone,
+  Video, Play, Map as MapIcon, Globe,
+  Wallet, Search, ArrowRight, Target, ShoppingBag, TrendingUp
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI } from "@google/genai";
+import { Product } from '../types';
+import { WAREHOUSES } from '../constants';
 
 // --- VISUAL CONSTANTS ---
 const COLORS = {
   primary: '#00F0FF', // Cyan
   secondary: '#BD00FF', // Purple
-  tiktok: '#ff0050',  // TikTok Red
-  tiktokBlue: '#00f2ea', // TikTok Blue
   success: '#10b981', // Emerald
   warning: '#f59e0b', // Amber
   danger: '#ef4444', // Red
   text: '#94a3b8', // Slate-400
   grid: 'rgba(255,255,255,0.05)',
-  bgCard: 'rgba(13, 17, 28, 0.65)'
 };
-
-// ... [Existing Mock Data kept as is for brevity, assume GLOBAL_INVENTORY, etc. are defined] ...
-const CASH_FLOW_DATA = [
-    { day: '1', balance: 50000, burn: 2000 },
-    { day: '5', balance: 48000, burn: 4000 },
-    { day: '10', balance: 65000, burn: 1500 }, 
-    { day: '15', balance: 55000, burn: 10000 }, 
-    { day: '20', balance: 52000, burn: 3000 },
-    { day: '25', balance: 70000, burn: 2000 }, 
-    { day: '30', balance: 68000, burn: 2500 },
-];
-
-const GLOBAL_INVENTORY = [
-    { id: 'US-W', name: '美西仓 (LA)', stock: 1250, lat: 34, long: -118, color: '#00F0FF', type: 'FBA' },
-    { id: 'US-E', name: '美东仓 (NY)', stock: 450, lat: 40, long: -74, color: '#BD00FF', type: '3PL' },
-    { id: 'CN', name: '深圳总仓', stock: 5000, lat: 22, long: 114, color: '#10b981', type: 'Local' },
-    { id: 'EU', name: '德国仓 (FRA)', stock: 800, lat: 50, long: 8, color: '#f59e0b', type: 'FBA' },
-];
-
-const CREATIVE_GALLERY = [
-    { id: 1, type: 'video', thumb: 'bg-pink-900/40', score: 9.2, ctr: '2.8%', title: '开箱钩子视频', retention: [100, 95, 80, 60, 45, 30] },
-    { id: 2, type: 'image', thumb: 'bg-blue-900/40', score: 7.5, ctr: '1.2%', title: '生活方式展示图', retention: [] },
-    { id: 3, type: 'video', thumb: 'bg-purple-900/40', score: 8.8, ctr: '2.4%', title: '痛点/解决方案', retention: [100, 85, 70, 65, 55, 50] },
-];
-
-const WORD_CLOUD = [
-    { text: '发货快', value: 80, sentiment: 'pos' },
-    { text: '质量好', value: 65, sentiment: 'pos' },
-    { text: '太贵', value: 30, sentiment: 'neu' },
-    { text: '包装破损', value: 15, sentiment: 'neg' },
-    { text: '颜色发错', value: 10, sentiment: 'neg' },
-    { text: '客服棒', value: 45, sentiment: 'pos' },
-];
-
-const REVIEWS_DB = [
-    { id: 1, user: "Mike T.", rating: 5, text: "Fast shipping! Arrived in 2 days.", tag: "发货快" },
-    { id: 2, user: "Sarah J.", rating: 5, text: "Really fast shipping, love it.", tag: "发货快" },
-    { id: 3, user: "Anon", rating: 2, text: "Expensive for what it is.", tag: "太贵" },
-    { id: 4, user: "David", rating: 1, text: "Broken seal upon arrival.", tag: "包装破损" },
-];
 
 // --- Custom HUD Tooltip ---
 const CustomHUDTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
         return (
-            <div className="bg-black/90 border border-neon-cyan/30 p-3 rounded-lg shadow-[0_0_15px_rgba(0,240,255,0.2)] backdrop-blur-md">
-                <p className="text-[10px] text-neon-cyan font-bold font-mono mb-1 border-b border-neon-cyan/20 pb-1">{label}</p>
+            <div className="bg-black/90 border border-cyan-500/30 p-3 rounded-lg shadow-[0_0_15px_rgba(0,240,255,0.2)] backdrop-blur-md z-50">
+                <p className="text-[10px] text-cyan-400 font-bold font-mono mb-1 border-b border-cyan-500/20 pb-1">{label}</p>
                 {payload.map((entry: any, index: number) => (
                     <div key={index} className="flex items-center gap-2 text-xs font-mono">
                         <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: entry.stroke || entry.fill }}></div>
                         <span className="text-slate-300">{entry.name}:</span>
-                        <span className="text-white font-bold">{entry.value?.toLocaleString()}</span>
+                        <span className="text-white font-bold">
+                            {typeof entry.value === 'number' ? entry.value.toLocaleString(undefined, {maximumFractionDigits: 2}) : entry.value}
+                        </span>
                     </div>
                 ))}
             </div>
@@ -90,7 +48,8 @@ const CustomHUDTooltip = ({ active, payload, label }: any) => {
     return null;
 };
 
-// 1. Warehouse Detail Modal (unchanged logic, updated style)
+// --- Modals ---
+
 const WarehouseDetailModal = ({ node, onClose }: { node: any, onClose: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
         <div className="ios-glass-panel w-full max-w-lg rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
@@ -98,85 +57,79 @@ const WarehouseDetailModal = ({ node, onClose }: { node: any, onClose: () => voi
                 <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full shadow-[0_0_10px_currentColor]" style={{backgroundColor: node.color, color: node.color}}></div>
                     <h3 className="font-bold text-white tracking-widest">{node.name}</h3>
-                    <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-slate-400 border border-white/10">{node.type}</span>
+                    <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-slate-400 border border-white/10">{node.region}</span>
                 </div>
                 <button onClick={onClose}><X className="w-5 h-5 text-slate-500 hover:text-white"/></button>
             </div>
             <div className="p-6">
-                <div className="flex justify-between items-center mb-6">
-                    <div>
-                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider">总库存 (Total)</div>
-                        <div className="text-2xl font-bold text-white font-mono text-glow">{node.stock.toLocaleString()}</div>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                    <div className="bg-white/5 p-3 rounded-lg">
+                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">总库存量 (Qty)</div>
+                        <div className="text-2xl font-bold text-white font-mono text-glow">{node.stockCount.toLocaleString()} pcs</div>
                     </div>
-                    {/* ... other stats ... */}
+                    <div className="bg-white/5 p-3 rounded-lg">
+                        <div className="text-xs text-slate-500 uppercase font-bold tracking-wider mb-1">库存货值 (Value)</div>
+                        <div className="text-2xl font-bold text-emerald-400 font-mono text-glow">¥{node.stockValue.toLocaleString()}</div>
+                    </div>
                 </div>
-                {/* ... list ... */}
+                <div>
+                    <h4 className="text-xs font-bold text-slate-400 mb-2 uppercase">主要 SKU 分布</h4>
+                    <div className="space-y-2 max-h-40 overflow-y-auto pr-2 custom-scrollbar">
+                        {node.topProducts.map((p: any, i: number) => (
+                            <div key={i} className="flex justify-between items-center text-xs border-b border-white/5 pb-1">
+                                <span className="text-slate-300">{p.sku}</span>
+                                <span className="text-white font-mono">{p.qty}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
             </div>
-            {/* ... footer ... */}
         </div>
     </div>
 );
 
-// ... CreativeDetailModal similar updates ...
 const CreativeDetailModal = ({ creative, onClose }: { creative: any, onClose: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
         <div className="ios-glass-panel w-full max-w-4xl h-[80vh] rounded-xl shadow-2xl overflow-hidden flex animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-            {/* Left: Player */}
             <div className="w-1/3 bg-black flex items-center justify-center relative border-r border-white/10">
-                <div className={`w-full aspect-[9/16] ${creative.thumb} flex items-center justify-center opacity-80`}>
+                <div className={`w-full aspect-[9/16] bg-gradient-to-b from-slate-800 to-black flex items-center justify-center opacity-80`}>
                     <Play className="w-12 h-12 text-white/80" />
                 </div>
-                {/* ... */}
+                <div className="absolute bottom-4 left-4 right-4 text-center">
+                    <span className="text-xs font-mono text-slate-500">{creative.name}</span>
+                </div>
             </div>
-            {/* Right: Stats */}
             <div className="flex-1 p-6 flex flex-col overflow-y-auto">
                 <div className="flex justify-between items-start mb-6">
                     <div>
                         <h2 className="text-xl font-bold text-white">素材深度分析</h2>
-                        <p className="text-xs text-slate-500 font-mono mt-1">ID: {creative.id} • AI 评分</p>
+                        <p className="text-xs text-slate-500 font-mono mt-1">Platform: {creative.platform} • Status: {creative.status}</p>
                     </div>
                     <button onClick={onClose}><X className="w-6 h-6 text-slate-500 hover:text-white"/></button>
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 mb-8">
                     <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
-                        <div className="text-xs text-slate-500 uppercase">AI 评分</div>
-                        <div className="text-2xl font-bold text-emerald-400 text-glow-green">{creative.score}</div>
+                        <div className="text-xs text-slate-500 uppercase">ROAS</div>
+                        <div className="text-2xl font-bold text-emerald-400 text-glow-green">{creative.roas}</div>
                     </div>
                     <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
                         <div className="text-xs text-slate-500 uppercase">CTR 点击率</div>
-                        <div className="text-2xl font-bold text-blue-400 text-glow">{creative.ctr}</div>
+                        <div className="text-2xl font-bold text-blue-400 text-glow">{creative.ctr}%</div>
                     </div>
                     <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
-                        <div className="text-xs text-slate-500 uppercase">3s 完播率</div>
-                        <div className="text-2xl font-bold text-purple-400 text-glow-purple">42%</div>
+                        <div className="text-xs text-slate-500 uppercase">转化数 (Sales)</div>
+                        <div className="text-2xl font-bold text-purple-400 text-glow-purple">{creative.sales}</div>
                     </div>
                 </div>
 
                 <div className="flex-1">
                     <h4 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
                         <Activity className="w-4 h-4 text-orange-500" /> 
-                        受众留存曲线 (Retention)
+                        趋势分析 (Trend)
                     </h4>
-                    <div className="h-48 w-full bg-black/20 rounded-xl border border-white/10 p-2">
-                        {creative.retention.length > 0 ? (
-                            <ResponsiveContainer width="100%" height="100%">
-                                <AreaChart data={creative.retention.map((v:number, i:number) => ({sec: i, val: v}))}>
-                                    <defs>
-                                        <linearGradient id="colorRet" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%" stopColor="#f97316" stopOpacity={0.6}/>
-                                            <stop offset="95%" stopColor="#f97316" stopOpacity={0}/>
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
-                                    <XAxis hide />
-                                    <Tooltip content={<CustomHUDTooltip />} />
-                                    <Area type="monotone" dataKey="val" stroke="#f97316" fill="url(#colorRet)" strokeWidth={2} />
-                                </AreaChart>
-                            </ResponsiveContainer>
-                        ) : (
-                            <div className="h-full flex items-center justify-center text-slate-600 text-xs">暂无留存数据</div>
-                        )}
+                    <div className="h-48 w-full bg-black/20 rounded-xl border border-white/10 p-2 flex items-center justify-center text-slate-500 text-xs">
+                        [此处展示该素材过去30天的点击与转化趋势图表]
                     </div>
                 </div>
             </div>
@@ -185,15 +138,13 @@ const CreativeDetailModal = ({ creative, onClose }: { creative: any, onClose: ()
 );
 
 const Analytics: React.FC = () => {
-  const { state, showToast } = useTanxing();
+  const { state, showToast, dispatch } = useTanxing();
   const [activeTab, setActiveTab] = useState<'finance' | 'supply' | 'ads' | 'market'>('finance');
   
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   const [selectedNode, setSelectedNode] = useState<any>(null);
   const [selectedCreative, setSelectedCreative] = useState<any>(null);
-  const [reviewFilter, setReviewFilter] = useState<string | null>(null);
-  const [simulatorMode, setSimulatorMode] = useState(false);
 
   const handleAiAnalysis = async (context: string) => {
       setIsAiThinking(true);
@@ -207,159 +158,174 @@ const Analytics: React.FC = () => {
           });
           setAiInsight(response.text);
       } catch (e) {
-          setAiInsight("AI 服务暂时不可用。");
+          setAiInsight("AI 服务暂时不可用 (API Key required).");
       } finally {
           setIsAiThinking(false);
       }
   };
 
-  const handleGeneratePO = (sku: string) => {
-      if (confirm(`确认要为 ${sku} 生成采购建议单吗？`)) {
-          showToast(`已生成 ${sku} 的草稿采购单 (PO-${Date.now().toString().slice(-4)})`, 'success');
-      }
-  };
-
-  // 1. FINANCE VIEW
+  // --- 1. FINANCE VIEW (Real Data) ---
   const FinanceView = () => {
-      const [priceSim, setPriceSim] = useState(29.99);
+      // Simulator State
+      const [selectedProductId, setSelectedProductId] = useState<string>(state.products[0]?.id || '');
+      const [simPrice, setSimPrice] = useState(0);
       
-      const dynamicEconomics = useMemo(() => {
-          const cost = 8.5 + 4.2 + 6.0 + 0.5; // Fixed costs
-          const fees = priceSim * (4.5 / 29.99); // Variable fees approx
-          const profit = priceSim - cost - fees;
-          const margin = (profit / priceSim) * 100;
-          return { profit, margin, fees };
-      }, [priceSim]);
+      const selectedProduct = useMemo(() => 
+          state.products.find(p => p.id === selectedProductId), 
+      [selectedProductId, state.products]);
 
-      const SIM_DATA = [
-          { name: '生产成本', value: 8.5, fill: '#ef4444' },
-          { name: 'FBA/物流', value: 4.2, fill: '#f59e0b' },
-          { name: '平台费用', value: dynamicEconomics.fees, fill: '#3b82f6' },
-          { name: '广告支出 (CPA)', value: 6.0, fill: '#8b5cf6' },
-          { name: '净利润', value: Math.max(0, dynamicEconomics.profit), fill: '#10b981' },
-      ];
+      // Initialize price when product changes
+      useEffect(() => {
+          if (selectedProduct) setSimPrice(selectedProduct.price);
+      }, [selectedProduct]);
 
-      // Data for Unit Economics (Moved from Dashboard)
-      const UNIT_ECONOMICS_DATA = [
-        {
-          name: 'MAD ACID 赛博卫衣',
-          sku: 'MA-001',
-          total: 15.62,
-          breakdown: [
-            { label: '货值', value: 6.5, color: '#3b82f6', percent: 41 }, // blue-500
-            { label: '头程', value: 2.5, color: '#f97316', percent: 16 }, // orange-500
-            { label: '尾程', value: 3.5, color: '#a855f7', percent: 22 }, // purple-500
-            { label: '佣金', value: 1.12, color: '#ec4899', percent: 8 }, // pink-500
-            { label: '广告', value: 2.0, color: '#64748b', percent: 13 }  // slate-500
-          ]
-        },
-        {
-          name: 'Carplay Q1M 车机盒',
-          sku: 'CP-Q1M',
-          total: 25.37,
-          breakdown: [
-            { label: '货值', value: 10.5, color: '#3b82f6', percent: 41 },
-            { label: '头程', value: 1.2, color: '#f97316', percent: 5 },
-            { label: '尾程', value: 4.0, color: '#a855f7', percent: 16 },
-            { label: '佣金', value: 4.67, color: '#ec4899', percent: 18 },
-            { label: '广告', value: 5.0, color: '#64748b', percent: 20 }
-          ]
-        },
-        {
-          name: 'AI BOX2 (Fan Edition)',
-          sku: 'BOX2-NEW',
-          total: 42.52,
-          breakdown: [
-            { label: '货值', value: 18.0, color: '#3b82f6', percent: 42 },
-            { label: '头程', value: 0.8, color: '#f97316', percent: 2 },
-            { label: '尾程', value: 4.5, color: '#a855f7', percent: 11 },
-            { label: '佣金', value: 11.22, color: '#ec4899', percent: 26 },
-            { label: '广告', value: 8.0, color: '#64748b', percent: 19 }
-          ]
-        }
-      ];
+      // Dynamic Calculation for Simulator
+      const simData = useMemo(() => {
+          if (!selectedProduct) return [];
+          const cost = selectedProduct.costPrice || 0; // RMB usually, let's assume converted or displayed as base unit
+          const logistics = selectedProduct.logistics?.unitFreightCost || 0;
+          const fees = simPrice * ((selectedProduct.economics?.platformFeePercent || 0) / 100);
+          const ads = selectedProduct.economics?.adCost || 0;
+          const profit = simPrice - (cost/7.2) - logistics - fees - ads; // Simple conversion assumption: Cost is CNY, others USD. 
+          // Note: In a real app, strict currency handling is needed. Here we assume Product Cost is CNY and others are USD for the simulator visuals.
+          // Let's normalize to USD for the chart.
+          const costUSD = cost / 7.2;
+          
+          return [
+              { name: '货值 (COGS)', value: costUSD, fill: '#3b82f6' },
+              { name: '物流 (Freight)', value: logistics, fill: '#f59e0b' },
+              { name: '平台佣金 (Fees)', value: fees, fill: '#ec4899' },
+              { name: '广告 (Ads)', value: ads, fill: '#8b5cf6' },
+              { name: '净利润 (Profit)', value: Math.max(0, profit), fill: '#10b981' },
+          ];
+      }, [selectedProduct, simPrice]);
 
-      const handleChartClick = (data: any) => {
-          if (data && data.activePayload) {
-              const payload = data.activePayload[0].payload;
-              handleAiAnalysis(`Analyze financial data for Day ${payload.day}: Cash Balance ${payload.balance}, Daily Burn ${payload.burn}. Is the trend sustainable?`);
-          }
-      };
+      const profitMargin = useMemo(() => {
+          if (!simData.length || simPrice === 0) return 0;
+          const profit = simData.find(d => d.name.includes('利润'))?.value || 0;
+          return (profit / simPrice) * 100;
+      }, [simData, simPrice]);
+
+      // Real Cash Flow Data
+      const cashFlowData = useMemo(() => {
+          const agg: Record<string, { income: number, expense: number, date: string }> = {};
+          // Sort transactions by date
+          const sortedTx = [...state.transactions].sort((a,b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+          
+          sortedTx.forEach(tx => {
+              const date = tx.date; // YYYY-MM-DD
+              if (!agg[date]) agg[date] = { income: 0, expense: 0, date };
+              // Simple currency normalization for chart (assuming 1 USD = 7.2 CNY)
+              const amountUSD = tx.currency === 'CNY' ? tx.amount / 7.2 : tx.amount;
+              
+              if (tx.type === 'income') agg[date].income += amountUSD;
+              else agg[date].expense += amountUSD;
+          });
+
+          // Convert to cumulative balance array (starting from 0 for the period)
+          let currentBalance = 50000; // Mock starting balance
+          return Object.values(agg).map(day => {
+              currentBalance += (day.income - day.expense);
+              return {
+                  date: day.date.slice(5), // MM-DD
+                  balance: parseFloat(currentBalance.toFixed(2)),
+                  income: parseFloat(day.income.toFixed(2)),
+                  expense: parseFloat(day.expense.toFixed(2))
+              };
+          });
+      }, [state.transactions]);
 
       return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              {/* Cash Flow Chart */}
               <div className="lg:col-span-2 ios-glass-card p-6 flex flex-col">
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                           <DollarSign className="w-4 h-4 text-emerald-400" /> 
-                          资金流向 (Cash Flow & P&L)
+                          实时资金流 (Real-time Cash Flow)
                       </h3>
                       <button 
-                        onClick={() => handleAiAnalysis("Cash Flow is positive but burn rate increased by 15% due to inventory stocking.")}
+                        onClick={() => handleAiAnalysis(`Based on the chart data: Ending Balance ${cashFlowData[cashFlowData.length-1]?.balance}, Trend is ${cashFlowData[cashFlowData.length-1]?.balance > cashFlowData[0]?.balance ? 'Positive' : 'Negative'}. Provide financial advice.`)}
                         className="text-[10px] bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-1"
                       >
                           <BrainCircuit className="w-3 h-3" /> 资金诊断
                       </button>
                   </div>
                   <div className="flex-1 min-h-[300px]">
-                      <ResponsiveContainer width="100%" height="100%">
-                          <AreaChart 
-                              data={CASH_FLOW_DATA}
-                              onClick={handleChartClick}
-                              style={{ cursor: 'pointer' }}
-                          >
-                              <defs>
-                                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
-                                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                                  </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-                              <XAxis dataKey="day" stroke={COLORS.text} tick={{fontSize: 10, fontFamily: 'monospace'}} axisLine={false} tickLine={false} />
-                              <YAxis stroke={COLORS.text} tick={{fontSize: 10, fontFamily: 'monospace'}} axisLine={false} tickLine={false} />
-                              <Tooltip content={<CustomHUDTooltip />} />
-                              <Area type="monotone" dataKey="balance" stroke="#10b981" fillOpacity={1} fill="url(#colorBalance)" strokeWidth={2} name="现金余额" />
-                              <Line type="monotone" dataKey="burn" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" name="支出/Burn" />
-                          </AreaChart>
-                      </ResponsiveContainer>
-                      <p className="text-[10px] text-center text-slate-500 mt-2">点击图表数据点以获取 AI 单日分析</p>
+                      {cashFlowData.length > 0 ? (
+                          <ResponsiveContainer width="100%" height="100%">
+                              <AreaChart data={cashFlowData}>
+                                  <defs>
+                                      <linearGradient id="colorBal" x1="0" y1="0" x2="0" y2="1">
+                                          <stop offset="5%" stopColor="#10b981" stopOpacity={0.4}/>
+                                          <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                      </linearGradient>
+                                  </defs>
+                                  <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
+                                  <XAxis dataKey="date" stroke={COLORS.text} tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+                                  <YAxis stroke={COLORS.text} tick={{fontSize: 10}} axisLine={false} tickLine={false} />
+                                  <Tooltip content={<CustomHUDTooltip />} />
+                                  <Area type="monotone" dataKey="balance" stroke="#10b981" fill="url(#colorBal)" strokeWidth={2} name="现金余额 ($)" />
+                                  <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" dot={false} name="当日支出 ($)" />
+                              </AreaChart>
+                          </ResponsiveContainer>
+                      ) : (
+                          <div className="h-full flex items-center justify-center text-slate-500">暂无交易数据</div>
+                      )}
                   </div>
               </div>
 
-              {/* Unit Economics Simulator */}
+              {/* Interactive Simulator */}
               <div className="lg:col-span-1 ios-glass-card p-6 flex flex-col">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
                       <Calculator className="w-4 h-4 text-purple-400" /> 
-                      单品模型模拟 (Simulator)
+                      单品模型模拟器 (Unit Economics)
                   </h3>
                   
-                  <div className="mb-4 bg-black/40 p-3 rounded-lg border border-white/10">
-                      <label className="text-xs text-slate-400 block mb-1">定价模拟 (Price): ${priceSim}</label>
-                      <input 
-                          type="range" 
-                          min="15" 
-                          max="50" 
-                          step="0.5" 
-                          value={priceSim} 
-                          onChange={(e) => setPriceSim(parseFloat(e.target.value))}
-                          className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-neon-purple"
-                      />
+                  <div className="mb-4 space-y-4">
+                      <div>
+                          <label className="text-xs text-slate-400 block mb-1">选择产品 (Select SKU)</label>
+                          <select 
+                              value={selectedProductId} 
+                              onChange={(e) => setSelectedProductId(e.target.value)}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white outline-none focus:border-purple-500"
+                          >
+                              {state.products.map(p => (
+                                  <option key={p.id} value={p.id}>{p.sku} - {p.name.substring(0, 15)}...</option>
+                              ))}
+                          </select>
+                      </div>
+                      <div className="bg-black/40 p-3 rounded-lg border border-white/10">
+                          <div className="flex justify-between text-xs mb-1">
+                              <span className="text-slate-400">模拟售价 (Sale Price)</span>
+                              <span className="text-white font-mono font-bold">${simPrice.toFixed(2)}</span>
+                          </div>
+                          <input 
+                              type="range" 
+                              min="0" 
+                              max="200" 
+                              step="0.5" 
+                              value={simPrice} 
+                              onChange={(e) => setSimPrice(parseFloat(e.target.value))}
+                              className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+                          />
+                      </div>
                   </div>
 
                   <div className="relative h-48 mb-2">
                       <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                               <Pie
-                                  data={SIM_DATA}
+                                  data={simData}
                                   innerRadius={50}
                                   outerRadius={70}
                                   paddingAngle={2}
                                   dataKey="value"
                                   stroke="none"
                               >
-                                  {SIM_DATA.map((entry, index) => (
-                                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(0,0,0,0)" style={{filter: `drop-shadow(0 0 5px ${entry.fill}80)`}} />
+                                  {simData.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.fill} />
                                   ))}
                               </Pie>
                               <Tooltip formatter={(val:number) => `$${val.toFixed(2)}`} content={<CustomHUDTooltip />} />
@@ -367,107 +333,115 @@ const Analytics: React.FC = () => {
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                           <span className="text-xs text-slate-500">利润率</span>
-                          <span className={`text-xl font-bold ${dynamicEconomics.margin > 0 ? 'text-emerald-400 text-glow-green' : 'text-red-400'}`}>
-                              {dynamicEconomics.margin.toFixed(1)}%
+                          <span className={`text-xl font-bold ${profitMargin > 20 ? 'text-emerald-400 text-glow-green' : profitMargin > 0 ? 'text-orange-400' : 'text-red-400'}`}>
+                              {profitMargin.toFixed(1)}%
                           </span>
                       </div>
                   </div>
                   
-                  <div className="space-y-2 text-xs border-t border-white/10 pt-2">
-                      <div className="flex justify-between">
-                          <span className="text-slate-400">净利润 (Profit)</span>
-                          <span className="text-white font-mono font-bold text-glow">${dynamicEconomics.profit.toFixed(2)}</span>
-                      </div>
-                  </div>
-              </div>
-          </div>
-
-          {/* Moved Unit Economics Breakdown */}
-          <div className="ios-glass-card p-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-                  <div>
-                      <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
-                          <span className="w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></span>
-                          TikTok 成本结构拆解 (Unit Economics Breakdown)
-                      </h3>
-                      <p className="text-xs text-slate-500 mt-2 pl-4 font-semibold">单品全链路成本透视 • 利润空间分析</p>
-                  </div>
-                  <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-400 bg-black/40 px-4 py-2.5 rounded-xl border border-white/5">
-                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> 货值 (Goods)</div>
-                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-orange-500 rounded-full"></div> 头程 (Logistics)</div>
-                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-purple-500 rounded-full"></div> 尾程 (Last Leg)</div>
-                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-pink-500 rounded-full"></div> 佣金 (Fees)</div>
-                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-slate-500 rounded-full"></div> 广告 (Ads)</div>
-                  </div>
-              </div>
-              
-              <div className="space-y-8">
-                  {UNIT_ECONOMICS_DATA.map(item => (
-                      <div key={item.sku} className="relative group">
-                          <div className="flex justify-between text-sm mb-3 items-end">
-                              <div>
-                                  <span className="font-bold text-white text-base">{item.name}</span>
-                                  <span className="text-slate-400 ml-3 font-mono text-xs font-bold bg-slate-800 px-2 py-1 rounded-md">{item.sku}</span>
-                              </div>
-                              <div className="text-slate-400 font-mono text-xs font-bold">
-                                  总成本: <span className="font-bold text-white text-base ml-1">${item.total.toFixed(2)}</span>
-                              </div>
+                  <div className="mt-auto space-y-1 text-xs border-t border-white/10 pt-2">
+                      {simData.map((d, i) => (
+                          <div key={i} className="flex justify-between items-center">
+                              <span className="text-slate-400 flex items-center gap-1"><div className="w-2 h-2 rounded-full" style={{backgroundColor: d.fill}}></div> {d.name}</span>
+                              <span className="text-white font-mono">${d.value.toFixed(2)}</span>
                           </div>
-                          
-                          {/* Stacked Bar */}
-                          <div className="h-8 w-full flex rounded-lg overflow-hidden bg-slate-800/50 ring-1 ring-white/5 shadow-inner">
-                              {item.breakdown.map((part, idx) => (
-                                  <div 
-                                      key={idx} 
-                                      style={{ width: `${(part.value / item.total) * 100}%`, backgroundColor: part.color }}
-                                      className="h-full relative group/segment flex items-center justify-center transition-all hover:brightness-110 cursor-pointer"
-                                  >
-                                      {/* Tooltip on Hover */}
-                                      <div className="absolute bottom-full mb-3 opacity-0 group-hover/segment:opacity-100 transition-opacity bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap z-20 border border-white/10 shadow-2xl pointer-events-none font-bold">
-                                          <span style={{color: part.color}}>{part.label}</span>: ${part.value} ({part.percent}%)
-                                      </div>
-                                      
-                                      {/* Segment Label (only if wide enough) */}
-                                      {(part.value / item.total) > 0.1 && (
-                                          <span className="text-[10px] font-bold text-white/90 drop-shadow-md truncate px-1 uppercase tracking-wide">
-                                              {part.label}
-                                          </span>
-                                      )}
-                                  </div>
-                              ))}
-                          </div>
-                      </div>
-                  ))}
+                      ))}
+                  </div>
               </div>
           </div>
       </div>
       );
   };
 
-  // 2. SUPPLY VIEW
-  const SupplyView = () => (
+  // --- 2. SUPPLY VIEW (Real Inventory Data) ---
+  const SupplyView = () => {
+      // Aggregate real stock data by Warehouse Region/ID
+      const mapNodes = useMemo(() => {
+          const nodes: Record<string, { id: string, name: string, region: string, stockCount: number, stockValue: number, topProducts: any[], lat: number, long: number, color: string, type: string }> = {};
+          
+          // Helper to init node if missing
+          const initNode = (wh: any) => {
+              // Mock lat/long based on region for visualization
+              let lat = 30, long = 0, color = '#3b82f6';
+              if (wh.region === 'CN') { lat = 22; long = 114; color = '#10b981'; } // Shenzhen
+              if (wh.region === 'US') { lat = 34; long = -118; color = '#00F0FF'; } // LA
+              if (wh.type === '3PL') { lat = 40; long = -74; color = '#BD00FF'; } // NY
+              
+              if (!nodes[wh.id]) {
+                  nodes[wh.id] = {
+                      id: wh.id,
+                      name: wh.name,
+                      region: wh.region,
+                      type: wh.type,
+                      stockCount: 0,
+                      stockValue: 0,
+                      topProducts: [],
+                      lat, long, color
+                  };
+              }
+          };
+
+          // Initialize with known warehouses
+          WAREHOUSES.forEach(initNode);
+
+          // Populate data from Products
+          state.products.forEach(p => {
+              if (p.inventoryBreakdown) {
+                  p.inventoryBreakdown.forEach(inv => {
+                      if (nodes[inv.warehouseId]) {
+                          nodes[inv.warehouseId].stockCount += inv.quantity;
+                          nodes[inv.warehouseId].stockValue += (inv.quantity * (p.costPrice || 0));
+                          nodes[inv.warehouseId].topProducts.push({ sku: p.sku, qty: inv.quantity });
+                      }
+                  });
+              } else {
+                  // Fallback for simple products without breakdown (assume primary warehouse WH-CN-01)
+                  if(nodes['WH-CN-01']) {
+                      nodes['WH-CN-01'].stockCount += p.stock;
+                      nodes['WH-CN-01'].stockValue += (p.stock * (p.costPrice || 0));
+                  }
+              }
+          });
+
+          // Sort top products for each node
+          Object.values(nodes).forEach(n => {
+              n.topProducts.sort((a,b) => b.qty - a.qty);
+              n.topProducts = n.topProducts.slice(0, 5);
+          });
+
+          return Object.values(nodes);
+      }, [state.products]);
+
+      // Calculate Restock Suggestions (Real)
+      const restockSuggestions = useMemo(() => {
+          return state.products
+              .filter(p => !p.deletedAt)
+              .map(p => {
+                  const burnRate = p.dailyBurnRate || 1;
+                  const daysLeft = p.stock / burnRate;
+                  return { ...p, daysLeft, rec: Math.ceil(burnRate * 45 - p.stock) };
+              })
+              .filter(p => p.daysLeft < 20) // Alert threshold
+              .sort((a,b) => a.daysLeft - b.daysLeft);
+      }, [state.products]);
+
+      return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          {/* Map Visualization */}
           <div className="lg:col-span-2 ios-glass-card p-0 relative overflow-hidden flex flex-col min-h-[400px]">
               <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center z-10 relative">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <Globe className="w-4 h-4 text-blue-400" /> 全球库存分布 (Click Nodes)
+                      <Globe className="w-4 h-4 text-blue-400" /> 全球库存分布 (Global Inventory)
                   </h3>
-                  <div className="flex gap-2 text-[10px]">
-                      {GLOBAL_INVENTORY.map(node => (
-                          <div key={node.id} className="flex items-center gap-1">
-                              <span className="w-2 h-2 rounded-full shadow-[0_0_5px_currentColor]" style={{backgroundColor: node.color, color: node.color}}></span>
-                              <span className="text-slate-400">{node.name}</span>
-                          </div>
-                      ))}
-                  </div>
+                  <div className="text-[10px] text-slate-400">Click nodes for details</div>
               </div>
               
-              <div className="flex-1 relative cursor-grab active:cursor-grabbing bg-grid">
+              <div className="flex-1 relative bg-grid">
                   {/* Map Nodes */}
                   <div className="absolute inset-0 flex items-center justify-center">
                       <div className="relative w-3/4 h-3/4 border border-slate-800/50 rounded-full border-dashed opacity-30 animate-[spin_60s_linear_infinite]"></div>
                       <div className="absolute w-full h-full">
-                          {GLOBAL_INVENTORY.map((node, i) => (
+                          {mapNodes.map((node) => (
                               <div 
                                   key={node.id}
                                   onClick={() => setSelectedNode(node)}
@@ -483,6 +457,7 @@ const Analytics: React.FC = () => {
                                   </div>
                                   <div className="mt-2 bg-black/80 backdrop-blur-md border border-slate-700 px-2 py-1 rounded text-[10px] text-white whitespace-nowrap shadow-lg">
                                       {node.name}
+                                      <div className="text-[9px] text-slate-400">{node.stockCount} pcs</div>
                                   </div>
                               </div>
                           ))}
@@ -491,32 +466,113 @@ const Analytics: React.FC = () => {
               </div>
           </div>
 
+          {/* Restock Alerts */}
           <div className="lg:col-span-1 ios-glass-card p-6 flex flex-col">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <RefreshCw className="w-4 h-4 text-orange-400" /> 智能补货建议 (Restock)
+                  <RefreshCw className="w-4 h-4 text-orange-400" /> 紧急补货 (Urgent Restock)
               </h3>
-              <div className="flex-1 overflow-y-auto space-y-3 pr-2">
-                  {[
-                      { sku: 'MA-001', name: '赛博卫衣', stock: 42, burn: 3.5, rec: 200, urgent: true },
-                      { sku: 'CP-Q1M', name: '车机盒子', stock: 120, burn: 12, rec: 500, urgent: false },
-                      { sku: 'MG-PRO', name: '磁吸支架', stock: 8, burn: 2, rec: 100, urgent: true },
-                  ].map((item, idx) => (
+              <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                  {restockSuggestions.length > 0 ? restockSuggestions.map((item, idx) => (
                       <div key={idx} className="bg-black/20 border border-white/10 p-3 rounded-lg flex justify-between items-center group hover:border-white/20 transition-all hover:bg-black/40">
                           <div>
                               <div className="flex items-center gap-2">
-                                  <span className={`w-1.5 h-1.5 rounded-full ${item.urgent ? 'bg-red-500 animate-pulse shadow-[0_0_5px_#ef4444]' : 'bg-emerald-500'}`}></span>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${item.daysLeft < 7 ? 'bg-red-500 animate-pulse' : 'bg-orange-500'}`}></span>
                                   <span className="font-bold text-white text-xs font-mono">{item.sku}</span>
                               </div>
-                              <div className="text-[10px] text-slate-500 mt-0.5">{item.name}</div>
+                              <div className="text-[10px] text-slate-500 mt-0.5 truncate w-32">{item.name}</div>
                           </div>
                           <div className="text-right">
                               <button 
-                                onClick={() => handleGeneratePO(item.sku)}
-                                className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] rounded transition-colors shadow-lg"
+                                onClick={() => {
+                                    if(confirm(`为 ${item.sku} 生成 ${Math.max(100, item.rec)} 件的采购建议?`)) {
+                                        showToast(`已生成 ${item.sku} 的采购需求`, 'success');
+                                    }
+                                }}
+                                className="px-2 py-1 bg-indigo-600 hover:bg-indigo-500 text-white text-[10px] rounded transition-colors shadow-lg mb-1"
                               >
-                                  +{item.rec} 生成PO
+                                  +{Math.max(100, item.rec)} PO
                               </button>
-                              <div className="text-[9px] text-slate-600 mt-1">可售: {Math.floor(item.stock/item.burn)}天</div>
+                              <div className="text-[9px] text-red-400 font-bold">{item.daysLeft.toFixed(1)} 天断货</div>
+                          </div>
+                      </div>
+                  )) : (
+                      <div className="text-center text-slate-500 text-xs py-10">库存健康，暂无紧急补货建议</div>
+                  )}
+              </div>
+          </div>
+      </div>
+      );
+  };
+
+  // --- 3. ADS VIEW (Real Ads Data) ---
+  const AdsView = () => (
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="lg:col-span-8 ios-glass-card p-6">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
+                  <Megaphone className="w-4 h-4 text-pink-400" /> 广告活动表现 (Campaigns ROI)
+              </h3>
+              
+              {/* Scatter Chart for Ad Performance */}
+              <div className="h-64 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                      <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 20 }}>
+                          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} />
+                          <XAxis type="number" dataKey="spend" name="Spend" unit="$" stroke={COLORS.text} tick={{fontSize: 10}} label={{ value: 'Spend ($)', position: 'insideBottomRight', offset: 0, fill: COLORS.text, fontSize: 10 }} />
+                          <YAxis type="number" dataKey="roas" name="ROAS" unit="x" stroke={COLORS.text} tick={{fontSize: 10}} label={{ value: 'ROAS', angle: -90, position: 'insideLeft', fill: COLORS.text, fontSize: 10 }} />
+                          <Tooltip cursor={{ strokeDasharray: '3 3' }} content={<CustomHUDTooltip />} />
+                          <Scatter name="Campaigns" data={state.adCampaigns} fill="#8884d8">
+                              {state.adCampaigns.map((entry, index) => (
+                                  <Cell key={`cell-${index}`} fill={entry.roas > 3 ? '#10b981' : entry.roas < 2 ? '#ef4444' : '#f59e0b'} />
+                              ))}
+                          </Scatter>
+                      </ScatterChart>
+                  </ResponsiveContainer>
+              </div>
+              
+              <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {state.adCampaigns.slice(0,4).map(c => (
+                      <div key={c.id} className="bg-black/20 p-3 rounded-lg border border-white/5 text-xs">
+                          <div className="text-slate-400 truncate mb-1">{c.name}</div>
+                          <div className="flex justify-between font-bold">
+                              <span className="text-white">${c.spend}</span>
+                              <span className={c.roas > 3 ? 'text-emerald-400' : 'text-orange-400'}>{c.roas} ROAS</span>
+                          </div>
+                      </div>
+                  ))}
+              </div>
+          </div>
+
+          <div className="lg:col-span-4 ios-glass-card p-6 flex flex-col">
+              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
+                  <Video className="w-4 h-4 text-blue-400" /> 热门素材 (Top Creatives)
+              </h3>
+              <div className="flex-1 overflow-y-auto space-y-3 custom-scrollbar pr-1">
+                  {/* Mock Creatives for Visuals - in real app, link to media library */}
+                  {[
+                      { id: 1, name: 'Hook_Video_v3.mp4', ctr: 2.8, roas: 4.2, thumb: 'bg-indigo-500/20' },
+                      { id: 2, name: 'Unboxing_ASMR.mp4', ctr: 1.9, roas: 3.1, thumb: 'bg-pink-500/20' },
+                      { id: 3, name: 'Feature_Showcase.png', ctr: 1.2, roas: 2.5, thumb: 'bg-emerald-500/20' }
+                  ].map(creative => (
+                      <div 
+                        key={creative.id}
+                        onClick={() => setSelectedCreative({...creative, sales: Math.floor(Math.random()*500), score: 8.5})}
+                        className="flex gap-3 p-2 rounded-lg hover:bg-white/5 cursor-pointer transition-colors group"
+                      >
+                          <div className={`w-16 h-16 rounded-lg ${creative.thumb} flex items-center justify-center shrink-0 border border-white/10`}>
+                              <Play className="w-6 h-6 text-white/50 group-hover:text-white transition-colors" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-white truncate">{creative.name}</div>
+                              <div className="flex gap-3 mt-1.5">
+                                  <div>
+                                      <div className="text-[9px] text-slate-500 uppercase">CTR</div>
+                                      <div className="text-xs font-mono text-blue-400">{creative.ctr}%</div>
+                                  </div>
+                                  <div>
+                                      <div className="text-[9px] text-slate-500 uppercase">ROAS</div>
+                                      <div className="text-xs font-mono text-emerald-400">{creative.roas}</div>
+                                  </div>
+                              </div>
                           </div>
                       </div>
                   ))}
@@ -525,39 +581,27 @@ const Analytics: React.FC = () => {
       </div>
   );
 
-  // 3. ADS & MARKET VIEWS kept similar structure but updated styles...
-  // (Simplified for brevity, assuming standard structure applied)
-  const AdsView = () => (
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="lg:col-span-8 ios-glass-card p-6">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <Video className="w-4 h-4 text-pink-400" /> 热门素材 (Top Creatives)
-              </h3>
-              <div className="grid grid-cols-3 gap-4">
-                  {CREATIVE_GALLERY.map(creative => (
-                      <div 
-                        key={creative.id} 
-                        onClick={() => setSelectedCreative(creative)}
-                        className="aspect-[9/16] bg-black/40 rounded-lg border border-white/10 relative group overflow-hidden cursor-pointer hover:border-pink-500/50 transition-all hover:scale-[1.02]"
-                      >
-                          <div className={`absolute inset-0 ${creative.thumb} flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity`}>
-                              <Play className="w-8 h-8 text-white/80" />
-                          </div>
-                          <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 to-transparent">
-                              <div className="text-xs font-bold text-white mb-1">{creative.title}</div>
-                              <div className="flex justify-between text-[10px] text-slate-300">
-                                  <span>CTR: {creative.ctr}</span>
-                                  <span className="text-emerald-400 font-bold text-glow-green">{creative.score} 分</span>
-                              </div>
-                          </div>
-                          <div className="absolute top-2 left-2 bg-black/60 backdrop-blur border border-white/10 px-1.5 py-0.5 rounded text-[9px] text-pink-300 flex items-center gap-1">
-                              <Sparkles className="w-2 h-2" /> AI 评分
-                          </div>
-                      </div>
-                  ))}
+  // --- 4. MARKET VIEW (Mocked but enabled) ---
+  const MarketView = () => (
+      <div className="grid grid-cols-1 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="ios-glass-card p-6">
+              <div className="flex justify-between items-center mb-6">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                      <Target className="w-4 h-4 text-red-400" /> 市场趋势情报 (Market Intel)
+                  </h3>
+                  <div className="flex gap-2">
+                      <input type="text" placeholder="输入关键词 (如: Mechanical Keyboard)" className="bg-black/40 border border-white/10 rounded px-3 py-1 text-xs text-white w-64 focus:border-red-500 outline-none" />
+                      <button className="px-3 py-1 bg-red-600/20 text-red-400 border border-red-500/30 rounded text-xs hover:bg-red-600 hover:text-white transition-all">分析</button>
+                  </div>
+              </div>
+              
+              <div className="h-64 flex items-center justify-center border border-dashed border-white/10 rounded-xl bg-black/20 text-slate-500 text-sm">
+                  <div className="text-center">
+                      <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-20" />
+                      <p>输入关键词以获取 AI 市场趋势分析 (Mock)</p>
+                  </div>
               </div>
           </div>
-          {/* ... Simulator Entry ... */}
       </div>
   );
 
@@ -572,11 +616,11 @@ const Analytics: React.FC = () => {
         <div className="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0">
             <div>
                 <h1 className="text-3xl font-black text-white tracking-widest uppercase flex items-center gap-3 text-glow-cyan">
-                    <span className="w-2 h-8 bg-neon-cyan shadow-[0_0_10px_#00F0FF]"></span>
+                    <span className="w-2 h-8 bg-cyan-500 shadow-[0_0_10px_#06b6d4]"></span>
                     数据指挥中心
                 </h1>
                 <p className="text-xs text-slate-400 font-mono mt-2 flex items-center gap-2">
-                    <Activity className="w-3 h-3 text-neon-purple" />
+                    <Activity className="w-3 h-3 text-purple-500" />
                     智能情报中心 • 实时数据
                 </p>
             </div>
@@ -586,7 +630,7 @@ const Analytics: React.FC = () => {
                     { id: 'finance', label: '深度财务', icon: Wallet },
                     { id: 'supply', label: '供应链智脑', icon: Truck },
                     { id: 'ads', label: '广告智脑', icon: Megaphone },
-                    // { id: 'market', label: '市场情报', icon: Users },
+                    { id: 'market', label: '市场情报', icon: Target },
                 ].map(tab => (
                     <button
                         key={tab.id}
@@ -606,7 +650,7 @@ const Analytics: React.FC = () => {
 
         {/* AI Insight Bar */}
         {aiInsight && (
-            <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex items-start gap-4 animate-in fade-in slide-in-from-top-2 relative hud-card">
+            <div className="bg-indigo-900/20 border border-indigo-500/30 p-4 rounded-xl flex items-start gap-4 animate-in fade-in slide-in-from-top-2 relative">
                 <div className="p-2 bg-indigo-500/20 rounded-lg shrink-0"><Sparkles className="w-5 h-5 text-indigo-400" /></div>
                 <div className="text-xs text-indigo-100 leading-relaxed pt-1" dangerouslySetInnerHTML={{ __html: aiInsight }}></div>
                 <button onClick={() => setAiInsight(null)} className="absolute top-2 right-2 text-indigo-400 hover:text-white"><X className="w-4 h-4"/></button>
@@ -614,10 +658,11 @@ const Analytics: React.FC = () => {
         )}
 
         {/* --- TAB CONTENT AREA --- */}
-        <div className="flex-1 min-h-0 overflow-y-auto pr-2 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
             {activeTab === 'finance' && <FinanceView />}
             {activeTab === 'supply' && <SupplyView />}
             {activeTab === 'ads' && <AdsView />}
+            {activeTab === 'market' && <MarketView />}
         </div>
     </div>
   );

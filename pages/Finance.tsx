@@ -4,7 +4,7 @@ import {
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, FileText, 
   PieChart as PieIcon, ArrowUpRight, ArrowDownRight, Filter, Calendar, 
   Landmark, CreditCard, Sparkles, Bot, Loader2, X, Download,
-  Wand2, Receipt, Search, BarChart3, Activity, AlertCircle, CheckCircle2
+  Wand2, Receipt, Search, BarChart3, Activity, AlertCircle, CheckCircle2, Trash2
 } from 'lucide-react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -13,8 +13,10 @@ import {
 import { GoogleGenAI } from "@google/genai";
 import { MOCK_TRANSACTIONS } from '../constants';
 import { Transaction, PaymentMethod } from '../types';
+import { useTanxing } from '../context/TanxingContext';
 
 const Finance: React.FC = () => {
+  const { showToast } = useTanxing();
   const [transactions, setTransactions] = useState<Transaction[]>(MOCK_TRANSACTIONS);
   const [activeCurrency, setActiveCurrency] = useState<'CNY' | 'USD'>('CNY');
   const [exchangeRate, setExchangeRate] = useState(7.2); // 1 USD = 7.2 CNY
@@ -52,8 +54,8 @@ const Finance: React.FC = () => {
     return new Intl.NumberFormat(activeCurrency === 'CNY' ? 'zh-CN' : 'en-US', {
       style: 'currency',
       currency: activeCurrency,
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   };
 
@@ -62,7 +64,7 @@ const Finance: React.FC = () => {
       if (filterCategory !== 'All') {
           filtered = filtered.filter(t => t.category === filterCategory);
       }
-      return filtered;
+      return filtered.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
   const visibleTransactions = getFilteredTransactions();
@@ -94,23 +96,37 @@ const Finance: React.FC = () => {
     return { totalRevenue, totalCOGS, totalOpex, grossProfit, netProfit, grossMargin, netMargin };
   }, [transactions, activeCurrency, exchangeRate]);
 
-  // --- Chart Data (Area Chart) ---
+  // --- Chart Data (Real-time Aggregation) ---
   const chartData = useMemo(() => {
-    const data: any[] = [];
-    const months = ['5月', '6月', '7月', '8月', '9月', '10月'];
-    months.forEach((m, i) => {
-      const revenueBase = stats.totalRevenue > 0 ? stats.totalRevenue / 2 : 5000; 
-      const expenseBase = (stats.totalCOGS + stats.totalOpex) > 0 ? (stats.totalCOGS + stats.totalOpex) / 2 : 3000;
-      const randomFactor = 0.8 + (Math.sin(i) * 0.2 + 0.2); 
-      
-      data.push({
-        name: m,
-        income: Math.round(revenueBase * randomFactor),
-        expense: Math.round(expenseBase * (randomFactor * 0.9)), 
-      });
+    const agg: Record<string, { income: number; expense: number }> = {};
+    
+    // 1. Aggregate by Date
+    transactions.forEach(t => {
+        // Use simpler date formatting for grouping (e.g., MM-DD)
+        const dateKey = t.date.substring(5); // "10-26"
+        if (!agg[dateKey]) agg[dateKey] = { income: 0, expense: 0 };
+        
+        const val = convertToActive(t.amount, t.currency);
+        if (t.type === 'income') agg[dateKey].income += val;
+        else agg[dateKey].expense += val;
     });
-    return data;
-  }, [stats]);
+
+    // 2. Sort and convert to array
+    const sortedKeys = Object.keys(agg).sort();
+    
+    // 3. Take last 7 active days or fill if empty
+    let finalData = sortedKeys.map(k => ({
+        name: k,
+        income: agg[k].income,
+        expense: agg[k].expense
+    }));
+
+    if (finalData.length === 0) {
+        return [{ name: '无数据', income: 0, expense: 0 }];
+    }
+
+    return finalData.slice(-14); // Show last 14 days with activity
+  }, [transactions, activeCurrency, exchangeRate]);
 
   // --- Pie Chart Data (Expenses by Category) ---
   const expensePieData = useMemo(() => {
@@ -120,10 +136,13 @@ const Finance: React.FC = () => {
           categoryMap[t.category] = (categoryMap[t.category] || 0) + val;
       });
       
-      return Object.keys(categoryMap).map(key => ({
+      const data = Object.keys(categoryMap).map(key => ({
           name: key,
           value: categoryMap[key]
-      })).sort((a, b) => b.value - a.value); 
+      })).sort((a, b) => b.value - a.value);
+
+      if (data.length === 0) return [{ name: 'No Expenses', value: 1 }];
+      return data;
   }, [transactions, activeCurrency, exchangeRate]);
 
   const PIE_COLORS = ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6', '#ec4899', '#64748b', '#ef4444', '#6366f1'];
@@ -146,6 +165,36 @@ const Finance: React.FC = () => {
     setShowAddModal(false);
     setNewTx({ type: 'expense', currency: 'CNY', category: 'Other', date: new Date().toISOString().split('T')[0], status: 'completed', paymentMethod: 'Bank' });
     setSmartInput('');
+    showToast("交易已记录", "success");
+  };
+
+  const handleDeleteTransaction = (id: string) => {
+      if (confirm('确定要删除这条记录吗？')) {
+          setTransactions(prev => prev.filter(t => t.id !== id));
+          showToast("交易已删除", "info");
+      }
+  };
+
+  const handleExportCSV = () => {
+      const headers = ['ID', 'Date', 'Type', 'Category', 'Amount', 'Currency', 'Description', 'Status'];
+      const rows = visibleTransactions.map(t => [
+          t.id, t.date, t.type, t.category, t.amount, t.currency, `"${t.description}"`, t.status
+      ]);
+      
+      const csvContent = [
+          headers.join(','),
+          ...rows.map(r => r.join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `financial_report_${new Date().toISOString().split('T')[0]}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast("报表已导出", "success");
   };
 
   const handleSmartFill = async () => {
@@ -154,12 +203,33 @@ const Finance: React.FC = () => {
     try {
         if (!process.env.API_KEY) throw new Error("API Key missing");
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const prompt = `Extract transaction from: "${smartInput}". Current Date: ${new Date().toISOString().split('T')[0]}. Return JSON {amount:number, currency:"USD"|"CNY", type:"income"|"expense", category:"Revenue"|"COGS"|"Logistics"|"Marketing"|"Software"|"Office"|"Payroll"|"Other", paymentMethod:"Bank"|"PayPal"..., description:string, date:string}`;
+        const prompt = `
+            Extract transaction details from this text: "${smartInput}". 
+            Context: Current Date is ${new Date().toISOString().split('T')[0]}. 
+            Return a JSON object ONLY with these fields:
+            {
+                "amount": number,
+                "currency": "USD" or "CNY",
+                "type": "income" or "expense",
+                "category": One of ["Revenue", "COGS", "Logistics", "Marketing", "Software", "Office", "Payroll", "Other"],
+                "paymentMethod": One of ["Bank", "PayPal", "AliPay", "WeChat", "CreditCard"],
+                "description": string,
+                "date": string (YYYY-MM-DD)
+            }
+        `;
         const response = await ai.models.generateContent({ model: 'gemini-2.5-flash', contents: prompt, config: { responseMimeType: "application/json" } });
-        const result = JSON.parse(response.text || '{}');
+        
+        // Robust JSON parsing
+        let jsonStr = response.text || '{}';
+        // Clean markdown blocks if present
+        jsonStr = jsonStr.replace(/```json/g, '').replace(/```/g, '').trim();
+        
+        const result = JSON.parse(jsonStr);
         setNewTx(prev => ({ ...prev, ...result }));
+        showToast("AI 识别成功，请核对后保存", "success");
     } catch (e) {
-        alert("AI 识别失败");
+        console.error(e);
+        showToast("AI 识别失败，请重试", "error");
     } finally {
         setIsSmartFilling(false);
     }
@@ -212,13 +282,15 @@ const Finance: React.FC = () => {
   // --- Custom Tooltips ---
   const CustomAreaTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-      const net = (payload[0].value - payload[1].value);
+      const income = payload[0].value;
+      const expense = payload[1].value;
+      const net = income - expense;
       return (
         <div className="bg-[#090C14] border border-white/10 p-3 rounded-lg shadow-xl text-xs backdrop-blur-md">
           <p className="font-bold text-slate-300 mb-2 border-b border-white/10 pb-1">{label}</p>
           <div className="flex flex-col gap-1">
-             <div className="flex justify-between gap-4 text-emerald-400"><span>收入</span> <span className="font-mono">{formatMoney(payload[0].value)}</span></div>
-             <div className="flex justify-between gap-4 text-red-400"><span>支出</span> <span className="font-mono">{formatMoney(payload[1].value)}</span></div>
+             <div className="flex justify-between gap-4 text-emerald-400"><span>收入</span> <span className="font-mono">{formatMoney(income)}</span></div>
+             <div className="flex justify-between gap-4 text-red-400"><span>支出</span> <span className="font-mono">{formatMoney(expense)}</span></div>
              <div className={`flex justify-between gap-4 pt-1 mt-1 border-t border-white/10 ${net >= 0 ? 'text-blue-400' : 'text-orange-400'}`}>
                  <span>结余</span> <span className="font-mono">{formatMoney(net)}</span>
              </div>
@@ -323,7 +395,7 @@ const Finance: React.FC = () => {
                    {/* Cash Flow Chart */}
                    <div className="lg:col-span-1 ios-glass-panel rounded-xl p-5 shadow-sm flex flex-col">
                        <h3 className="text-xs font-bold text-slate-400 uppercase mb-4 flex items-center gap-2">
-                           <BarChart3 className="w-4 h-4 text-emerald-500" /> 现金流趋势 (Trend)
+                           <BarChart3 className="w-4 h-4 text-emerald-500" /> 现金流趋势 (Daily Trend)
                        </h3>
                        <div className="flex-1 w-full min-h-0">
                            <ResponsiveContainer width="100%" height="100%">
@@ -407,11 +479,16 @@ const Finance: React.FC = () => {
               <div className="p-4 border-b border-white/10 bg-black/40 flex justify-between items-center">
                   <h3 className="font-bold text-white text-sm flex items-center gap-2">
                       <FileText className="w-4 h-4 text-slate-400" /> 
-                      账目明细 (Ledger)
+                      账目明细 ({visibleTransactions.length})
                   </h3>
-                  <button onClick={() => setShowAddModal(true)} className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-lg shadow-indigo-900/20">
-                      <Plus className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex gap-2">
+                      <button onClick={handleExportCSV} className="p-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded" title="导出报表">
+                          <Download className="w-3.5 h-3.5" />
+                      </button>
+                      <button onClick={() => setShowAddModal(true)} className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-lg shadow-indigo-900/20">
+                          <Plus className="w-3.5 h-3.5" />
+                      </button>
+                  </div>
               </div>
               
               <div className="p-2 border-b border-white/10 bg-black/40 flex gap-2">
@@ -433,7 +510,7 @@ const Finance: React.FC = () => {
 
               <div className="flex-1 overflow-auto divide-y divide-white/5">
                   {visibleTransactions.map(tx => (
-                      <div key={tx.id} className="p-3 hover:bg-white/5 transition-colors flex justify-between items-center group">
+                      <div key={tx.id} className="p-3 hover:bg-white/5 transition-colors flex justify-between items-center group relative">
                           <div className="flex items-center gap-3">
                               <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.type === 'income' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
                                   {tx.type === 'income' ? <ArrowDownRight className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
@@ -453,6 +530,16 @@ const Finance: React.FC = () => {
                               {tx.currency !== activeCurrency && (
                                   <div className="text-[9px] text-slate-600">≈ {formatMoney(convertToActive(tx.amount, tx.currency))}</div>
                               )}
+                          </div>
+                          
+                          {/* Delete Action */}
+                          <div className="absolute right-0 top-0 bottom-0 w-16 bg-gradient-to-l from-black via-black/80 to-transparent opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-end pr-2">
+                              <button 
+                                onClick={() => handleDeleteTransaction(tx.id)}
+                                className="p-1.5 bg-red-900/50 hover:bg-red-600 text-red-200 hover:text-white rounded transition-colors"
+                              >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                              </button>
                           </div>
                       </div>
                   ))}

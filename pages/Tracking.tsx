@@ -1,24 +1,18 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Search, Map, Truck, Package, Clock, AlertTriangle, 
   CheckCircle2, Plus, ArrowRight, Loader2, Bot, Sparkles, Navigation,
   Trash2, RefreshCw, MoreHorizontal, FileText, Save, X, Globe,
-  AlertOctagon, Plane, Ship, AlertCircle
+  AlertOctagon, Plane, Ship, AlertCircle, DollarSign, Zap, Anchor, Shield
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
-import { MOCK_SHIPMENTS } from '../constants';
 import { Shipment, LogisticsEvent } from '../types';
 import { useTanxing } from '../context/TanxingContext';
 
 const Tracking: React.FC = () => {
-  const { showToast } = useTanxing();
-  
-  // --- State Management ---
-  const [shipments, setShipments] = useState<Shipment[]>(() => {
-      const saved = localStorage.getItem('tanxing_shipments');
-      return saved ? JSON.parse(saved) : MOCK_SHIPMENTS;
-  });
+  const { state, dispatch, showToast } = useTanxing();
+  const shipments = state.shipments; // Use global state
 
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -27,10 +21,17 @@ const Tracking: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addMode, setAddMode] = useState<'auto' | 'manual'>('auto');
   
+  // Route Planner State
+  const [showPlannerModal, setShowPlannerModal] = useState(false);
+  const [plannerForm, setPlannerForm] = useState({ origin: 'Shenzhen, CN', destination: 'Los Angeles, US', weight: 20 });
+  const [routeOptions, setRouteOptions] = useState<any[]>([]);
+  const [isOptimizing, setIsOptimizing] = useState(false);
+
   // Loading States
   const [isSearching, setIsSearching] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   // Manual Form State
   const [manualForm, setManualForm] = useState<Partial<Shipment>>({
@@ -43,11 +44,7 @@ const Tracking: React.FC = () => {
       events: []
   });
 
-  // --- Effects ---
-  useEffect(() => {
-      localStorage.setItem('tanxing_shipments', JSON.stringify(shipments));
-  }, [shipments]);
-
+  // Select first shipment on load if available
   useEffect(() => {
       if (!selectedShipment && shipments.length > 0) {
           setSelectedShipment(shipments[0]);
@@ -73,15 +70,25 @@ const Tracking: React.FC = () => {
       }
   };
 
+  // Calculate Map Progress
+  const shipmentProgress = useMemo(() => {
+      if (!selectedShipment) return 0;
+      if (selectedShipment.status === 'Delivered') return 100;
+      if (selectedShipment.status === 'Pending') return 5;
+      // Heuristic: Max 90% until delivered, step by 20% per event
+      const eventCount = selectedShipment.events.length;
+      return Math.min(90, Math.max(10, eventCount * 20));
+  }, [selectedShipment]);
+
   // --- Handlers ---
 
   const handleDelete = (id: string, e: React.MouseEvent) => {
       e.stopPropagation();
       if (confirm('确定要删除这条物流记录吗?')) {
-          const newList = shipments.filter(s => s.id !== id);
-          setShipments(newList);
+          dispatch({ type: 'DELETE_SHIPMENT', payload: id });
           if (selectedShipment?.id === id) {
-              setSelectedShipment(newList.length > 0 ? newList[0] : null);
+              const remaining = shipments.filter(s => s.id !== id);
+              setSelectedShipment(remaining.length > 0 ? remaining[0] : null);
           }
           showToast('物流记录已删除', 'info');
       }
@@ -89,7 +96,30 @@ const Tracking: React.FC = () => {
 
   const handleRefreshStatus = async () => {
       if (!selectedShipment) return;
-      showToast(`已向 ${selectedShipment.carrier} 发送实时状态更新请求...`, 'info');
+      setIsRefreshing(true);
+      
+      // Simulate API Call delay
+      await new Promise(resolve => setTimeout(resolve, 1500));
+
+      const now = new Date();
+      const newEvent: LogisticsEvent = {
+          date: now.toISOString().split('T')[0],
+          time: now.toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}),
+          location: selectedShipment.destination.split(',')[0] + ' Dist. Center',
+          description: 'Arrived at Distribution Facility',
+          status: 'InTransit'
+      };
+
+      const updatedShipment = {
+          ...selectedShipment,
+          lastUpdate: newEvent.description,
+          events: [newEvent, ...selectedShipment.events]
+      };
+
+      dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedShipment });
+      setSelectedShipment(updatedShipment); // Update local selection to reflect changes immediately
+      showToast('状态已更新: Arrived at Distribution Facility', 'success');
+      setIsRefreshing(false);
   };
 
   const handleAutoTrack = async () => {
@@ -190,7 +220,7 @@ const Tracking: React.FC = () => {
           events: events as LogisticsEvent[]
       };
 
-      setShipments([newShipment, ...shipments]);
+      dispatch({ type: 'ADD_SHIPMENT', payload: newShipment });
       setSelectedShipment(newShipment);
       setShowAddModal(false);
       
@@ -238,6 +268,61 @@ const Tracking: React.FC = () => {
     }
   };
 
+  // --- Route Planning Handler ---
+  const handleOptimizeRoute = async () => {
+      if (!plannerForm.origin || !plannerForm.destination) {
+          showToast("请完善起止地点", "warning");
+          return;
+      }
+      setIsOptimizing(true);
+      setRouteOptions([]);
+      try {
+          if (!process.env.API_KEY) throw new Error("API Key missing");
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+          const prompt = `
+            Act as a Logistics Expert. 
+            Task: Recommend 3 optimal shipping routes for a package.
+            Details:
+            - Origin: ${plannerForm.origin}
+            - Destination: ${plannerForm.destination}
+            - Weight: ${plannerForm.weight} kg
+            
+            Provide 3 distinct options: 
+            1. Fastest (Air Express)
+            2. Cheapest (Sea Freight/Economy)
+            3. Balanced (Air Freight/Standard)
+
+            Return strictly a JSON array of objects with this schema:
+            [
+              {
+                "type": "Fastest" | "Cheapest" | "Balanced",
+                "carrier": "Carrier Name (e.g. DHL, Matson)",
+                "method": "Air" | "Sea" | "Rail",
+                "estimatedCost": "Number (USD)",
+                "transitTime": "String (e.g. 3-5 days)",
+                "riskScore": "Number (1-10, 1 is safe)",
+                "reasoning": "Brief explanation in Chinese"
+              }
+            ]
+          `;
+
+          const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt,
+              config: { responseMimeType: "application/json" }
+          });
+
+          const data = JSON.parse(response.text || '[]');
+          setRouteOptions(data);
+
+      } catch (error) {
+          showToast("AI 规划服务暂时不可用", "error");
+      } finally {
+          setIsOptimizing(false);
+      }
+  };
+
   return (
     <div className="h-[calc(100vh-8rem)] flex flex-col md:flex-row gap-6">
       
@@ -251,16 +336,25 @@ const Tracking: React.FC = () => {
                       <Map className="w-5 h-5 text-indigo-500" />
                       物流追踪 (Tracking)
                   </h2>
-                  <button 
-                      onClick={() => {
-                          setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', events: [] });
-                          setAddMode('auto');
-                          setShowAddModal(true);
-                      }}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-900/20 flex items-center gap-1 transition-all active:scale-95"
-                  >
-                      <Plus className="w-4 h-4" /> 新增运单
-                  </button>
+                  <div className="flex gap-2">
+                      <button 
+                          onClick={() => setShowPlannerModal(true)}
+                          className="px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
+                          title="AI 智能路由规划"
+                      >
+                          <Sparkles className="w-3.5 h-3.5" /> 路由
+                      </button>
+                      <button 
+                          onClick={() => {
+                              setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', events: [] });
+                              setAddMode('auto');
+                              setShowAddModal(true);
+                          }}
+                          className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-900/20 flex items-center gap-1 transition-all active:scale-95"
+                      >
+                          <Plus className="w-4 h-4" /> 运单
+                      </button>
+                  </div>
               </div>
               
               <div className="relative">
@@ -347,10 +441,30 @@ const Tracking: React.FC = () => {
                   <div className="h-48 bg-black/60 relative overflow-hidden border-b border-white/10 group shrink-0">
                       <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:16px_16px]"></div>
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="w-3/4 h-0.5 bg-gradient-to-r from-emerald-500/20 via-indigo-500 to-blue-500/20 relative">
-                              <div className="absolute -top-1.5 left-0 w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
-                              <div className="absolute -top-1.5 right-0 w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></div>
-                              <div className="absolute -top-3 left-1/2 p-1 bg-black/80 rounded-full border border-indigo-500 shadow-lg shadow-indigo-500/50">
+                          <div className="w-3/4 h-0.5 bg-slate-800 relative rounded-full overflow-hidden">
+                              {/* Dynamic Progress Bar */}
+                              <div 
+                                className="h-full bg-gradient-to-r from-emerald-500 via-indigo-500 to-blue-500 transition-all duration-1000 ease-out relative"
+                                style={{ width: `${shipmentProgress}%` }}
+                              >
+                                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 bg-white rounded-full shadow-[0_0_10px_white]"></div>
+                              </div>
+                          </div>
+                          
+                          {/* Icons */}
+                          <div className="absolute left-[10%] top-1/2 -translate-y-1/2 -mt-4">
+                              <div className="w-2 h-2 bg-emerald-500 rounded-full mb-1 mx-auto shadow-[0_0_10px_#10b981]"></div>
+                          </div>
+                          <div className="absolute right-[10%] top-1/2 -translate-y-1/2 -mt-4">
+                              <div className="w-2 h-2 bg-blue-500 rounded-full mb-1 mx-auto shadow-[0_0_10px_#3b82f6]"></div>
+                          </div>
+                          
+                          {/* Moving Vehicle Icon */}
+                          <div 
+                            className="absolute top-1/2 -translate-y-1/2 -mt-6 transition-all duration-1000 ease-out"
+                            style={{ left: `calc(12.5% + ${shipmentProgress * 0.75}%)` }}
+                          >
+                              <div className="p-1 bg-black/80 rounded-full border border-indigo-500 shadow-lg shadow-indigo-500/50">
                                   {selectedShipment.carrier === 'Matson' || selectedShipment.carrier === 'Cosco' ? 
                                     <Ship className="text-indigo-400 w-4 h-4" /> : 
                                     <Plane className="text-indigo-400 w-4 h-4" />
@@ -375,10 +489,11 @@ const Tracking: React.FC = () => {
                       
                       <button 
                         onClick={handleRefreshStatus}
-                        className="absolute top-4 right-4 p-2 bg-black/80 border border-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm"
+                        disabled={isRefreshing}
+                        className="absolute top-4 right-4 p-2 bg-black/80 border border-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors backdrop-blur-sm shadow-lg active:scale-95"
                         title="刷新状态"
                       >
-                          <RefreshCw className="w-4 h-4" />
+                          <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-indigo-400' : ''}`} />
                       </button>
                   </div>
 
@@ -389,7 +504,12 @@ const Tracking: React.FC = () => {
                                 <h1 className="text-2xl font-bold text-white font-mono tracking-tight">
                                     {selectedShipment.trackingNo}
                                 </h1>
-                                <a href="#" className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-indigo-300 hover:text-white hover:bg-white/10 flex items-center gap-1">
+                                <a 
+                                    href={`https://www.google.com/search?q=${selectedShipment.carrier}+tracking+${selectedShipment.trackingNo}`} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-indigo-300 hover:text-white hover:bg-white/10 flex items-center gap-1 transition-colors"
+                                >
                                     <Globe className="w-3 h-3" /> 官网查询
                                 </a>
                            </div>
@@ -424,7 +544,7 @@ const Tracking: React.FC = () => {
                       <div className="absolute left-9 top-6 bottom-6 w-0.5 bg-slate-800"></div>
                       <div className="space-y-6 relative z-10">
                           {selectedShipment.events.map((event, index) => (
-                              <div key={index} className="flex gap-6 group">
+                              <div key={index} className="flex gap-6 group animate-in slide-in-from-bottom-2 duration-500" style={{animationDelay: `${index * 100}ms`}}>
                                   <div className="w-16 text-right shrink-0">
                                       <div className="text-xs font-bold text-slate-400">{event.time}</div>
                                       <div className="text-[10px] text-slate-600">{event.date.substring(5)}</div>
@@ -455,6 +575,116 @@ const Tracking: React.FC = () => {
               </div>
           )}
       </div>
+
+      {/* Route Planner Modal */}
+      {showPlannerModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowPlannerModal(false)}>
+              <div className="ios-glass-panel w-full max-w-4xl h-[80vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                  <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                          <Sparkles className="w-5 h-5 text-indigo-500" />
+                          AI 智能物流规划 (Route Optimizer)
+                      </h3>
+                      <button onClick={() => setShowPlannerModal(false)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-6">
+                      {/* Input Section */}
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8 bg-black/20 p-4 rounded-xl border border-white/5">
+                          <div className="md:col-span-1">
+                              <label className="text-xs text-slate-400 block mb-1">发货地 Origin</label>
+                              <input 
+                                type="text" value={plannerForm.origin} 
+                                onChange={e => setPlannerForm({...plannerForm, origin: e.target.value})} 
+                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none"
+                              />
+                          </div>
+                          <div className="md:col-span-1">
+                              <label className="text-xs text-slate-400 block mb-1">目的地 Destination</label>
+                              <input 
+                                type="text" value={plannerForm.destination} 
+                                onChange={e => setPlannerForm({...plannerForm, destination: e.target.value})} 
+                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none"
+                              />
+                          </div>
+                          <div className="md:col-span-1">
+                              <label className="text-xs text-slate-400 block mb-1">预估重量 (kg)</label>
+                              <input 
+                                type="number" value={plannerForm.weight} 
+                                onChange={e => setPlannerForm({...plannerForm, weight: Number(e.target.value)})} 
+                                className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none"
+                              />
+                          </div>
+                          <div className="md:col-span-1 flex items-end">
+                              <button 
+                                onClick={handleOptimizeRoute}
+                                disabled={isOptimizing}
+                                className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all disabled:opacity-50"
+                              >
+                                  {isOptimizing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />}
+                                  {isOptimizing ? 'AI 计算中...' : '生成方案'}
+                              </button>
+                          </div>
+                      </div>
+
+                      {/* Results Section */}
+                      {routeOptions.length > 0 ? (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                              {routeOptions.map((opt, idx) => (
+                                  <div key={idx} className="ios-glass-card p-5 hover:border-indigo-500/30 transition-all group flex flex-col">
+                                      <div className="flex justify-between items-start mb-4">
+                                          <span className={`px-2 py-1 rounded text-xs font-bold border ${
+                                              opt.type === 'Fastest' ? 'bg-purple-500/10 text-purple-400 border-purple-500/20' : 
+                                              opt.type === 'Cheapest' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 
+                                              'bg-blue-500/10 text-blue-400 border-blue-500/20'
+                                          }`}>
+                                              {opt.type === 'Fastest' ? <Zap className="w-3 h-3 inline mr-1"/> : opt.type === 'Cheapest' ? <Anchor className="w-3 h-3 inline mr-1"/> : <Truck className="w-3 h-3 inline mr-1"/>}
+                                              {opt.type}
+                                          </span>
+                                          <div className="text-right">
+                                              <div className="text-xl font-bold text-white font-mono">{opt.estimatedCost}</div>
+                                              <div className="text-[10px] text-slate-500">Estimated Cost</div>
+                                          </div>
+                                      </div>
+                                      
+                                      <div className="mb-4">
+                                          <div className="text-lg font-bold text-white mb-1">{opt.carrier}</div>
+                                          <div className="text-xs text-slate-400 flex items-center gap-2">
+                                              {opt.method === 'Air' ? <Plane className="w-3 h-3" /> : <Ship className="w-3 h-3" />}
+                                              {opt.method} Freight
+                                          </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-2 gap-2 mb-4 bg-black/20 p-2 rounded-lg text-xs">
+                                          <div>
+                                              <span className="text-slate-500 block">时效</span>
+                                              <span className="text-white font-mono">{opt.transitTime}</span>
+                                          </div>
+                                          <div>
+                                              <span className="text-slate-500 block">风险指数</span>
+                                              <span className={`font-mono font-bold ${opt.riskScore > 5 ? 'text-red-400' : 'text-emerald-400'}`}>{opt.riskScore}/10</span>
+                                          </div>
+                                      </div>
+
+                                      <div className="mt-auto pt-4 border-t border-white/5">
+                                          <p className="text-xs text-slate-400 leading-relaxed">
+                                              <span className="text-indigo-400 font-bold">AI 推荐: </span>
+                                              {opt.reasoning}
+                                          </p>
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      ) : (
+                          <div className="h-64 flex flex-col items-center justify-center text-slate-600 border-2 border-dashed border-white/10 rounded-xl">
+                              <Navigation className="w-12 h-12 mb-3 opacity-20" />
+                              <p className="text-sm">输入参数并点击“生成方案”以获取 AI 建议</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
 
       {/* Add Modal */}
       {showAddModal && (

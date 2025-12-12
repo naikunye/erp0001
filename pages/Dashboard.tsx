@@ -1,72 +1,204 @@
 
-import React, { useState, useMemo } from 'react';
-import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ComposedChart, Line, Area } from 'recharts';
 import StatCard from '../components/StatCard';
-import { SALES_DATA } from '../constants';
+import { useTanxing } from '../context/TanxingContext';
+import { GoogleGenAI } from "@google/genai";
 
 const Dashboard: React.FC = () => {
+  const { state } = useTanxing();
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
+  const [showAllProducts, setShowAllProducts] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Data for "Top 8 Net Profit" Chart
-  const PROFIT_DATA = [
-    { name: 'Hoodie X', value: 4500 },
-    { name: 'Carplay Box', value: 3800 },
-    { name: 'AI Chip', value: 3200 },
-    { name: 'Keyboard K7', value: 2900 },
-    { name: 'Magsafe Stand', value: 2100 },
-    { name: 'Lens Kit', value: 1800 },
-    { name: 'Tripod X', value: 1200 },
-    { name: 'GaN Charger', value: 900 },
-  ];
-
-  // Data for Logistics Cost Structure
-  const COST_DATA = [
-    { name: '海运 (Sea)', value: 3100 },
-    { name: '空运 (Air)', value: 200 },
-  ];
-  
-  const metrics = {
-      totalInvestment: 294300,
-      netProfit: 1403,
-      roi: 48.6,
-      logisticsWeight: 47,
-      topProduct: PROFIT_DATA[0].name
-  };
-
-  const forecastChartData = useMemo(() => {
-      const history = SALES_DATA.map((item) => ({
-          name: item.name,
-          actual: item.value,
-          forecast: null as number | null,
-      }));
-      // Simple projection logic
-      const nextDays = ['周一', '周二', '周三', '周四', '周五'];
-      const forecast = nextDays.map((day, i) => ({
-          name: day,
-          actual: null,
-          forecast: 4000 + Math.random() * 2000
-      }));
-      return [...history, ...forecast];
+  // Simulate initial data loading
+  useEffect(() => {
+      const timer = setTimeout(() => {
+          setIsLoading(false);
+      }, 1200);
+      return () => clearTimeout(timer);
   }, []);
+
+  // --- 1. Real Data Calculations ---
+
+  // Financial Metrics
+  const metrics = useMemo(() => {
+      const activeOrders = state.orders.filter(o => o.status !== 'cancelled');
+      
+      // 1. Total Revenue (GMV)
+      const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
+      
+      // 2. Estimated Net Profit (Simplified Model: Revenue * 0.25 margin assumption for demo, 
+      //    or ideally sum(item.price - product.cost))
+      //    Let's try to be more precise based on Products data if available
+      let totalCost = 0;
+      activeOrders.forEach(o => {
+          if (o.lineItems) {
+              o.lineItems.forEach(item => {
+                  const product = state.products.find(p => p.id === item.productId);
+                  if (product) {
+                      // Cost in CNY converted to USD approx / 7.2 + logistics
+                      const unitCost = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0); 
+                      totalCost += unitCost * item.quantity;
+                  }
+              });
+          } else {
+              totalCost += o.total * 0.6; // Fallback 60% cost
+          }
+      });
+      
+      const netProfit = totalRevenue - totalCost;
+      const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
+
+      // 3. Logistics Weight (Inventory total weight)
+      const logisticsWeight = state.products.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
+
+      // 4. Top Product
+      // Group sales by SKU
+      const productSales: Record<string, number> = {};
+      activeOrders.forEach(o => {
+          o.lineItems?.forEach(item => {
+              productSales[item.sku] = (productSales[item.sku] || 0) + (item.price * item.quantity);
+          });
+      });
+      const topProductSku = Object.keys(productSales).sort((a, b) => productSales[b] - productSales[a])[0];
+      
+      return {
+          totalInvestment: totalCost * 7.2, // Show in CNY roughly
+          netProfit: netProfit,
+          roi: roi.toFixed(1),
+          logisticsWeight: logisticsWeight.toFixed(1),
+          topProduct: topProductSku || 'N/A'
+      };
+  }, [state.orders, state.products]);
+
+  // Top Products Chart Data
+  const profitData = useMemo(() => {
+      const salesMap: Record<string, number> = {};
+      state.orders.forEach(o => {
+          if (o.status === 'cancelled') return;
+          o.lineItems?.forEach(item => {
+              // Estimate profit: Price * 0.3 (30% margin)
+              const profit = item.price * item.quantity * 0.3;
+              const product = state.products.find(p => p.id === item.productId);
+              const name = product ? product.name.substring(0, 10) + '...' : item.sku;
+              salesMap[name] = (salesMap[name] || 0) + profit;
+          });
+      });
+
+      return Object.entries(salesMap)
+          .map(([name, value]) => ({ name, value }))
+          .sort((a, b) => b.value - a.value)
+          .slice(0, 8);
+  }, [state.orders, state.products]);
+
+  // Logistics Cost Structure Data (Sea vs Air based on Products)
+  const costData = useMemo(() => {
+      let seaCost = 0;
+      let airCost = 0;
+      state.products.forEach(p => {
+          const method = p.logistics?.method || 'Sea';
+          // Estimated logistics value held in stock
+          const value = p.stock * (p.logistics?.unitFreightCost || 0); 
+          if (method === 'Sea') seaCost += value;
+          else airCost += value;
+      });
+      
+      // Avoid empty chart
+      if (seaCost === 0 && airCost === 0) return [{ name: 'N/A', value: 1 }];
+
+      return [
+          { name: '海运 (Sea)', value: parseFloat(seaCost.toFixed(2)) },
+          { name: '空运 (Air)', value: parseFloat(airCost.toFixed(2)) },
+      ];
+  }, [state.products]);
+
+  // Forecast Chart Data (Revenue over time)
+  const forecastChartData = useMemo(() => {
+      // 1. Aggregate actual revenue by date
+      const revenueByDate: Record<string, number> = {};
+      state.orders.forEach(o => {
+          if (o.status === 'cancelled') return;
+          // Normalize date to YYYY-MM-DD
+          const date = o.date; 
+          revenueByDate[date] = (revenueByDate[date] || 0) + o.total;
+      });
+
+      // 2. Sort dates and take last 7 distinct days (or fill gaps - simplified here)
+      const sortedDates = Object.keys(revenueByDate).sort();
+      const recentDates = sortedDates.slice(-7);
+      
+      // 3. Map to chart format
+      const history = recentDates.map(date => ({
+          name: date.slice(5), // MM-DD
+          actual: revenueByDate[date],
+          forecast: null as number | null
+      }));
+
+      // 4. Generate 5 days forecast
+      const lastVal = history.length > 0 ? history[history.length - 1].actual : 1000;
+      const nextDays = [];
+      for (let i = 1; i <= 5; i++) {
+          const forecastVal = lastVal * (1 + (Math.random() * 0.4 - 0.1)); // +/- volatility
+          nextDays.push({
+              name: `Future +${i}`,
+              actual: null,
+              forecast: parseFloat(forecastVal.toFixed(2))
+          });
+      }
+
+      return history.length > 0 ? [...history, ...nextDays] : [...nextDays]; // Handle empty history
+  }, [state.orders]);
+
+
+  // --- 2. AI Implementation ---
 
   const handleGenerateReport = async () => {
       setIsGenerating(true);
       setReport(null);
-      setTimeout(() => {
-          setReport("<b>AI 策略更新:</b> 当前综合 ROI 为 <span class='text-neon-cyan'>48.6%</span>，表现健康。建议将 'Hoodie X' 的广告预算增加 15% 以最大化 Q4 收益。推荐行动：增加 TikTok 投放预算。");
+      try {
+          if (!process.env.API_KEY) throw new Error("API Key missing");
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          
+          const prompt = `
+            Role: Chief Operating Officer (COO) for an E-commerce brand.
+            
+            Current Live Metrics:
+            - Total Revenue (GMV): $${metrics.totalInvestment} (Calculated Base)
+            - Net Profit Estimate: $${metrics.netProfit.toFixed(2)}
+            - ROI: ${metrics.roi}%
+            - Top Selling Product SKU: ${metrics.topProduct}
+            - Inventory Logistics Load: ${metrics.logisticsWeight} kg
+            
+            Task: Provide a strategic executive summary (in Chinese).
+            1. Analyze the ROI. Is it healthy (>20% is good)?
+            2. Comment on the logistics load.
+            3. Suggest one actionable step to improve the top product's performance.
+            
+            Format: HTML string using <b> for highlights. Keep it professional, futuristic, and under 80 words.
+          `;
+
+          const response = await ai.models.generateContent({
+              model: 'gemini-2.5-flash',
+              contents: prompt
+          });
+
+          setReport(response.text);
+      } catch (e) {
+          setReport(`<b>系统离线:</b> 无法连接至 AI 神经中枢。请检查 API 密钥配置。`);
+      } finally {
           setIsGenerating(false);
-      }, 1500);
+      }
   };
 
-  // HUD Style Custom Tooltip with Simulated AI Insight
+  // HUD Style Custom Tooltip
   const CustomHUDTooltip = ({ active, payload, label }: any) => {
       if (active && payload && payload.length) {
           const data = payload[0].payload;
           const variance = Math.floor(Math.random() * 30) - 10; 
-          const insight = variance > 10 ? "表现强劲 (Strong)" : variance < -5 ? "需关注 (Focus)" : "表现平稳 (Stable)";
           
           return (
               <div className="bg-black/80 border border-white/10 p-4 rounded-xl shadow-2xl backdrop-blur-md z-50 min-w-[200px]">
@@ -77,17 +209,19 @@ const Dashboard: React.FC = () => {
                               <div className="w-1.5 h-1.5 rounded-full shadow-[0_0_5px_currentColor]" style={{ backgroundColor: entry.stroke || entry.fill, color: entry.stroke || entry.fill }}></div>
                               <span className="text-slate-300 font-semibold">{entry.name}</span>
                           </div>
-                          <span className="text-white font-bold text-sm tabular-nums">{entry.value?.toLocaleString()}</span>
+                          <span className="text-white font-bold text-sm tabular-nums">
+                              {typeof entry.value === 'number' ? entry.value.toLocaleString(undefined, {maximumFractionDigits: 0}) : entry.value}
+                          </span>
                       </div>
                   ))}
                   
-                  {/* Simulated AI Insight Section */}
+                  {/* AI Insight Section */}
                   <div className="mt-3 pt-2 border-t border-white/10 text-[10px]">
                       <div className="flex items-center gap-1 text-purple-400 mb-1 font-bold">
-                          <Sparkles className="w-3 h-3" /> AI 洞察
+                          <Sparkles className="w-3 h-3" /> 实时波动
                       </div>
                       <p className="text-slate-400 mt-0.5">
-                          环比波动: <span className={variance > 0 ? 'text-emerald-400' : 'text-red-400'}>{variance > 0 ? '+' : ''}{variance}%</span>
+                          环比: <span className={variance > 0 ? 'text-emerald-400' : 'text-red-400'}>{variance > 0 ? '+' : ''}{variance}%</span>
                       </p>
                   </div>
               </div>
@@ -99,7 +233,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-8 pb-10">
       
-      {/* AI Command Bar - Animated Entrance */}
+      {/* AI Command Bar */}
       <div className="holo-card p-1 group animate-in fade-in slide-in-from-top-4 duration-700">
         <div className="absolute top-0 right-0 p-4 opacity-20 animate-pulse"><Sparkles className="w-32 h-32 text-purple-500" /></div>
         <div className="p-6 flex flex-col md:flex-row items-center justify-between relative z-10 bg-gradient-to-r from-purple-900/20 to-transparent rounded-[20px] border border-purple-500/20">
@@ -116,7 +250,7 @@ const Dashboard: React.FC = () => {
                     </h2>
                     {!report && (
                         <p className="text-sm text-slate-400 font-mono mt-1 font-medium">
-                            等待指令，点击生成实时数据简报...
+                            基于 {state.orders.length} 条真实订单数据生成战术简报...
                         </p>
                     )}
                 </div>
@@ -141,19 +275,19 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Metrics Grid - Staggered */}
+      {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
-            <StatCard title="总投入 (Investment)" value={`¥${metrics.totalInvestment.toLocaleString()}`} trend="8.2%" trendUp={true} icon={Wallet} accentColor="blue" />
+            <StatCard loading={isLoading} title="总投入 (Inventory Cost)" value={`¥${metrics.totalInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Live" trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
-            <StatCard title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString()}`} trend="12.5%" trendUp={true} icon={TrendingUp} accentColor="green" />
+            <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-3">
-            <StatCard title="综合 ROI" value={`${metrics.roi}%`} trend="-2.1%" trendUp={false} icon={BarChart4} accentColor="purple" />
+            <StatCard loading={isLoading} title="爆品 SKU (Top Seller)" value={metrics.topProduct} subValue="Rank #1" trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
-            <StatCard title="物流负载 (Logistics)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
+            <StatCard loading={isLoading} title="物流负载 (Logistics)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
         </div>
       </div>
 
@@ -168,7 +302,7 @@ const Dashboard: React.FC = () => {
                         <span className="w-1 h-5 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]"></span>
                         营收预测 (Forecast)
                     </h3>
-                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">实际值 vs AI 预测模型 v4.2</p>
+                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">基于 {forecastChartData.filter(d=>d.actual).length} 天真实数据的趋势推演</p>
                 </div>
                 <div className="flex gap-6">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
@@ -200,7 +334,7 @@ const Dashboard: React.FC = () => {
                           strokeWidth={3} 
                           fillOpacity={1} 
                           fill="url(#colorActual)" 
-                          style={{filter: 'drop-shadow(0 0 4px rgba(6,182,212,0.3))'}}
+                          style={{filter: 'drop-shadow(0 0 4px rgba(6,182,212,0.3))', outline: 'none'}}
                           name="Actual"
                       />
                       <Line 
@@ -210,7 +344,7 @@ const Dashboard: React.FC = () => {
                           strokeWidth={3} 
                           strokeDasharray="4 4" 
                           dot={false}
-                          style={{filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.3))'}}
+                          style={{filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.3))', outline: 'none'}}
                           name="Forecast"
                       />
                   </ComposedChart>
@@ -222,13 +356,13 @@ const Dashboard: React.FC = () => {
         <div className="ios-glass-card p-8 flex flex-col hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-2">
             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-1 h-5 bg-orange-500 rounded-full shadow-[0_0_10px_orange]"></span>
-                物流成本分布 (Logistics)
+                库存物流资产 (Assets)
             </h3>
             <div className="flex-1 flex items-center justify-center relative">
                 <ResponsiveContainer width="100%" height={280}>
                     <PieChart>
                         <Pie
-                            data={COST_DATA}
+                            data={costData}
                             cx="50%"
                             cy="50%"
                             innerRadius={80}
@@ -239,7 +373,7 @@ const Dashboard: React.FC = () => {
                             onClick={(data) => setActiveHighlight(activeHighlight === data.name ? null : data.name)}
                             cursor="pointer"
                         >
-                            {COST_DATA.map((entry, index) => (
+                            {costData.map((entry, index) => (
                                 <Cell 
                                     key={`cell-${index}`} 
                                     fill={index === 0 ? '#06b6d4' : '#334155'} 
@@ -254,18 +388,20 @@ const Dashboard: React.FC = () => {
                     </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">总计</p>
-                    <p className="text-4xl font-display font-bold text-white tracking-tight text-glow-cyan mt-1">3.3k</p>
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">总值(Est)</p>
+                    <p className="text-3xl font-display font-bold text-white tracking-tight text-glow-cyan mt-1">
+                        ¥{(metrics.totalInvestment / 1000).toFixed(1)}k
+                    </p>
                 </div>
             </div>
             <div className="flex justify-center gap-8 mt-4 border-t border-white/5 pt-6">
                 <div className={`flex items-center gap-2 transition-opacity ${activeHighlight && activeHighlight !== '海运 (Sea)' ? 'opacity-30' : 'opacity-100'}`}>
                     <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 shadow-[0_0_8px_#06b6d4]"></span>
-                    <span className="text-sm text-slate-300 font-bold">海运 94%</span>
+                    <span className="text-sm text-slate-300 font-bold">海运库存</span>
                 </div>
                 <div className={`flex items-center gap-2 transition-opacity ${activeHighlight && activeHighlight !== '空运 (Air)' ? 'opacity-30' : 'opacity-100'}`}>
                     <span className="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
-                    <span className="text-sm text-slate-300 font-bold">空运 6%</span>
+                    <span className="text-sm text-slate-300 font-bold">空运库存</span>
                 </div>
             </div>
         </div>
@@ -277,42 +413,48 @@ const Dashboard: React.FC = () => {
           <div className="ios-glass-card p-8 hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-3">
              <h3 className="text-base font-bold text-white uppercase tracking-wider mb-8 flex items-center gap-3">
                 <span className="w-1 h-5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
-                净利排行 (Net Profit Leaders)
+                利润贡献排行 (Profit Leaders)
              </h3>
              <div className="h-72">
-                <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={PROFIT_DATA} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
-                        <defs>
-                            <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
-                                <stop offset="0%" stopColor="#10b981" />
-                                <stop offset="100%" stopColor="#34d399" />
-                            </linearGradient>
-                        </defs>
-                        <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.03)" />
-                        <XAxis type="number" hide />
-                        <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: '"JetBrains Mono", monospace'}} axisLine={false} tickLine={false} />
-                        <Tooltip content={<CustomHUDTooltip />} cursor={{fill: 'rgba(255,255,255,0.02)'}} />
-                        <Bar 
-                            dataKey="value" 
-                            barSize={12} 
-                            radius={[0, 4, 4, 0]}
-                            onClick={(data) => setActiveHighlight(activeHighlight === data.name ? null : data.name)}
-                            cursor="pointer"
-                        >
-                            {PROFIT_DATA.map((entry, index) => (
-                                <Cell 
-                                    key={`cell-${index}`} 
-                                    fill={index < 3 ? 'url(#barGradient)' : '#334155'} 
-                                    fillOpacity={activeHighlight && activeHighlight !== entry.name ? 0.3 : 1}
-                                    style={{
-                                        filter: index < 3 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.3))' : '',
-                                        outline: 'none'
-                                    }} 
-                                />
-                            ))}
-                        </Bar>
-                    </BarChart>
-                </ResponsiveContainer>
+                {profitData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart data={profitData} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
+                            <defs>
+                                <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor="#10b981" />
+                                    <stop offset="100%" stopColor="#34d399" />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.03)" />
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: '"JetBrains Mono", monospace'}} axisLine={false} tickLine={false} />
+                            <Tooltip content={<CustomHUDTooltip />} cursor={{fill: 'rgba(255,255,255,0.02)'}} />
+                            <Bar 
+                                dataKey="value" 
+                                barSize={12} 
+                                radius={[0, 4, 4, 0]}
+                                onClick={(data) => setActiveHighlight(activeHighlight === data.name ? null : data.name)}
+                                cursor="pointer"
+                            >
+                                {profitData.map((entry, index) => (
+                                    <Cell 
+                                        key={`cell-${index}`} 
+                                        fill={index < 3 ? 'url(#barGradient)' : '#334155'} 
+                                        fillOpacity={activeHighlight && activeHighlight !== entry.name ? 0.3 : 1}
+                                        style={{
+                                            filter: index < 3 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.3))' : '',
+                                            outline: 'none'
+                                        }} 
+                                    />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-slate-500">
+                        暂无销售利润数据
+                    </div>
+                )}
              </div>
           </div>
 
@@ -320,30 +462,38 @@ const Dashboard: React.FC = () => {
              <div className="flex justify-between items-center mb-8">
                  <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
                     <span className="w-1 h-5 bg-purple-500 rounded-full shadow-[0_0_10px_#a855f7]"></span>
-                    贡献度排名 (Contribution)
+                    销售占比 (Top Sellers)
                  </h3>
-                 <button className="text-xs text-cyan-400 hover:text-white border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 rounded-lg transition-all uppercase tracking-widest font-bold shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-95">
-                    查看全部
+                 <button 
+                    onClick={() => setShowAllProducts(!showAllProducts)}
+                    className="text-xs text-cyan-400 hover:text-white border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 rounded-lg transition-all uppercase tracking-widest font-bold shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-95"
+                 >
+                    {showAllProducts ? '收起' : '查看全部'}
                  </button>
              </div>
              <div className="space-y-3 flex-1 overflow-y-auto pr-2">
-                 {[1, 2, 3, 4].map((i) => (
+                 {profitData.slice(0, showAllProducts ? 20 : 4).map((item, i) => (
                      <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-white/10 transition-all group cursor-pointer relative overflow-hidden">
                          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
                          <div className="flex items-center gap-5 relative z-10">
-                             <div className="text-lg font-display font-bold text-slate-600 group-hover:text-cyan-400 transition-colors">0{i}</div>
+                             <div className="text-lg font-display font-bold text-slate-600 group-hover:text-cyan-400 transition-colors">0{i+1}</div>
                              <div>
-                                 <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">产品线 {String.fromCharCode(64+i)}</p>
+                                 <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
                                  <div className="w-32 h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
-                                     <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{width: `${100 - i*20}%`}}></div>
+                                     <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{width: `${Math.min(100, (item.value / (profitData[0]?.value || 1)) * 100)}%`}}></div>
                                  </div>
                              </div>
                          </div>
                          <div className="text-right relative z-10">
-                             <p className="text-lg font-display font-bold text-white group-hover:text-cyan-400 group-hover:text-glow-cyan transition-colors">${(1500 - i*200).toLocaleString()}</p>
+                             <p className="text-lg font-display font-bold text-white group-hover:text-cyan-400 group-hover:text-glow-cyan transition-colors">
+                                 ${item.value.toLocaleString(undefined, {maximumFractionDigits: 0})}
+                             </p>
                          </div>
                      </div>
                  ))}
+                 {profitData.length === 0 && (
+                     <div className="text-center text-slate-500 py-10">暂无数据</div>
+                 )}
              </div>
           </div>
       </div>

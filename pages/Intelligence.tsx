@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bot, Brain, Zap, Globe, MapPin, Image as ImageIcon, Video, Mic, 
   Speaker, Upload, Sparkles, Loader2, Send, Play, Square, Pause,
-  Maximize2, RefreshCw, Download, AlertCircle, Wand2, Film
+  Maximize2, RefreshCw, Download, AlertCircle, Wand2, Film, StopCircle
 } from 'lucide-react';
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { useTanxing } from '../context/TanxingContext';
@@ -16,7 +16,57 @@ const TABS = [
   { id: 'voice', label: '语音交互 (Voice)', icon: Mic },
 ];
 
-// --- Helper Functions ---
+// --- Audio Helper Functions (PCM Decoding/Encoding) ---
+
+function base64ToUint8Array(base64: string) {
+  const binaryString = atob(base64);
+  const len = binaryString.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  let binary = '';
+  const bytes = new Uint8Array(buffer);
+  const len = bytes.byteLength;
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// Convert Float32 mic input to 16-bit PCM for Gemini
+function floatTo16BitPCM(input: Float32Array) {
+    const output = new Int16Array(input.length);
+    for (let i = 0; i < input.length; i++) {
+        const s = Math.max(-1, Math.min(1, input[i]));
+        output[i] = s < 0 ? s * 0x8000 : s * 0x7FFF;
+    }
+    return output.buffer;
+}
+
+// Decode Gemini's 24kHz PCM output to AudioBuffer
+async function decodeAudioData(
+  base64Data: string,
+  ctx: AudioContext,
+  sampleRate: number = 24000
+): Promise<AudioBuffer> {
+  const uint8Array = base64ToUint8Array(base64Data);
+  const int16Array = new Int16Array(uint8Array.buffer);
+  const float32Array = new Float32Array(int16Array.length);
+  
+  for (let i = 0; i < int16Array.length; i++) {
+    float32Array[i] = int16Array[i] / 32768.0;
+  }
+
+  const buffer = ctx.createBuffer(1, float32Array.length, sampleRate);
+  buffer.getChannelData(0).set(float32Array);
+  return buffer;
+}
+
 const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: string; mimeType: string } }> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -39,12 +89,11 @@ const checkApiKeySelection = async () => {
         const hasKey = await (window as any).aistudio.hasSelectedApiKey();
         if (!hasKey && (window as any).aistudio.openSelectKey) {
             await (window as any).aistudio.openSelectKey();
-            // Assume success after dialog interaction to avoid race condition
             return true;
         }
         return hasKey;
     }
-    return true; // Fallback if not in specific environment
+    return true; 
 };
 
 // --- Components ---
@@ -91,7 +140,7 @@ const OmniChat = () => {
                 case 'lite':
                     model = 'gemini-2.5-flash-lite';
                     break;
-                default: // Standard
+                default: 
                     model = 'gemini-2.5-flash';
             }
 
@@ -152,7 +201,6 @@ const OmniChat = () => {
                             {msg.isThinking && <div className="text-xs text-purple-400 font-mono mb-1 flex items-center gap-1"><Brain className="w-3 h-3"/> 思考过程已完成</div>}
                             {msg.text}
                         </div>
-                        {/* Grounding Sources */}
                         {msg.grounding?.groundingChunks && (
                             <div className="mt-2 text-xs flex flex-wrap gap-2 max-w-[80%]">
                                 {msg.grounding.groundingChunks.map((chunk: any, i: number) => {
@@ -212,7 +260,6 @@ const CreativeStudio = () => {
         setStatusMsg('正在初始化创意引擎...');
 
         try {
-            // API Key Check for Veo & High-Quality Image
             if (tool === 'video-gen' || (tool === 'image-gen' && imageSize !== '1K')) {
                 await checkApiKeySelection();
             }
@@ -230,7 +277,6 @@ const CreativeStudio = () => {
                     }
                 });
                 
-                // Extract Image
                 for (const part of response.candidates?.[0]?.content?.parts || []) {
                     if (part.inlineData) {
                         setResultUrl(`data:${part.inlineData.mimeType};base64,${part.inlineData.data}`);
@@ -251,14 +297,13 @@ const CreativeStudio = () => {
                 
                 setStatusMsg('正在渲染视频帧... 此过程可能需要一分钟。');
                 while (!operation.done) {
-                    await new Promise(resolve => setTimeout(resolve, 5000)); // Poll every 5s
+                    await new Promise(resolve => setTimeout(resolve, 5000));
                     operation = await ai.operations.getVideosOperation({ operation: operation });
                     setStatusMsg('渲染进行中...');
                 }
 
                 const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
                 if (videoUri) {
-                    // Fetch blob directly to avoid CORS/Auth issues with raw link if possible, or just append key
                     setResultUrl(`${videoUri}&key=${process.env.API_KEY}`);
                 }
             } else if (tool === 'image-edit') {
@@ -270,7 +315,7 @@ const CreativeStudio = () => {
                     model: 'gemini-2.5-flash-image',
                     contents: {
                         parts: [
-                            imgPart, // FIX: Use imgPart directly (it already has {inlineData: ...} structure)
+                            imgPart, 
                             { text: prompt || "Edit this image" }
                         ]
                     }
@@ -293,7 +338,6 @@ const CreativeStudio = () => {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
-            {/* Controls */}
             <div className="md:col-span-1 bg-black/20 border border-white/10 rounded-xl p-5 flex flex-col gap-5 backdrop-blur-sm">
                 <div className="flex gap-2 p-1 bg-black/40 rounded-lg border border-white/10">
                     <button onClick={() => setTool('image-gen')} className={`flex-1 py-2 text-xs font-bold rounded ${tool === 'image-gen' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>图片生成</button>
@@ -367,7 +411,6 @@ const CreativeStudio = () => {
                 </button>
             </div>
 
-            {/* Preview */}
             <div className="md:col-span-2 bg-black/20 border border-white/10 rounded-xl flex flex-col items-center justify-center relative overflow-hidden p-6 backdrop-blur-sm">
                 {loading ? (
                     <div className="text-center">
@@ -393,6 +436,7 @@ const CreativeStudio = () => {
 
 const VisionLab = () => {
     const [file, setFile] = useState<File | null>(null);
+    const [prompt, setPrompt] = useState('');
     const [analysis, setAnalysis] = useState('');
     const [loading, setLoading] = useState(false);
 
@@ -405,12 +449,14 @@ const VisionLab = () => {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const filePart = await fileToGenerativePart(file);
 
+            const userPrompt = prompt || "Analyze this media in detail. Describe features and key information. Answer in Chinese.";
+
             const response = await ai.models.generateContent({
                 model: 'gemini-3-pro-preview',
                 contents: {
                     parts: [
-                        filePart, // FIX: Use filePart directly
-                        { text: "Analyze this media in detail. If it's a product, describe features and selling points. If it's a chart, extract data. Answer in Chinese." }
+                        filePart,
+                        { text: userPrompt }
                     ]
                 }
             });
@@ -445,6 +491,17 @@ const VisionLab = () => {
                         </div>
                     )}
                 </div>
+                
+                <div>
+                    <label className="text-xs font-bold text-slate-400 mb-1 block">分析指令 (可选)</label>
+                    <textarea 
+                        value={prompt}
+                        onChange={e => setPrompt(e.target.value)}
+                        className="w-full h-20 bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-indigo-500 outline-none resize-none"
+                        placeholder="例如：提取这张图里的所有文字，或者描述视频中的产品卖点..."
+                    />
+                </div>
+
                 <button 
                     onClick={handleAnalyze} 
                     disabled={!file || loading}
@@ -475,38 +532,159 @@ const VoiceLab = () => {
     const [ttsText, setTtsText] = useState('');
     const [isSpeaking, setIsSpeaking] = useState(false);
 
-    // --- Transcription State ---
-    const [transcription, setTranscription] = useState('');
-    const [isRecording, setIsRecording] = useState(false);
-    const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+    // Audio Contexts
+    const inputAudioContext = useRef<AudioContext | null>(null);
+    const outputAudioContext = useRef<AudioContext | null>(null);
+    const audioStream = useRef<MediaStream | null>(null);
+    const sessionRef = useRef<any>(null);
+    
+    // Playback state
+    const nextStartTime = useRef<number>(0);
+    const scheduledSources = useRef<AudioBufferSourceNode[]>([]);
 
-    // Live API Handlers (Simplified Simulation for Demo consistency with prompt reqs)
+    useEffect(() => {
+        return () => {
+            // Cleanup on unmount
+            if (sessionRef.current) {
+                sessionRef.current.close();
+            }
+            if (audioStream.current) {
+                audioStream.current.getTracks().forEach(track => track.stop());
+            }
+            if (inputAudioContext.current) inputAudioContext.current.close();
+            if (outputAudioContext.current) outputAudioContext.current.close();
+        }
+    }, []);
+
+    // --- REAL Live API Handler ---
     const handleLiveConnect = async () => {
-        setLogs(prev => [...prev, '正在连接 Gemini Live API...']);
+        if (connected) {
+            // Disconnect Logic
+            if (sessionRef.current) {
+                sessionRef.current.close();
+                sessionRef.current = null;
+            }
+            if (audioStream.current) {
+                audioStream.current.getTracks().forEach(track => track.stop());
+                audioStream.current = null;
+            }
+            setConnected(false);
+            setLogs(prev => [...prev, '连接已断开']);
+            return;
+        }
+
+        setLogs(prev => [...prev, '正在初始化音频环境...']);
+        
         try {
             if (!process.env.API_KEY) throw new Error("API Key missing");
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+            // Setup Audio Contexts
+            inputAudioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
+            outputAudioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+            nextStartTime.current = outputAudioContext.current.currentTime;
+
+            // Get Mic
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            audioStream.current = stream;
+            setLogs(prev => [...prev, '麦克风已就绪']);
+
+            // Connect Live Session
+            const sessionPromise = ai.live.connect({
+                model: 'gemini-2.5-flash-native-audio-preview-09-2025',
+                config: {
+                    responseModalities: [Modality.AUDIO],
+                    speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Zephyr' } } },
+                },
+                callbacks: {
+                    onopen: () => {
+                        setConnected(true);
+                        setLogs(prev => [...prev, 'Gemini Live 连接成功！正在监听...']);
+                        
+                        // Setup Audio Processor
+                        const source = inputAudioContext.current!.createMediaStreamSource(stream);
+                        const processor = inputAudioContext.current!.createScriptProcessor(4096, 1, 1);
+                        
+                        processor.onaudioprocess = (e) => {
+                            const inputData = e.inputBuffer.getChannelData(0);
+                            const pcmData16 = floatTo16BitPCM(inputData);
+                            const base64 = arrayBufferToBase64(pcmData16);
+                            
+                            sessionPromise.then(session => {
+                                session.sendRealtimeInput({
+                                    media: {
+                                        mimeType: 'audio/pcm;rate=16000',
+                                        data: base64
+                                    }
+                                });
+                            });
+                        };
+                        
+                        source.connect(processor);
+                        processor.connect(inputAudioContext.current!.destination);
+                    },
+                    onmessage: async (msg: LiveServerMessage) => {
+                        // Handle Audio Output
+                        const audioData = msg.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+                        if (audioData) {
+                            try {
+                                const ctx = outputAudioContext.current!;
+                                const buffer = await decodeAudioData(audioData, ctx, 24000);
+                                
+                                const source = ctx.createBufferSource();
+                                source.buffer = buffer;
+                                source.connect(ctx.destination);
+                                
+                                const startTime = Math.max(ctx.currentTime, nextStartTime.current);
+                                source.start(startTime);
+                                nextStartTime.current = startTime + buffer.duration;
+                                scheduledSources.current.push(source);
+                                
+                                source.onended = () => {
+                                    scheduledSources.current = scheduledSources.current.filter(s => s !== source);
+                                };
+                            } catch (e) {
+                                console.error("Audio Decode Error", e);
+                            }
+                        }
+                        
+                        if (msg.serverContent?.turnComplete) {
+                            setLogs(prev => [...prev, '模型回复完毕']);
+                        }
+                        
+                        if (msg.serverContent?.interrupted) {
+                            setLogs(prev => [...prev, '用户打断']);
+                            // Cancel queued audio
+                            scheduledSources.current.forEach(s => s.stop());
+                            scheduledSources.current = [];
+                            nextStartTime.current = outputAudioContext.current!.currentTime;
+                        }
+                    },
+                    onclose: () => {
+                        setConnected(false);
+                        setLogs(prev => [...prev, '连接关闭']);
+                    },
+                    onerror: (e) => {
+                        setLogs(prev => [...prev, '连接错误']);
+                        console.error(e);
+                    }
+                }
+            });
             
-            try {
-                // Try to get mic access
-                await navigator.mediaDevices.getUserMedia({ audio: true });
-                setLogs(prev => [...prev, '麦克风权限已获取。']);
-            } catch (mediaError) {
-                console.warn("Microphone not found or permission denied. Switching to simulation mode.");
-                setLogs(prev => [...prev, '⚠️ 未检测到麦克风或权限不足。切换至模拟模式。']);
-            }
-            
-            // Simulate connection for UI feedback
-            setConnected(true);
-            setLogs(prev => [...prev, '连接成功！正在监听...', '(会话活跃)']);
-            
+            sessionRef.current = await sessionPromise;
+
         } catch (e: any) {
             setLogs(prev => [...prev, `错误: ${e.message}`]);
+            setConnected(false);
         }
     };
 
+    // --- REAL TTS Handler (PCM) ---
     const handleTTS = async () => {
         if (!ttsText) return;
         setIsSpeaking(true);
+        setLogs(prev => [...prev, '正在生成语音 (PCM)...']);
+        
         try {
             if (!process.env.API_KEY) throw new Error("API Key missing");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
@@ -519,11 +697,21 @@ const VoiceLab = () => {
                 },
             });
             
-            // Decode and play (Simulated playback for base64)
             const base64Audio = response.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
             if (base64Audio) {
-                const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`); 
-                setLogs(prev => [...prev, '语音生成成功。正在播放...']);
+                // Initialize context if needed
+                if (!outputAudioContext.current) {
+                    outputAudioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });
+                }
+                const ctx = outputAudioContext.current;
+                
+                // Decode and Play
+                const buffer = await decodeAudioData(base64Audio, ctx, 24000);
+                const source = ctx.createBufferSource();
+                source.buffer = buffer;
+                source.connect(ctx.destination);
+                source.start();
+                setLogs(prev => [...prev, '播放成功']);
             }
         } catch (e: any) {
             setLogs(prev => [...prev, `TTS 错误: ${e.message}`]);
@@ -532,90 +720,34 @@ const VoiceLab = () => {
         }
     };
 
-    const handleTranscribe = async () => {
-        if (isRecording) {
-            if (mediaRecorderRef.current) {
-                // Stop real recorder if it exists
-                if (mediaRecorderRef.current.state !== 'inactive') {
-                    mediaRecorderRef.current.stop();
-                }
-                // Stop tracks to release mic
-                mediaRecorderRef.current.stream.getTracks().forEach(track => track.stop());
-                mediaRecorderRef.current = null;
-            }
-            
-            setIsRecording(false);
-            setLogs(prev => [...prev, '正在处理音频...']);
-            // Mock result
-            setTimeout(() => {
-                setTranscription("这是使用 Gemini 2.5 Flash 生成的模拟语音转录文本。");
-                setLogs(prev => [...prev, '转录完成。']);
-            }, 1500);
-        } else {
-            setLogs(prev => [...prev, '正在请求麦克风权限...']);
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                const recorder = new MediaRecorder(stream);
-                recorder.start();
-                mediaRecorderRef.current = recorder;
-                setIsRecording(true);
-                setLogs(prev => [...prev, '开始录音。']);
-            } catch (error) {
-                console.error("Mic error:", error);
-                // Fallback simulation
-                setLogs(prev => [...prev, '⚠️ 设备未找到。模拟录音中...']);
-                setIsRecording(true);
-            }
-        }
-    };
-
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
             <div className="space-y-6">
                 {/* Live Card */}
-                <div className="bg-black/20 border border-white/10 rounded-xl p-6 relative overflow-hidden backdrop-blur-sm">
-                    <div className="relative z-10">
+                <div className="bg-black/20 border border-white/10 rounded-xl p-6 relative overflow-hidden backdrop-blur-sm h-full flex flex-col">
+                    <div className="relative z-10 flex-1 flex flex-col">
                         <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
-                            <Mic className="w-5 h-5 text-red-500" /> 实时对话 (Live API)
+                            <Mic className="w-5 h-5 text-red-500" /> 实时对话 (Gemini Live)
                         </h3>
-                        <p className="text-xs text-slate-400 mb-6">低延迟、可打断的实时 AI 语音对话体验。</p>
+                        <p className="text-xs text-slate-400 mb-6">低延迟、全双工、可打断的实时 AI 语音对话。</p>
                         
-                        <div className="flex gap-4">
+                        <div className="flex gap-4 mb-6">
                             <button 
                                 onClick={handleLiveConnect}
-                                disabled={connected}
-                                className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${connected ? 'bg-red-500/20 text-red-400 cursor-default' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/40'}`}
+                                className={`px-6 py-3 rounded-xl font-bold flex items-center gap-2 transition-all ${connected ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-red-600 hover:bg-red-500 text-white shadow-lg shadow-red-900/40'}`}
                             >
-                                {connected ? <span className="animate-pulse">● 通话中</span> : <Play className="w-4 h-4 fill-current" />}
-                                {connected ? '正在监听' : '开始对话'}
+                                {connected ? <StopCircle className="w-4 h-4 fill-current" /> : <Play className="w-4 h-4 fill-current" />}
+                                {connected ? '断开连接' : '开始对话'}
                             </button>
-                            {connected && (
-                                <button onClick={() => setConnected(false)} className="px-4 py-3 bg-slate-800 rounded-xl text-white hover:bg-slate-700">
-                                    <Square className="w-4 h-4 fill-current" />
-                                </button>
-                            )}
+                        </div>
+
+                        <div className="flex-1 bg-black/40 rounded-lg p-3 overflow-y-auto text-xs font-mono text-slate-300 space-y-1 border border-white/5">
+                            {logs.map((log, i) => <div key={i}>{log}</div>)}
                         </div>
                     </div>
                     {connected && (
                         <div className="absolute top-0 right-0 bottom-0 left-0 bg-[radial-gradient(circle_at_center,_#ef4444_0%,_transparent_70%)] opacity-5 pointer-events-none animate-pulse"></div>
                     )}
-                </div>
-
-                {/* Transcription Card */}
-                <div className="bg-black/20 border border-white/10 rounded-xl p-6 backdrop-blur-sm">
-                    <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <RefreshCw className="w-5 h-5 text-blue-500" /> 语音转写 (Transcription)
-                    </h3>
-                    <div className="bg-black/40 p-4 rounded-lg min-h-[100px] mb-4 text-sm text-slate-300 border border-white/10">
-                        {transcription || "录制的文本将显示在这里..."}
-                    </div>
-                    <button 
-                        onClick={handleTranscribe}
-                        className={`w-full py-3 rounded-xl font-bold transition-all flex items-center justify-center gap-2 ${isRecording ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-blue-600 text-white hover:bg-blue-500'}`}
-                    >
-                        {isRecording ? <Square className="w-4 h-4 fill-current" /> : <Mic className="w-4 h-4" />}
-                        {isRecording ? '停止录音' : '录音并转写'}
-                    </button>
                 </div>
             </div>
 
@@ -623,13 +755,13 @@ const VoiceLab = () => {
                 {/* TTS Card */}
                 <div className="bg-black/20 border border-white/10 rounded-xl p-6 h-full flex flex-col backdrop-blur-sm">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-                        <Speaker className="w-5 h-5 text-emerald-500" /> 文本转语音 (TTS)
+                        <Speaker className="w-5 h-5 text-emerald-500" /> 文本转语音 (PCM TTS)
                     </h3>
                     <textarea 
                         value={ttsText}
                         onChange={e => setTtsText(e.target.value)}
                         className="flex-1 bg-black/40 border border-white/10 rounded-lg p-4 text-sm text-white focus:border-emerald-500 outline-none resize-none mb-4"
-                        placeholder="输入要朗读的文本..."
+                        placeholder="输入要朗读的文本 (支持中英文)..."
                     />
                     <button 
                         onClick={handleTTS}
@@ -637,7 +769,7 @@ const VoiceLab = () => {
                         className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
                     >
                         {isSpeaking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Play className="w-4 h-4 fill-current" />}
-                        生成语音
+                        生成并播放 (Realtime)
                     </button>
                 </div>
             </div>
