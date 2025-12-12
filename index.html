@@ -1,0 +1,155 @@
+
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tanxing OS | Quantum Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Rajdhani:wght@500;600;700&family=Noto+Sans+SC:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['"Inter"', '"Noto Sans SC"', 'sans-serif'],
+              mono: ['"JetBrains Mono"', 'monospace'],
+              display: ['"Rajdhani"', 'sans-serif'],
+            },
+            colors: {
+              glass: {
+                100: 'rgba(255, 255, 255, 0.03)',
+                200: 'rgba(255, 255, 255, 0.05)',
+                300: 'rgba(255, 255, 255, 0.08)',
+                border: 'rgba(255, 255, 255, 0.08)',
+                highlight: 'rgba(255, 255, 255, 0.15)',
+              },
+              quantum: {
+                cyan: '#00F0FF',
+                blue: '#0066FF',
+                dark: '#05070A'
+              }
+            },
+            animation: {
+              'float': 'float 10s ease-in-out infinite',
+              'pulse-glow': 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            },
+            keyframes: {
+              float: {
+                '0%, 100%': { transform: 'translateY(0) scale(1)' },
+                '50%': { transform: 'translateY(-20px) scale(1.05)' },
+              },
+              'pulse-glow': {
+                '0%, 100%': { opacity: '1', boxShadow: '0 0 5px rgba(0, 240, 255, 0.5)' },
+                '50%': { opacity: '0.8', boxShadow: '0 0 15px rgba(0, 240, 255, 0.8)' },
+              }
+            }
+          }
+        }
+      }
+    </script>
+    <style>
+      /* --- Quantum Reset --- */
+      html, body {
+        background-color: #05070A;
+        color: #E2E8F0;
+        font-family: 'Inter', 'Noto Sans SC', sans-serif;
+        overflow: hidden;
+        height: 100%;
+        width: 100%;
+      }
+
+      /* --- Quantum Background --- */
+      .quantum-bg {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(circle at 50% 0%, #0f1524 0%, #05070A 100%);
+        z-index: -2;
+      }
+
+      .quantum-orb {
+        position: fixed;
+        border-radius: 50%;
+        filter: blur(100px);
+        z-index: -1;
+        opacity: 0.4;
+        animation: float 15s infinite ease-in-out;
+      }
+      .orb-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #0066FF; animation-delay: 0s; }
+      .orb-2 { bottom: -20%; right: -10%; width: 60vw; height: 60vw; background: #00F0FF; opacity: 0.15; animation-delay: -5s; }
+      .orb-3 { top: 40%; left: 40%; width: 30vw; height: 30vw; background: #7000FF; opacity: 0.1; animation-delay: -8s; }
+
+      /* --- Quantum Glass Card --- */
+      .glass-panel {
+        background: rgba(20, 25, 35, 0.4);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      }
+
+      .glass-card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(255, 255, 255, 0.01) 100%);
+        backdrop-filter: blur(12px);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .glass-card:hover {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+        border-color: rgba(0, 240, 255, 0.3);
+        box-shadow: 0 0 20px rgba(0, 240, 255, 0.05);
+        transform: translateY(-2px);
+      }
+
+      /* --- Special Effects --- */
+      .text-glow {
+        text-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
+      }
+      
+      /* Subtle Grid Overlay */
+      .grid-overlay {
+        position: fixed;
+        inset: 0;
+        background-image: 
+          linear-gradient(rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+        background-size: 50px 50px;
+        pointer-events: none;
+        z-index: -1;
+        mask-image: radial-gradient(circle at center, black 40%, transparent 100%);
+      }
+
+      /* Scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 3px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
+    </style>
+  <script type="importmap">
+{
+  "imports": {
+    "react/": "https://aistudiocdn.com/react@^19.2.1/",
+    "react": "https://aistudiocdn.com/react@^19.2.1",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
+    "react-dom": "https://esm.sh/react-dom@^19.2.1"
+  }
+}
+</script>
+</head>
+  <body>
+    <div class="quantum-bg"></div>
+    <div class="quantum-orb orb-1"></div>
+    <div class="quantum-orb orb-2"></div>
+    <div class="quantum-orb orb-3"></div>
+    <div class="grid-overlay"></div>
+    <div id="root" class="h-full w-full relative z-10 text-slate-200"></div>
+  </body>
+</html>
