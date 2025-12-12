@@ -133,13 +133,15 @@ const Settings: React.FC = () => {
 
   // EchoTik State
   const [echotikForm, setEchotikForm] = useState({
-      apiKey: state.echotikConfig?.apiKey || '',
+      username: state.echotikConfig?.username || '',
+      password: state.echotikConfig?.password || '',
       region: state.echotikConfig?.region || 'US'
   });
 
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showKey, setShowKey] = useState(false);
+  const [showEchoTikPass, setShowEchoTikPass] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
 
   // --- Handlers ---
@@ -324,21 +326,36 @@ const Settings: React.FC = () => {
                       <h4 className="text-sm font-bold text-white mb-1">EchoTik API 集成</h4>
                       <p className="text-xs text-slate-300 leading-relaxed">
                           接入 EchoTik 第三方数据服务，用于 TikTok Shop 市场情报、达人搜索与选品分析。
-                          需要在营销 (Marketing) 模块中使用。
+                          请填写 API 密钥管理中的 Username 和 Password。
                       </p>
                   </div>
               </div>
 
               <div className="space-y-4 max-w-lg">
                   <div className="space-y-1">
-                      <label className="text-xs text-slate-400">EchoTik API Key</label>
+                      <label className="text-xs text-slate-400">Username / Access Key</label>
                       <input 
-                          type="password" 
-                          value={echotikForm.apiKey} 
-                          onChange={e => setEchotikForm({...echotikForm, apiKey: e.target.value})} 
+                          type="text" 
+                          value={echotikForm.username} 
+                          onChange={e => setEchotikForm({...echotikForm, username: e.target.value})} 
                           className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white font-mono focus:border-pink-500 outline-none" 
-                          placeholder="echotik_sk_..." 
+                          placeholder="e.g. 240906..." 
                       />
+                  </div>
+                  <div className="space-y-1">
+                      <label className="text-xs text-slate-400">Password / Secret Key</label>
+                      <div className="relative">
+                          <input 
+                              type={showEchoTikPass ? "text" : "password"} 
+                              value={echotikForm.password} 
+                              onChange={e => setEchotikForm({...echotikForm, password: e.target.value})} 
+                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white font-mono focus:border-pink-500 outline-none pr-10" 
+                              placeholder="e.g. 962749..." 
+                          />
+                          <button onClick={() => setShowEchoTikPass(!showEchoTikPass)} className="absolute right-3 top-2.5 text-slate-500 hover:text-white">
+                              {showEchoTikPass ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                          </button>
+                      </div>
                   </div>
                   <div className="space-y-1">
                       <label className="text-xs text-slate-400">默认市场区域 (Region)</label>

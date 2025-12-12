@@ -82,10 +82,10 @@ const EchoTikDiscoveryModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
     const searchEchoTik = async () => {
         if (!searchQuery) return;
         
-        // 1. Validate API Key
-        const apiKey = state.echotikConfig?.apiKey;
-        if (!apiKey) {
-            setErrorMsg("未配置 API Key。请前往系统设置 -> Integrations 配置 EchoTik API Key。");
+        // 1. Validate Credentials
+        const { username, password } = state.echotikConfig;
+        if (!username || !password) {
+            setErrorMsg("未配置 EchoTik Username 或 Password。请前往系统设置 -> Integrations 进行配置。");
             return;
         }
 
@@ -96,7 +96,8 @@ const EchoTikDiscoveryModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
         try {
             // 2. Call Service
             const data = await EchoTikService.searchInfluencers(
-                apiKey, 
+                username,
+                password,
                 searchQuery, 
                 state.echotikConfig?.region || 'US'
             );
@@ -167,8 +168,8 @@ const EchoTikDiscoveryModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                     </div>
                     {/* API Status Hint */}
                     <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                        <span className={`w-1.5 h-1.5 rounded-full ${state.echotikConfig?.apiKey ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
-                        API Key: {state.echotikConfig?.apiKey ? '已配置 (Configured)' : '未配置 (Missing)'}
+                        <span className={`w-1.5 h-1.5 rounded-full ${state.echotikConfig?.username && state.echotikConfig?.password ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                        Credentials: {state.echotikConfig?.username ? '已配置 (Configured)' : '未配置 (Missing)'}
                         <span className="mx-1">|</span>
                         Region: {state.echotikConfig?.region || 'US'}
                     </div>

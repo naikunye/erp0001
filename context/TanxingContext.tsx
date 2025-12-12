@@ -19,7 +19,8 @@ interface AppState {
         lastSync: string | null;
     };
     echotikConfig: {
-        apiKey: string;
+        username: string; // Changed from apiKey
+        password: string; // Added password
         region: 'US' | 'UK' | 'SEA';
     };
     // Data
@@ -46,7 +47,7 @@ type Action =
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     // Config Actions
     | { type: 'SET_SUPABASE_CONFIG'; payload: { url: string; key: string } }
-    | { type: 'SET_ECHOTIK_CONFIG'; payload: { apiKey: string; region: 'US' | 'UK' | 'SEA' } }
+    | { type: 'SET_ECHOTIK_CONFIG'; payload: { username: string; password: string; region: 'US' | 'UK' | 'SEA' } }
     | { type: 'SET_LAST_SYNC'; payload: string }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     // Product Actions
@@ -93,7 +94,7 @@ type Action =
 const mockState: AppState = {
     theme: 'ios',
     supabaseConfig: { url: '', key: '', lastSync: null },
-    echotikConfig: { apiKey: '', region: 'US' },
+    echotikConfig: { username: '', password: '', region: 'US' },
     products: MOCK_PRODUCTS,
     orders: MOCK_ORDERS.map(o => ({
         ...o,
@@ -124,7 +125,7 @@ const init = (initial: AppState): AppState => {
                 ...parsed, 
                 // Ensure configs exist even if loading old state
                 supabaseConfig: parsed.supabaseConfig || { url: '', key: '', lastSync: null },
-                echotikConfig: parsed.echotikConfig || { apiKey: '', region: 'US' },
+                echotikConfig: parsed.echotikConfig || { username: '', password: '', region: 'US' },
                 toasts: [], 
                 isMobileMenuOpen: false 
             };

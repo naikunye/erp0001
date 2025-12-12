@@ -34,10 +34,11 @@ export const EchoTikService = {
     
     /**
      * Search for influencers using the real API
+     * Uses Basic Auth (Username/Password)
      */
-    async searchInfluencers(apiKey: string, keyword: string, region: string = 'US'): Promise<EchoTikInfluencer[]> {
-        if (!apiKey) {
-            throw new Error("API Key is missing. Please configure it in Settings.");
+    async searchInfluencers(username: string, password: string, keyword: string, region: string = 'US'): Promise<EchoTikInfluencer[]> {
+        if (!username || !password) {
+            throw new Error("Username or Password is missing. Please configure them in Settings.");
         }
 
         const endpoint = `${BASE_URL}/influencers/search`;
@@ -49,20 +50,25 @@ export const EchoTikService = {
             page_size: '20'
         });
 
+        // Encode credentials for Basic Auth
+        const authString = btoa(`${username}:${password}`);
+
         try {
             const response = await fetch(`${endpoint}?${params.toString()}`, {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    // Check docs: Is it 'X-API-KEY', 'Authorization: Bearer', or 'X-Echotik-Token'?
-                    // Defaulting to Bearer token standard.
-                    'Authorization': `Bearer ${apiKey}`, 
-                    'X-EchoTik-Token': apiKey // Alternate common header
+                    // Basic Auth using username and password
+                    'Authorization': `Basic ${authString}`,
+                    // Some Chinese SaaS might use specific headers instead of Basic Auth. 
+                    // If Basic Auth fails, try uncommenting these:
+                    // 'X-App-Id': username,
+                    // 'X-App-Secret': password
                 }
             });
 
             if (!response.ok) {
-                if (response.status === 401) throw new Error("API Key 无效或过期 (401)");
+                if (response.status === 401) throw new Error("认证失败: Username 或 Password 无效 (401)");
                 if (response.status === 403) throw new Error("无权限访问此接口 (403)");
                 if (response.status === 429) throw new Error("请求过于频繁，请稍后再试 (429)");
                 throw new Error(`EchoTik API Error: ${response.status} ${response.statusText}`);
