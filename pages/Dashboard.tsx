@@ -28,46 +28,6 @@ const Dashboard: React.FC = () => {
     { name: '空运 (Air)', value: 200 },
   ];
   
-  // Data for Unit Economics (New Feature)
-  const UNIT_ECONOMICS_DATA = [
-    {
-      name: 'MAD ACID 赛博卫衣',
-      sku: 'MA-001',
-      total: 15.62,
-      breakdown: [
-        { label: '货值', value: 6.5, color: '#3b82f6', percent: 41 }, // blue-500
-        { label: '头程', value: 2.5, color: '#f97316', percent: 16 }, // orange-500
-        { label: '尾程', value: 3.5, color: '#a855f7', percent: 22 }, // purple-500
-        { label: '佣金', value: 1.12, color: '#ec4899', percent: 8 }, // pink-500
-        { label: '广告', value: 2.0, color: '#64748b', percent: 13 }  // slate-500
-      ]
-    },
-    {
-      name: 'Carplay Q1M 车机盒',
-      sku: 'CP-Q1M',
-      total: 25.37,
-      breakdown: [
-        { label: '货值', value: 10.5, color: '#3b82f6', percent: 41 },
-        { label: '头程', value: 1.2, color: '#f97316', percent: 5 },
-        { label: '尾程', value: 4.0, color: '#a855f7', percent: 16 },
-        { label: '佣金', value: 4.67, color: '#ec4899', percent: 18 },
-        { label: '广告', value: 5.0, color: '#64748b', percent: 20 }
-      ]
-    },
-    {
-      name: 'AI BOX2 (Fan Edition)',
-      sku: 'BOX2-NEW',
-      total: 42.52,
-      breakdown: [
-        { label: '货值', value: 18.0, color: '#3b82f6', percent: 42 },
-        { label: '头程', value: 0.8, color: '#f97316', percent: 2 },
-        { label: '尾程', value: 4.5, color: '#a855f7', percent: 11 },
-        { label: '佣金', value: 11.22, color: '#ec4899', percent: 26 },
-        { label: '广告', value: 8.0, color: '#64748b', percent: 19 }
-      ]
-    }
-  ];
-  
   const metrics = {
       totalInvestment: 294300,
       netProfit: 1403,
@@ -195,65 +155,6 @@ const Dashboard: React.FC = () => {
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
             <StatCard title="物流负载 (Logistics)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
         </div>
-      </div>
-
-      {/* Unit Economics Chart (NEW SECTION) */}
-      <div className="holo-card p-8 hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 mt-2">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
-              <div>
-                  <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
-                      <span className="w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></span>
-                      TikTok 成本结构拆解 (Unit Economics)
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-2 pl-4 font-semibold">单品全链路成本透视 • 利润空间分析</p>
-              </div>
-              <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-400 bg-black/40 px-4 py-2.5 rounded-xl border border-white/5">
-                   <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> 货值 (Goods)</div>
-                   <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-orange-500 rounded-full"></div> 头程 (Logistics)</div>
-                   <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-purple-500 rounded-full"></div> 尾程 (Last Leg)</div>
-                   <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-pink-500 rounded-full"></div> 佣金 (Fees)</div>
-                   <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-slate-500 rounded-full"></div> 广告 (Ads)</div>
-              </div>
-          </div>
-          
-          <div className="space-y-8">
-              {UNIT_ECONOMICS_DATA.map(item => (
-                  <div key={item.sku} className="relative group">
-                      <div className="flex justify-between text-sm mb-3 items-end">
-                          <div>
-                              <span className="font-bold text-white text-base">{item.name}</span>
-                              <span className="text-slate-400 ml-3 font-mono text-xs font-bold bg-slate-800 px-2 py-1 rounded-md">{item.sku}</span>
-                          </div>
-                          <div className="text-slate-400 font-mono text-xs font-bold">
-                              总成本: <span className="font-bold text-white text-base ml-1">${item.total.toFixed(2)}</span>
-                          </div>
-                      </div>
-                      
-                      {/* Stacked Bar */}
-                      <div className="h-8 w-full flex rounded-lg overflow-hidden bg-slate-800/50 ring-1 ring-white/5 shadow-inner">
-                          {item.breakdown.map((part, idx) => (
-                              <div 
-                                  key={idx} 
-                                  style={{ width: `${(part.value / item.total) * 100}%`, backgroundColor: part.color }}
-                                  className="h-full relative group/segment flex items-center justify-center transition-all hover:brightness-110 cursor-pointer"
-                              >
-                                  {/* Tooltip on Hover */}
-                                  <div className="absolute bottom-full mb-3 opacity-0 group-hover/segment:opacity-100 transition-opacity bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap z-20 border border-white/10 shadow-2xl pointer-events-none font-bold">
-                                      <span style={{color: part.color}}>{part.label}</span>: ${part.value} ({part.percent}%)
-                                  </div>
-                                  
-                                  {/* Segment Label (only if wide enough) */}
-                                  {(part.value / item.total) > 0.1 && (
-                                      <span className="text-[10px] font-bold text-white/90 drop-shadow-md truncate px-1 uppercase tracking-wide">
-                                          {part.label}
-                                      </span>
-                                  )}
-                              </div>
-                          ))}
-                      </div>
-                  </div>
-              ))}
-          </div>
       </div>
 
       {/* Charts Section */}

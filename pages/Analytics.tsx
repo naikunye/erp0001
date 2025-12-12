@@ -239,6 +239,46 @@ const Analytics: React.FC = () => {
           { name: '净利润', value: Math.max(0, dynamicEconomics.profit), fill: '#10b981' },
       ];
 
+      // Data for Unit Economics (Moved from Dashboard)
+      const UNIT_ECONOMICS_DATA = [
+        {
+          name: 'MAD ACID 赛博卫衣',
+          sku: 'MA-001',
+          total: 15.62,
+          breakdown: [
+            { label: '货值', value: 6.5, color: '#3b82f6', percent: 41 }, // blue-500
+            { label: '头程', value: 2.5, color: '#f97316', percent: 16 }, // orange-500
+            { label: '尾程', value: 3.5, color: '#a855f7', percent: 22 }, // purple-500
+            { label: '佣金', value: 1.12, color: '#ec4899', percent: 8 }, // pink-500
+            { label: '广告', value: 2.0, color: '#64748b', percent: 13 }  // slate-500
+          ]
+        },
+        {
+          name: 'Carplay Q1M 车机盒',
+          sku: 'CP-Q1M',
+          total: 25.37,
+          breakdown: [
+            { label: '货值', value: 10.5, color: '#3b82f6', percent: 41 },
+            { label: '头程', value: 1.2, color: '#f97316', percent: 5 },
+            { label: '尾程', value: 4.0, color: '#a855f7', percent: 16 },
+            { label: '佣金', value: 4.67, color: '#ec4899', percent: 18 },
+            { label: '广告', value: 5.0, color: '#64748b', percent: 20 }
+          ]
+        },
+        {
+          name: 'AI BOX2 (Fan Edition)',
+          sku: 'BOX2-NEW',
+          total: 42.52,
+          breakdown: [
+            { label: '货值', value: 18.0, color: '#3b82f6', percent: 42 },
+            { label: '头程', value: 0.8, color: '#f97316', percent: 2 },
+            { label: '尾程', value: 4.5, color: '#a855f7', percent: 11 },
+            { label: '佣金', value: 11.22, color: '#ec4899', percent: 26 },
+            { label: '广告', value: 8.0, color: '#64748b', percent: 19 }
+          ]
+        }
+      ];
+
       const handleChartClick = (data: any) => {
           if (data && data.activePayload) {
               const payload = data.activePayload[0].payload;
@@ -247,96 +287,157 @@ const Analytics: React.FC = () => {
       };
 
       return (
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="lg:col-span-2 ios-glass-card p-6 flex flex-col">
-              <div className="flex justify-between items-center mb-6">
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <DollarSign className="w-4 h-4 text-emerald-400" /> 
-                      资金流向 (Cash Flow & P&L)
-                  </h3>
-                  <button 
-                    onClick={() => handleAiAnalysis("Cash Flow is positive but burn rate increased by 15% due to inventory stocking.")}
-                    className="text-[10px] bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-1"
-                  >
-                      <BrainCircuit className="w-3 h-3" /> 资金诊断
-                  </button>
-              </div>
-              <div className="flex-1 min-h-[300px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart 
-                          data={CASH_FLOW_DATA}
-                          onClick={handleChartClick}
-                          style={{ cursor: 'pointer' }}
+      <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+              <div className="lg:col-span-2 ios-glass-card p-6 flex flex-col">
+                  <div className="flex justify-between items-center mb-6">
+                      <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                          <DollarSign className="w-4 h-4 text-emerald-400" /> 
+                          资金流向 (Cash Flow & P&L)
+                      </h3>
+                      <button 
+                        onClick={() => handleAiAnalysis("Cash Flow is positive but burn rate increased by 15% due to inventory stocking.")}
+                        className="text-[10px] bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded hover:bg-emerald-600 hover:text-white transition-all flex items-center gap-1"
                       >
-                          <defs>
-                              <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
-                                  <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                              </linearGradient>
-                          </defs>
-                          <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
-                          <XAxis dataKey="day" stroke={COLORS.text} tick={{fontSize: 10, fontFamily: 'monospace'}} axisLine={false} tickLine={false} />
-                          <YAxis stroke={COLORS.text} tick={{fontSize: 10, fontFamily: 'monospace'}} axisLine={false} tickLine={false} />
-                          <Tooltip content={<CustomHUDTooltip />} />
-                          <Area type="monotone" dataKey="balance" stroke="#10b981" fillOpacity={1} fill="url(#colorBalance)" strokeWidth={2} name="现金余额" />
-                          <Line type="monotone" dataKey="burn" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" name="支出/Burn" />
-                      </AreaChart>
-                  </ResponsiveContainer>
-                  <p className="text-[10px] text-center text-slate-500 mt-2">点击图表数据点以获取 AI 单日分析</p>
+                          <BrainCircuit className="w-3 h-3" /> 资金诊断
+                      </button>
+                  </div>
+                  <div className="flex-1 min-h-[300px]">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <AreaChart 
+                              data={CASH_FLOW_DATA}
+                              onClick={handleChartClick}
+                              style={{ cursor: 'pointer' }}
+                          >
+                              <defs>
+                                  <linearGradient id="colorBalance" x1="0" y1="0" x2="0" y2="1">
+                                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.6}/>
+                                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                                  </linearGradient>
+                              </defs>
+                              <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
+                              <XAxis dataKey="day" stroke={COLORS.text} tick={{fontSize: 10, fontFamily: 'monospace'}} axisLine={false} tickLine={false} />
+                              <YAxis stroke={COLORS.text} tick={{fontSize: 10, fontFamily: 'monospace'}} axisLine={false} tickLine={false} />
+                              <Tooltip content={<CustomHUDTooltip />} />
+                              <Area type="monotone" dataKey="balance" stroke="#10b981" fillOpacity={1} fill="url(#colorBalance)" strokeWidth={2} name="现金余额" />
+                              <Line type="monotone" dataKey="burn" stroke="#ef4444" strokeWidth={2} strokeDasharray="3 3" name="支出/Burn" />
+                          </AreaChart>
+                      </ResponsiveContainer>
+                      <p className="text-[10px] text-center text-slate-500 mt-2">点击图表数据点以获取 AI 单日分析</p>
+                  </div>
+              </div>
+
+              {/* Unit Economics Simulator */}
+              <div className="lg:col-span-1 ios-glass-card p-6 flex flex-col">
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
+                      <Calculator className="w-4 h-4 text-purple-400" /> 
+                      单品模型模拟 (Simulator)
+                  </h3>
+                  
+                  <div className="mb-4 bg-black/40 p-3 rounded-lg border border-white/10">
+                      <label className="text-xs text-slate-400 block mb-1">定价模拟 (Price): ${priceSim}</label>
+                      <input 
+                          type="range" 
+                          min="15" 
+                          max="50" 
+                          step="0.5" 
+                          value={priceSim} 
+                          onChange={(e) => setPriceSim(parseFloat(e.target.value))}
+                          className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-neon-purple"
+                      />
+                  </div>
+
+                  <div className="relative h-48 mb-2">
+                      <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                              <Pie
+                                  data={SIM_DATA}
+                                  innerRadius={50}
+                                  outerRadius={70}
+                                  paddingAngle={2}
+                                  dataKey="value"
+                                  stroke="none"
+                              >
+                                  {SIM_DATA.map((entry, index) => (
+                                      <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(0,0,0,0)" style={{filter: `drop-shadow(0 0 5px ${entry.fill}80)`}} />
+                                  ))}
+                              </Pie>
+                              <Tooltip formatter={(val:number) => `$${val.toFixed(2)}`} content={<CustomHUDTooltip />} />
+                          </PieChart>
+                      </ResponsiveContainer>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                          <span className="text-xs text-slate-500">利润率</span>
+                          <span className={`text-xl font-bold ${dynamicEconomics.margin > 0 ? 'text-emerald-400 text-glow-green' : 'text-red-400'}`}>
+                              {dynamicEconomics.margin.toFixed(1)}%
+                          </span>
+                      </div>
+                  </div>
+                  
+                  <div className="space-y-2 text-xs border-t border-white/10 pt-2">
+                      <div className="flex justify-between">
+                          <span className="text-slate-400">净利润 (Profit)</span>
+                          <span className="text-white font-mono font-bold text-glow">${dynamicEconomics.profit.toFixed(2)}</span>
+                      </div>
+                  </div>
               </div>
           </div>
 
-          {/* Unit Economics */}
-          <div className="lg:col-span-1 ios-glass-card p-6 flex flex-col">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                  <Calculator className="w-4 h-4 text-purple-400" /> 
-                  单品模型 (Unit Economics)
-              </h3>
-              
-              <div className="mb-4 bg-black/40 p-3 rounded-lg border border-white/10">
-                  <label className="text-xs text-slate-400 block mb-1">定价模拟 (Price): ${priceSim}</label>
-                  <input 
-                      type="range" 
-                      min="15" 
-                      max="50" 
-                      step="0.5" 
-                      value={priceSim} 
-                      onChange={(e) => setPriceSim(parseFloat(e.target.value))}
-                      className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-neon-purple"
-                  />
+          {/* Moved Unit Economics Breakdown */}
+          <div className="ios-glass-card p-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8 gap-4">
+                  <div>
+                      <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
+                          <span className="w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></span>
+                          TikTok 成本结构拆解 (Unit Economics Breakdown)
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-2 pl-4 font-semibold">单品全链路成本透视 • 利润空间分析</p>
+                  </div>
+                  <div className="flex flex-wrap gap-4 text-xs font-semibold text-slate-400 bg-black/40 px-4 py-2.5 rounded-xl border border-white/5">
+                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-blue-500 rounded-full"></div> 货值 (Goods)</div>
+                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-orange-500 rounded-full"></div> 头程 (Logistics)</div>
+                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-purple-500 rounded-full"></div> 尾程 (Last Leg)</div>
+                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-pink-500 rounded-full"></div> 佣金 (Fees)</div>
+                       <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 bg-slate-500 rounded-full"></div> 广告 (Ads)</div>
+                  </div>
               </div>
-
-              <div className="relative h-48 mb-2">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <PieChart>
-                          <Pie
-                              data={SIM_DATA}
-                              innerRadius={50}
-                              outerRadius={70}
-                              paddingAngle={2}
-                              dataKey="value"
-                              stroke="none"
-                          >
-                              {SIM_DATA.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.fill} stroke="rgba(0,0,0,0)" style={{filter: `drop-shadow(0 0 5px ${entry.fill}80)`}} />
+              
+              <div className="space-y-8">
+                  {UNIT_ECONOMICS_DATA.map(item => (
+                      <div key={item.sku} className="relative group">
+                          <div className="flex justify-between text-sm mb-3 items-end">
+                              <div>
+                                  <span className="font-bold text-white text-base">{item.name}</span>
+                                  <span className="text-slate-400 ml-3 font-mono text-xs font-bold bg-slate-800 px-2 py-1 rounded-md">{item.sku}</span>
+                              </div>
+                              <div className="text-slate-400 font-mono text-xs font-bold">
+                                  总成本: <span className="font-bold text-white text-base ml-1">${item.total.toFixed(2)}</span>
+                              </div>
+                          </div>
+                          
+                          {/* Stacked Bar */}
+                          <div className="h-8 w-full flex rounded-lg overflow-hidden bg-slate-800/50 ring-1 ring-white/5 shadow-inner">
+                              {item.breakdown.map((part, idx) => (
+                                  <div 
+                                      key={idx} 
+                                      style={{ width: `${(part.value / item.total) * 100}%`, backgroundColor: part.color }}
+                                      className="h-full relative group/segment flex items-center justify-center transition-all hover:brightness-110 cursor-pointer"
+                                  >
+                                      {/* Tooltip on Hover */}
+                                      <div className="absolute bottom-full mb-3 opacity-0 group-hover/segment:opacity-100 transition-opacity bg-black/90 text-white text-xs px-3 py-2 rounded-lg whitespace-nowrap z-20 border border-white/10 shadow-2xl pointer-events-none font-bold">
+                                          <span style={{color: part.color}}>{part.label}</span>: ${part.value} ({part.percent}%)
+                                      </div>
+                                      
+                                      {/* Segment Label (only if wide enough) */}
+                                      {(part.value / item.total) > 0.1 && (
+                                          <span className="text-[10px] font-bold text-white/90 drop-shadow-md truncate px-1 uppercase tracking-wide">
+                                              {part.label}
+                                          </span>
+                                      )}
+                                  </div>
                               ))}
-                          </Pie>
-                          <Tooltip formatter={(val:number) => `$${val.toFixed(2)}`} content={<CustomHUDTooltip />} />
-                      </PieChart>
-                  </ResponsiveContainer>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                      <span className="text-xs text-slate-500">利润率</span>
-                      <span className={`text-xl font-bold ${dynamicEconomics.margin > 0 ? 'text-emerald-400 text-glow-green' : 'text-red-400'}`}>
-                          {dynamicEconomics.margin.toFixed(1)}%
-                      </span>
-                  </div>
-              </div>
-              
-              <div className="space-y-2 text-xs border-t border-white/10 pt-2">
-                  <div className="flex justify-between">
-                      <span className="text-slate-400">净利润 (Profit)</span>
-                      <span className="text-white font-mono font-bold text-glow">${dynamicEconomics.profit.toFixed(2)}</span>
-                  </div>
+                          </div>
+                      </div>
+                  ))}
               </div>
           </div>
       </div>
