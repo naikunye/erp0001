@@ -10,7 +10,7 @@ import {
   ThumbsUp, UserCircle2, Ghost, BrainCircuit, Activity, Cpu, Layers, Globe,
   LayoutDashboard, DollarSign, ArrowUpRight, ArrowDownRight, Search, Radar as RadarIcon,
   PlayCircle, PauseCircle, Gauge, AlertCircle, FlaskConical, PenTool, X, Save,
-  Plus, Calendar, Gift, Link, Truck, MessageSquare, Calculator, Bot, Trash2, Edit2, Compass
+  Plus, Calendar, Gift, Link, Truck, MessageSquare, Calculator, Bot, Trash2, Edit2, Compass, AlertTriangle
 } from 'lucide-react';
 import { 
   AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -18,6 +18,7 @@ import {
   PolarAngleAxis, PolarRadiusAxis, Radar 
 } from 'recharts';
 import { AdCampaign, Influencer, InfluencerStatus } from '../types';
+import { EchoTikService, EchoTikInfluencer } from '../services/EchoTikService'; // Import Service
 
 // --- Types ---
 type Platform = 'TikTok' | 'Instagram' | 'RedNote';
@@ -69,46 +70,66 @@ const FlowingBorderCard: React.FC<{ children: React.ReactNode, className?: strin
 
 // --- Sub-Components ---
 
-// EchoTik Discovery Modal
+// EchoTik Discovery Modal (Real API Version)
 const EchoTikDiscoveryModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { dispatch, showToast, state } = useTanxing();
     const [searchQuery, setSearchQuery] = useState('');
-    const [results, setResults] = useState<any[]>([]);
+    const [results, setResults] = useState<EchoTikInfluencer[]>([]);
     const [loading, setLoading] = useState(false);
+    const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-    // Mock API Call simulating EchoTik data structure
+    // REAL API Call
     const searchEchoTik = async () => {
         if (!searchQuery) return;
-        setLoading(true);
-        // Simulate network latency
-        await new Promise(r => setTimeout(r, 1200));
+        
+        // 1. Validate API Key
+        const apiKey = state.echotikConfig?.apiKey;
+        if (!apiKey) {
+            setErrorMsg("未配置 API Key。请前往系统设置 -> Integrations 配置 EchoTik API Key。");
+            return;
+        }
 
-        // Generate fake but realistic data
-        const mockResults = Array.from({ length: 5 }).map((_, i) => ({
-            id: `echotik-${Date.now()}-${i}`,
-            nickname: `${searchQuery}_${['official', 'life', 'review', 'tech', 'vibes'][i]}`,
-            handle: `@${searchQuery}_${i}`,
-            followers: Math.floor(Math.random() * 500000) + 10000,
-            gmv_30d: Math.floor(Math.random() * 50000),
-            avg_views: Math.floor(Math.random() * 100000),
-            category: 'Tech & Electronics',
-            engagement_rate: (Math.random() * 5).toFixed(2),
-            avatar: ['bg-pink-500', 'bg-purple-500', 'bg-blue-500', 'bg-orange-500', 'bg-emerald-500'][i]
-        }));
-        setResults(mockResults);
-        setLoading(false);
+        setLoading(true);
+        setErrorMsg(null);
+        setResults([]); // Clear previous
+
+        try {
+            // 2. Call Service
+            const data = await EchoTikService.searchInfluencers(
+                apiKey, 
+                searchQuery, 
+                state.echotikConfig?.region || 'US'
+            );
+            
+            setResults(data);
+            
+            if (data.length === 0) {
+                showToast("未搜索到相关达人", "info");
+            } else {
+                showToast(`成功获取 ${data.length} 位达人数据`, "success");
+            }
+
+        } catch (err: any) {
+            console.error(err);
+            setErrorMsg(err.message || "请求失败");
+            showToast("EchoTik API 请求失败", "error");
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const importInfluencer = (item: any) => {
+    const importInfluencer = (item: EchoTikInfluencer) => {
         const inf: Influencer = {
-            id: `INF-ET-${Date.now()}`,
+            id: `INF-ET-${item.id}`, // Use real ID
             name: item.nickname,
-            handle: item.handle,
+            handle: item.username.startsWith('@') ? item.username : `@${item.username}`,
             platform: 'TikTok',
-            followers: item.followers,
-            country: state.echotikConfig?.region || 'US',
+            followers: item.follower_count,
+            country: item.region,
             status: 'To Contact',
-            tags: ['EchoTik Import', item.category]
+            tags: ['EchoTik Import', item.category || 'General'],
+            // Store extra metrics in a standardized way if needed, or mapped fields
+            generatedSales: item.gmv_30d // Use 30d GMV as a reference for sales potential
         };
         dispatch({ type: 'ADD_INFLUENCER', payload: inf });
         showToast(`已导入 ${item.nickname} 到 CRM`, 'success');
@@ -120,45 +141,72 @@ const EchoTikDiscoveryModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                 <div className="px-6 py-4 border-b border-white/10 bg-pink-900/10 flex justify-between items-center">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Compass className="w-5 h-5 text-pink-500" />
-                        EchoTik 达人发现 (Discovery)
+                        EchoTik 达人发现 (Real API)
                     </h3>
                     <button onClick={onClose}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
                 </div>
 
-                <div className="p-4 border-b border-white/10 bg-black/20 flex gap-2">
-                    <input 
-                        type="text" 
-                        value={searchQuery}
-                        onChange={e => setSearchQuery(e.target.value)}
-                        placeholder="输入关键词 (如: keyboard, tech, beauty)..."
-                        className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-pink-500 outline-none"
-                        onKeyDown={e => e.key === 'Enter' && searchEchoTik()}
-                    />
-                    <button 
-                        onClick={searchEchoTik}
-                        disabled={loading}
-                        className="px-6 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-lg flex items-center gap-2 disabled:opacity-50"
-                    >
-                        {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4"/>}
-                        搜索
-                    </button>
+                <div className="p-4 border-b border-white/10 bg-black/20 flex flex-col gap-2">
+                    <div className="flex gap-2">
+                        <input 
+                            type="text" 
+                            value={searchQuery}
+                            onChange={e => setSearchQuery(e.target.value)}
+                            placeholder="输入关键词 (如: beauty, tech, dog)..."
+                            className="flex-1 bg-black/40 border border-white/10 rounded-lg px-4 py-2 text-white focus:border-pink-500 outline-none"
+                            onKeyDown={e => e.key === 'Enter' && searchEchoTik()}
+                        />
+                        <button 
+                            onClick={searchEchoTik}
+                            disabled={loading}
+                            className="px-6 py-2 bg-pink-600 hover:bg-pink-500 text-white font-bold rounded-lg flex items-center gap-2 disabled:opacity-50"
+                        >
+                            {loading ? <Loader2 className="w-4 h-4 animate-spin"/> : <Search className="w-4 h-4"/>}
+                            搜索 API
+                        </button>
+                    </div>
+                    {/* API Status Hint */}
+                    <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                        <span className={`w-1.5 h-1.5 rounded-full ${state.echotikConfig?.apiKey ? 'bg-emerald-500' : 'bg-red-500'}`}></span>
+                        API Key: {state.echotikConfig?.apiKey ? '已配置 (Configured)' : '未配置 (Missing)'}
+                        <span className="mx-1">|</span>
+                        Region: {state.echotikConfig?.region || 'US'}
+                    </div>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                    {errorMsg && (
+                        <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-400">
+                            <AlertTriangle className="w-5 h-5" />
+                            <span className="text-sm">{errorMsg}</span>
+                        </div>
+                    )}
+
                     {results.map((item) => (
                         <div key={item.id} className="bg-white/5 border border-white/10 rounded-xl p-4 flex items-center gap-4 hover:border-pink-500/50 transition-all">
-                            <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold ${item.avatar}`}>
-                                {item.nickname.charAt(0).toUpperCase()}
-                            </div>
+                            {item.avatar_url ? (
+                                <img src={item.avatar_url} alt="Avatar" className="w-12 h-12 rounded-full object-cover border border-white/10" />
+                            ) : (
+                                <div className="w-12 h-12 rounded-full bg-slate-800 flex items-center justify-center text-white font-bold">
+                                    {item.nickname.charAt(0).toUpperCase()}
+                                </div>
+                            )}
+                            
                             <div className="flex-1">
                                 <div className="flex items-center gap-2 mb-1">
                                     <h4 className="font-bold text-white text-sm">{item.nickname}</h4>
-                                    <span className="text-xs text-slate-400">{item.handle}</span>
+                                    <span className="text-xs text-slate-400">@{item.username}</span>
+                                    {item.profile_url && (
+                                        <a href={item.profile_url} target="_blank" rel="noreferrer" className="text-[10px] text-indigo-400 hover:text-indigo-300">
+                                            [View Profile]
+                                        </a>
+                                    )}
                                 </div>
                                 <div className="flex gap-4 text-xs text-slate-300">
-                                    <span>粉丝: <b className="text-white">{(item.followers/1000).toFixed(1)}k</b></span>
-                                    <span>30天GMV: <b className="text-emerald-400">${item.gmv_30d.toLocaleString()}</b></span>
-                                    <span>互动率: <b className="text-pink-400">{item.engagement_rate}%</b></span>
+                                    <span>粉丝: <b className="text-white">{(item.follower_count/1000).toFixed(1)}k</b></span>
+                                    {item.gmv_30d !== undefined && <span>30天GMV: <b className="text-emerald-400">${item.gmv_30d.toLocaleString()}</b></span>}
+                                    {item.engagement_rate !== undefined && <span>互动率: <b className="text-pink-400">{(item.engagement_rate * 100).toFixed(2)}%</b></span>}
+                                    <span className="bg-white/10 px-1.5 rounded text-[10px]">{item.category}</span>
                                 </div>
                             </div>
                             <button 
@@ -169,10 +217,11 @@ const EchoTikDiscoveryModal: React.FC<{ onClose: () => void }> = ({ onClose }) =
                             </button>
                         </div>
                     ))}
-                    {results.length === 0 && !loading && (
+                    
+                    {results.length === 0 && !loading && !errorMsg && (
                         <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                             <Compass className="w-16 h-16 mb-4" />
-                            <p>输入关键词搜索 TikTok 优质达人</p>
+                            <p>输入关键词以调用 EchoTik 实时数据接口</p>
                         </div>
                     )}
                 </div>
