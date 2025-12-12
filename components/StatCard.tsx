@@ -15,51 +15,59 @@ interface StatCardProps {
 const StatCard: React.FC<StatCardProps> = ({ title, value, subValue, trend, trendUp, icon: Icon, accentColor = 'cyan' }) => {
   
   const colors = {
-      cyan: 'text-cyan-400 from-cyan-500/20 to-blue-500/20 border-cyan-500/30',
-      purple: 'text-purple-400 from-purple-500/20 to-pink-500/20 border-purple-500/30',
-      green: 'text-emerald-400 from-emerald-400/20 to-teal-500/20 border-emerald-500/30',
-      orange: 'text-orange-400 from-orange-400/20 to-red-500/20 border-orange-500/30',
-      blue: 'text-blue-400 from-blue-500/20 to-indigo-600/20 border-blue-500/30',
-      pink: 'text-pink-400 from-pink-500/20 to-rose-500/20 border-pink-500/30'
+      cyan: 'text-cyan-400 from-cyan-500/10 to-transparent border-cyan-500/20 shadow-cyan-500/10',
+      purple: 'text-purple-400 from-purple-500/10 to-transparent border-purple-500/20 shadow-purple-500/10',
+      green: 'text-emerald-400 from-emerald-500/10 to-transparent border-emerald-500/20 shadow-emerald-500/10',
+      orange: 'text-orange-400 from-orange-500/10 to-transparent border-orange-500/20 shadow-orange-500/10',
+      blue: 'text-blue-400 from-blue-500/10 to-transparent border-blue-500/20 shadow-blue-500/10',
+      pink: 'text-pink-400 from-pink-500/10 to-transparent border-pink-500/20 shadow-pink-500/10'
   };
 
-  const trendColor = trendUp ? 'text-emerald-400' : 'text-rose-400';
+  const trendColor = trendUp ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20';
   const TrendIcon = trendUp ? ArrowUpRight : ArrowDownRight;
   
+  // Extract base color class for icon bg
+  const iconBaseColor = colors[accentColor].split(' ')[0];
+
   return (
-    <div className="glass-card p-6 flex flex-col justify-between h-full group transition-all hover:scale-[1.02]">
+    <div className="ios-glass-card p-6 flex flex-col justify-between h-full group relative overflow-hidden">
       
+      {/* Background Gradient Blob on Hover */}
+      <div className={`absolute -right-10 -top-10 w-32 h-32 bg-gradient-to-br ${colors[accentColor].split(' ')[1]} rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}></div>
+
       <div className="flex justify-between items-start mb-4 relative z-10">
         <div className="flex flex-col">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
-                <Activity className="w-3.5 h-3.5 opacity-50" />
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-1.5 flex items-center gap-1.5">
+                <Activity className="w-3 h-3 opacity-50" />
                 {title}
             </span>
             <div className="flex items-baseline gap-2 mt-1">
-                <h3 className="text-4xl font-display font-bold text-white tracking-wide text-glow">
+                <h3 className="text-4xl font-display font-bold text-white tracking-tight drop-shadow-md">
                     {value}
                 </h3>
-                {subValue && <span className="text-sm text-slate-500 font-mono self-end mb-1.5 font-bold">{subValue}</span>}
+                {subValue && <span className="text-xs text-slate-500 font-mono self-end mb-1.5">{subValue}</span>}
             </div>
         </div>
         
         {Icon && (
-            <div className={`w-12 h-12 rounded-xl bg-gradient-to-br ${colors[accentColor].replace('text-', '').replace('border-', '')} flex items-center justify-center border ${colors[accentColor].split(' ')[2]} opacity-80 group-hover:opacity-100 transition-all shadow-[0_0_15px_rgba(0,0,0,0.2)] group-hover:scale-110`}>
-                <Icon className={`w-6 h-6 ${colors[accentColor].split(' ')[0]}`} />
+            <div className={`w-10 h-10 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center group-hover:scale-110 transition-all duration-300 shadow-lg ${iconBaseColor}`}>
+                <Icon className="w-5 h-5" />
             </div>
         )}
       </div>
       
-      <div className="relative z-10 pt-4 border-t border-white/5 flex items-center justify-between">
+      <div className="relative z-10 pt-4 border-t border-white/5 flex items-center justify-between mt-auto">
          {trend && (
-            <div className={`flex items-center gap-1 ${trendColor} text-sm font-bold bg-black/30 px-2.5 py-1 rounded border border-white/5`}>
-                <TrendIcon className="w-3.5 h-3.5" /> 
+            <div className={`flex items-center gap-1 ${trendColor} text-xs font-bold px-2 py-1 rounded border`}>
+                <TrendIcon className="w-3 h-3" /> 
                 {trend}
             </div>
          )}
-         {/* Simple sparkline or bar */}
-         <div className="h-1.5 flex-1 mx-4 bg-slate-800 rounded-full overflow-hidden">
-             <div className={`h-full w-2/3 bg-current opacity-80 ${colors[accentColor].split(' ')[0]}`}></div>
+         {/* Mini Sparkline Visualization */}
+         <div className="flex gap-0.5 items-end h-4 opacity-50">
+             {[30, 50, 40, 70, 50, 80].map((h, i) => (
+                 <div key={i} className={`w-1 rounded-t-sm ${iconBaseColor.replace('text-', 'bg-')}`} style={{ height: `${h}%` }}></div>
+             ))}
          </div>
       </div>
     </div>

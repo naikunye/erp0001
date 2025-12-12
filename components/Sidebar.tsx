@@ -40,26 +40,23 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
         {/* Mobile Overlay */}
         {isOpen && (
             <div 
-                className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-sm"
+                className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-md"
                 onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: false })}
             />
         )}
 
         {/* Sidebar Container */}
         <div className={`fixed lg:static inset-y-6 left-6 w-[280px] flex flex-col z-50 transition-transform duration-500 cubic-bezier(0.2, 0.8, 0.2, 1) ${isOpen ? 'translate-x-0' : '-translate-x-[120%] lg:translate-x-0'}`}>
-            <div className="ios-glass-panel h-full flex flex-col p-6 rounded-3xl">
+            <div className="ios-glass-panel h-full flex flex-col p-5 rounded-3xl relative overflow-hidden">
                 
                 {/* Brand Header */}
-                <div className="flex items-center gap-4 mb-8 px-2">
-                    <div 
-                        className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg backdrop-blur-md"
-                        style={{ backgroundColor: 'var(--sidebar-active-bg)', color: 'var(--accent-color)' }}
-                    >
-                        <Hexagon className="w-6 h-6 fill-current opacity-80" />
+                <div className="flex items-center gap-4 mb-10 px-2 relative z-10">
+                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white">
+                        <Hexagon className="w-6 h-6 fill-current" />
                     </div>
                     <div>
-                        <div className="font-display font-bold text-xl text-white tracking-wider leading-none">TANXING</div>
-                        <div className="text-[10px] text-white/40 font-mono tracking-[0.2em] mt-1 uppercase">探行 OS v5.0</div>
+                        <div className="font-display font-bold text-2xl text-white tracking-wide leading-none">TANXING</div>
+                        <div className="text-[10px] text-blue-400 font-mono tracking-[0.3em] mt-1.5 uppercase opacity-80">Quantum OS</div>
                     </div>
                     <button 
                         onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: false })}
@@ -70,7 +67,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 space-y-1.5 overflow-y-auto scrollbar-none -mx-2 px-2">
+                <nav className="flex-1 space-y-2 overflow-y-auto scrollbar-none px-1 relative z-10">
                     {menuItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = activePage === item.id;
@@ -81,18 +78,22 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                             <button
                                 key={item.id}
                                 onClick={() => handleNav(item.id as Page)}
-                                className="w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative"
-                                style={isActive ? { 
-                                    backgroundColor: 'var(--sidebar-active-bg)', 
-                                    color: 'var(--sidebar-active-text)',
-                                    boxShadow: '0 2px 10px rgba(0,0,0,0.1)'
-                                } : {}}
+                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+                                    isActive 
+                                    ? 'text-white' 
+                                    : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
+                                }`}
                             >
-                                <Icon className={`w-5 h-5 transition-colors ${isActive ? '' : 'text-slate-500 group-hover:text-slate-300'}`} />
+                                {/* Active State Background */}
+                                {isActive && (
+                                    <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-transparent border-l-2 border-blue-500 opacity-100"></div>
+                                )}
+
+                                <Icon className={`w-5 h-5 relative z-10 transition-colors ${isActive ? 'text-blue-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
                                 
-                                <div className="flex flex-col items-start">
-                                    <span className={`text-sm font-medium leading-none ${isActive ? 'font-bold' : 'text-slate-400 group-hover:text-slate-200'}`}>{item.label}</span>
-                                    <span className={`text-[10px] mt-1 font-mono tracking-wide ${isActive ? 'opacity-80' : 'text-slate-600 group-hover:text-slate-500'}`}>{item.subLabel}</span>
+                                <div className="flex flex-col items-start relative z-10">
+                                    <span className={`text-sm font-medium leading-none ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
+                                    <span className={`text-[9px] mt-1 font-mono tracking-wide uppercase ${isActive ? 'text-blue-300/70' : 'text-slate-600 group-hover:text-slate-500'}`}>{item.subLabel}</span>
                                 </div>
                                 
                                 {isHighlight && !isActive && (
@@ -104,10 +105,10 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                 </nav>
 
                 {/* Footer */}
-                <div className="pt-6 mt-auto border-t" style={{ borderColor: 'var(--glass-border)' }}>
+                <div className="pt-6 mt-auto border-t border-white/5 relative z-10">
                     <button 
                         onClick={onLogout}
-                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-all text-xs font-bold border border-transparent hover:border-red-500/20"
+                        className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-all text-xs font-bold border border-transparent hover:border-red-500/20 active:scale-95"
                     >
                         <LogOut className="w-4 h-4" />
                         <span>断开连接 (Disconnect)</span>
