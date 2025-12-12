@@ -223,7 +223,8 @@ export interface Influencer {
     roi?: number; 
 }
 
-export interface ReplenishmentItem extends Product {
+export interface ReplenishmentItem extends Omit<Product, 'status'> {
+  status: 'OOS' | 'Urgent' | 'OK';
   dailyBurnRate: number; 
   daysRemaining: number;
   safetyStock: number;
