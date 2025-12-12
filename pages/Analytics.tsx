@@ -93,12 +93,12 @@ const CustomHUDTooltip = ({ active, payload, label }: any) => {
 // 1. Warehouse Detail Modal (unchanged logic, updated style)
 const WarehouseDetailModal = ({ node, onClose }: { node: any, onClose: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
-        <div className="bg-[#0B0F19] w-full max-w-lg rounded-xl border border-slate-800 shadow-2xl overflow-hidden animate-in zoom-in-95 hud-card" onClick={e => e.stopPropagation()}>
-            <div className="p-4 border-b border-slate-800 flex justify-between items-center bg-slate-950/50">
+        <div className="ios-glass-panel w-full max-w-lg rounded-xl shadow-2xl overflow-hidden animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                 <div className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full shadow-[0_0_10px_currentColor]" style={{backgroundColor: node.color, color: node.color}}></div>
                     <h3 className="font-bold text-white tracking-widest">{node.name}</h3>
-                    <span className="text-[10px] bg-slate-800 px-2 py-0.5 rounded text-slate-400 border border-slate-700">{node.type}</span>
+                    <span className="text-[10px] bg-black/40 px-2 py-0.5 rounded text-slate-400 border border-white/10">{node.type}</span>
                 </div>
                 <button onClick={onClose}><X className="w-5 h-5 text-slate-500 hover:text-white"/></button>
             </div>
@@ -120,9 +120,9 @@ const WarehouseDetailModal = ({ node, onClose }: { node: any, onClose: () => voi
 // ... CreativeDetailModal similar updates ...
 const CreativeDetailModal = ({ creative, onClose }: { creative: any, onClose: () => void }) => (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
-        <div className="bg-[#0B0F19] w-full max-w-4xl h-[80vh] rounded-xl border border-slate-800 shadow-2xl overflow-hidden flex animate-in zoom-in-95 hud-card" onClick={e => e.stopPropagation()}>
+        <div className="ios-glass-panel w-full max-w-4xl h-[80vh] rounded-xl shadow-2xl overflow-hidden flex animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
             {/* Left: Player */}
-            <div className="w-1/3 bg-black flex items-center justify-center relative border-r border-slate-800">
+            <div className="w-1/3 bg-black flex items-center justify-center relative border-r border-white/10">
                 <div className={`w-full aspect-[9/16] ${creative.thumb} flex items-center justify-center opacity-80`}>
                     <Play className="w-12 h-12 text-white/80" />
                 </div>
@@ -139,15 +139,15 @@ const CreativeDetailModal = ({ creative, onClose }: { creative: any, onClose: ()
                 </div>
 
                 <div className="grid grid-cols-3 gap-4 mb-8">
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-sm">
+                    <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
                         <div className="text-xs text-slate-500 uppercase">AI 评分</div>
                         <div className="text-2xl font-bold text-emerald-400 text-glow-green">{creative.score}</div>
                     </div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-sm">
+                    <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
                         <div className="text-xs text-slate-500 uppercase">CTR 点击率</div>
                         <div className="text-2xl font-bold text-blue-400 text-glow">{creative.ctr}</div>
                     </div>
-                    <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800 backdrop-blur-sm">
+                    <div className="bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-sm">
                         <div className="text-xs text-slate-500 uppercase">3s 完播率</div>
                         <div className="text-2xl font-bold text-purple-400 text-glow-purple">42%</div>
                     </div>
@@ -158,7 +158,7 @@ const CreativeDetailModal = ({ creative, onClose }: { creative: any, onClose: ()
                         <Activity className="w-4 h-4 text-orange-500" /> 
                         受众留存曲线 (Retention)
                     </h4>
-                    <div className="h-48 w-full bg-slate-900/30 rounded-xl border border-slate-800 p-2 scanline-overlay">
+                    <div className="h-48 w-full bg-black/20 rounded-xl border border-white/10 p-2">
                         {creative.retention.length > 0 ? (
                             <ResponsiveContainer width="100%" height="100%">
                                 <AreaChart data={creative.retention.map((v:number, i:number) => ({sec: i, val: v}))}>
@@ -248,7 +248,7 @@ const Analytics: React.FC = () => {
 
       return (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="lg:col-span-2 holo-card p-6 flex flex-col hud-card scanline-overlay">
+          <div className="lg:col-span-2 ios-glass-card p-6 flex flex-col">
               <div className="flex justify-between items-center mb-6">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                       <DollarSign className="w-4 h-4 text-emerald-400" /> 
@@ -287,13 +287,13 @@ const Analytics: React.FC = () => {
           </div>
 
           {/* Unit Economics */}
-          <div className="lg:col-span-1 holo-card p-6 flex flex-col hud-card">
+          <div className="lg:col-span-1 ios-glass-card p-6 flex flex-col">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
                   <Calculator className="w-4 h-4 text-purple-400" /> 
                   单品模型 (Unit Economics)
               </h3>
               
-              <div className="mb-4 bg-slate-900/50 p-3 rounded-lg border border-slate-800">
+              <div className="mb-4 bg-black/40 p-3 rounded-lg border border-white/10">
                   <label className="text-xs text-slate-400 block mb-1">定价模拟 (Price): ${priceSim}</label>
                   <input 
                       type="range" 
@@ -332,7 +332,7 @@ const Analytics: React.FC = () => {
                   </div>
               </div>
               
-              <div className="space-y-2 text-xs border-t border-slate-800 pt-2">
+              <div className="space-y-2 text-xs border-t border-white/10 pt-2">
                   <div className="flex justify-between">
                       <span className="text-slate-400">净利润 (Profit)</span>
                       <span className="text-white font-mono font-bold text-glow">${dynamicEconomics.profit.toFixed(2)}</span>
@@ -346,8 +346,8 @@ const Analytics: React.FC = () => {
   // 2. SUPPLY VIEW
   const SupplyView = () => (
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="lg:col-span-2 holo-card p-0 relative overflow-hidden bg-slate-950 flex flex-col min-h-[400px] hud-card">
-              <div className="p-4 border-b border-slate-800 bg-slate-900/50 flex justify-between items-center z-10 relative">
+          <div className="lg:col-span-2 ios-glass-card p-0 relative overflow-hidden flex flex-col min-h-[400px]">
+              <div className="p-4 border-b border-white/10 bg-white/5 flex justify-between items-center z-10 relative">
                   <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
                       <Globe className="w-4 h-4 text-blue-400" /> 全球库存分布 (Click Nodes)
                   </h3>
@@ -390,7 +390,7 @@ const Analytics: React.FC = () => {
               </div>
           </div>
 
-          <div className="lg:col-span-1 holo-card p-6 flex flex-col hud-card">
+          <div className="lg:col-span-1 ios-glass-card p-6 flex flex-col">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                   <RefreshCw className="w-4 h-4 text-orange-400" /> 智能补货建议 (Restock)
               </h3>
@@ -400,7 +400,7 @@ const Analytics: React.FC = () => {
                       { sku: 'CP-Q1M', name: '车机盒子', stock: 120, burn: 12, rec: 500, urgent: false },
                       { sku: 'MG-PRO', name: '磁吸支架', stock: 8, burn: 2, rec: 100, urgent: true },
                   ].map((item, idx) => (
-                      <div key={idx} className="bg-slate-900/50 border border-slate-800 p-3 rounded-lg flex justify-between items-center group hover:border-slate-600 transition-all hover:bg-slate-800/80">
+                      <div key={idx} className="bg-black/20 border border-white/10 p-3 rounded-lg flex justify-between items-center group hover:border-white/20 transition-all hover:bg-black/40">
                           <div>
                               <div className="flex items-center gap-2">
                                   <span className={`w-1.5 h-1.5 rounded-full ${item.urgent ? 'bg-red-500 animate-pulse shadow-[0_0_5px_#ef4444]' : 'bg-emerald-500'}`}></span>
@@ -428,7 +428,7 @@ const Analytics: React.FC = () => {
   // (Simplified for brevity, assuming standard structure applied)
   const AdsView = () => (
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="lg:col-span-8 holo-card p-6 hud-card">
+          <div className="lg:col-span-8 ios-glass-card p-6">
               <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
                   <Video className="w-4 h-4 text-pink-400" /> 热门素材 (Top Creatives)
               </h3>
@@ -437,7 +437,7 @@ const Analytics: React.FC = () => {
                       <div 
                         key={creative.id} 
                         onClick={() => setSelectedCreative(creative)}
-                        className="aspect-[9/16] bg-slate-900 rounded-lg border border-slate-800 relative group overflow-hidden cursor-pointer hover:border-pink-500/50 transition-all hover:scale-[1.02]"
+                        className="aspect-[9/16] bg-black/40 rounded-lg border border-white/10 relative group overflow-hidden cursor-pointer hover:border-pink-500/50 transition-all hover:scale-[1.02]"
                       >
                           <div className={`absolute inset-0 ${creative.thumb} flex items-center justify-center opacity-60 group-hover:opacity-100 transition-opacity`}>
                               <Play className="w-8 h-8 text-white/80" />
@@ -480,7 +480,7 @@ const Analytics: React.FC = () => {
                 </p>
             </div>
             
-            <div className="bg-slate-900/80 backdrop-blur-md p-1 rounded-xl border border-slate-800 flex gap-1 shadow-lg">
+            <div className="bg-black/40 backdrop-blur-md p-1 rounded-xl border border-white/10 flex gap-1 shadow-lg">
                 {[
                     { id: 'finance', label: '深度财务', icon: Wallet },
                     { id: 'supply', label: '供应链智脑', icon: Truck },
@@ -493,7 +493,7 @@ const Analytics: React.FC = () => {
                         className={`px-4 py-2.5 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${
                             activeTab === tab.id 
                             ? 'bg-indigo-600 text-white shadow-[0_0_15px_rgba(79,70,229,0.4)]' 
-                            : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                            : 'text-slate-400 hover:text-white hover:bg-white/10'
                         }`}
                     >
                         <tab.icon className="w-4 h-4" />

@@ -118,22 +118,22 @@ const OmniChat = () => {
     };
 
     return (
-        <div className="flex flex-col h-full bg-slate-900 rounded-xl border border-slate-800 overflow-hidden">
+        <div className="flex flex-col h-full bg-black/20 rounded-xl border border-white/10 overflow-hidden backdrop-blur-sm">
             {/* Mode Selector */}
-            <div className="flex gap-2 p-4 border-b border-slate-800 bg-slate-950/50 overflow-x-auto">
-                <button onClick={() => setMode('standard')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'standard' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
+            <div className="flex gap-2 p-4 border-b border-white/10 bg-black/40 overflow-x-auto">
+                <button onClick={() => setMode('standard')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'standard' ? 'bg-indigo-600 border-indigo-500 text-white' : 'bg-black/60 border-white/10 text-slate-400'}`}>
                     <Sparkles className="w-3 h-3" /> 标准模式
                 </button>
-                <button onClick={() => setMode('thinking')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'thinking' ? 'bg-purple-600 border-purple-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
+                <button onClick={() => setMode('thinking')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'thinking' ? 'bg-purple-600 border-purple-500 text-white' : 'bg-black/60 border-white/10 text-slate-400'}`}>
                     <Brain className="w-3 h-3" /> 深度思考 (Pro)
                 </button>
-                <button onClick={() => setMode('search')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'search' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
+                <button onClick={() => setMode('search')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'search' ? 'bg-blue-600 border-blue-500 text-white' : 'bg-black/60 border-white/10 text-slate-400'}`}>
                     <Globe className="w-3 h-3" /> 联网搜索
                 </button>
-                <button onClick={() => setMode('maps')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'maps' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
+                <button onClick={() => setMode('maps')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'maps' ? 'bg-emerald-600 border-emerald-500 text-white' : 'bg-black/60 border-white/10 text-slate-400'}`}>
                     <MapPin className="w-3 h-3" /> 地图溯源
                 </button>
-                <button onClick={() => setMode('lite')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'lite' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-slate-900 border-slate-700 text-slate-400'}`}>
+                <button onClick={() => setMode('lite')} className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 border ${mode === 'lite' ? 'bg-amber-600 border-amber-500 text-white' : 'bg-black/60 border-white/10 text-slate-400'}`}>
                     <Zap className="w-3 h-3" /> 极速模式 (Lite)
                 </button>
             </div>
@@ -157,10 +157,10 @@ const OmniChat = () => {
                             <div className="mt-2 text-xs flex flex-wrap gap-2 max-w-[80%]">
                                 {msg.grounding.groundingChunks.map((chunk: any, i: number) => {
                                     if (chunk.web?.uri) {
-                                        return <a key={i} href={chunk.web.uri} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-slate-900 border border-slate-700 px-2 py-1 rounded text-blue-400 hover:text-white"><Globe className="w-3 h-3"/> {chunk.web.title || '来源'}</a>
+                                        return <a key={i} href={chunk.web.uri} target="_blank" rel="noreferrer" className="flex items-center gap-1 bg-black/60 border border-white/10 px-2 py-1 rounded text-blue-400 hover:text-white"><Globe className="w-3 h-3"/> {chunk.web.title || '来源'}</a>
                                     }
                                     if (chunk.maps?.placeAnswerSources?.[0]?.placeId) {
-                                         return <span key={i} className="flex items-center gap-1 bg-slate-900 border border-slate-700 px-2 py-1 rounded text-emerald-400"><MapPin className="w-3 h-3"/> 地图位置</span>
+                                         return <span key={i} className="flex items-center gap-1 bg-black/60 border border-white/10 px-2 py-1 rounded text-emerald-400"><MapPin className="w-3 h-3"/> 地图位置</span>
                                     }
                                     return null;
                                 })}
@@ -173,7 +173,7 @@ const OmniChat = () => {
             </div>
 
             {/* Input */}
-            <div className="p-4 border-t border-slate-800 bg-slate-950">
+            <div className="p-4 border-t border-white/10 bg-black/40">
                 <div className="flex gap-2">
                     <input 
                         type="text" 
@@ -181,7 +181,7 @@ const OmniChat = () => {
                         onChange={e => setInput(e.target.value)}
                         onKeyDown={e => e.key === 'Enter' && handleSend()}
                         placeholder={`给 Gemini 发送消息 (${mode} 模式)...`}
-                        className="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500"
+                        className="flex-1 bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500"
                     />
                     <button onClick={handleSend} disabled={loading} className="p-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl disabled:opacity-50 transition-colors">
                         <Send className="w-5 h-5" />
@@ -294,8 +294,8 @@ const CreativeStudio = () => {
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-full">
             {/* Controls */}
-            <div className="md:col-span-1 bg-slate-900 border border-slate-800 rounded-xl p-5 flex flex-col gap-5">
-                <div className="flex gap-2 p-1 bg-slate-950 rounded-lg border border-slate-800">
+            <div className="md:col-span-1 bg-black/20 border border-white/10 rounded-xl p-5 flex flex-col gap-5 backdrop-blur-sm">
+                <div className="flex gap-2 p-1 bg-black/40 rounded-lg border border-white/10">
                     <button onClick={() => setTool('image-gen')} className={`flex-1 py-2 text-xs font-bold rounded ${tool === 'image-gen' ? 'bg-indigo-600 text-white' : 'text-slate-400'}`}>图片生成</button>
                     <button onClick={() => setTool('video-gen')} className={`flex-1 py-2 text-xs font-bold rounded ${tool === 'video-gen' ? 'bg-pink-600 text-white' : 'text-slate-400'}`}>视频 (Veo)</button>
                     <button onClick={() => setTool('image-edit')} className={`flex-1 py-2 text-xs font-bold rounded ${tool === 'image-edit' ? 'bg-blue-600 text-white' : 'text-slate-400'}`}>图片编辑</button>
@@ -307,7 +307,7 @@ const CreativeStudio = () => {
                         <textarea 
                             value={prompt} 
                             onChange={e => setPrompt(e.target.value)}
-                            className="w-full h-32 bg-slate-950 border border-slate-700 rounded-lg p-3 text-sm text-white focus:border-indigo-500 outline-none resize-none"
+                            className="w-full h-32 bg-black/60 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-indigo-500 outline-none resize-none"
                             placeholder={tool === 'image-edit' ? "例如：添加复古滤镜..." : "描述你的创意构想..."}
                         />
                     </div>
@@ -327,7 +327,7 @@ const CreativeStudio = () => {
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="text-xs font-bold text-slate-400 mb-1 block">纵横比</label>
-                            <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-white">
+                            <select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded p-2 text-xs text-white">
                                 <option value="1:1">1:1 (方形)</option>
                                 <option value="16:9">16:9 (横屏)</option>
                                 <option value="9:16">9:16 (竖屏)</option>
@@ -338,7 +338,7 @@ const CreativeStudio = () => {
                         {tool === 'image-gen' && (
                             <div>
                                 <label className="text-xs font-bold text-slate-400 mb-1 block">画质 (Size)</label>
-                                <select value={imageSize} onChange={e => setImageSize(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-white">
+                                <select value={imageSize} onChange={e => setImageSize(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded p-2 text-xs text-white">
                                     <option value="1K">1K (标准)</option>
                                     <option value="2K">2K (高清)</option>
                                     <option value="4K">4K (超清)</option>
@@ -348,7 +348,7 @@ const CreativeStudio = () => {
                         {tool === 'video-gen' && (
                             <div>
                                 <label className="text-xs font-bold text-slate-400 mb-1 block">分辨率</label>
-                                <select value={resolution} onChange={e => setResolution(e.target.value)} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-xs text-white">
+                                <select value={resolution} onChange={e => setResolution(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded p-2 text-xs text-white">
                                     <option value="720p">720p</option>
                                     <option value="1080p">1080p</option>
                                 </select>
@@ -368,7 +368,7 @@ const CreativeStudio = () => {
             </div>
 
             {/* Preview */}
-            <div className="md:col-span-2 bg-slate-950 border border-slate-800 rounded-xl flex flex-col items-center justify-center relative overflow-hidden p-6">
+            <div className="md:col-span-2 bg-black/20 border border-white/10 rounded-xl flex flex-col items-center justify-center relative overflow-hidden p-6 backdrop-blur-sm">
                 {loading ? (
                     <div className="text-center">
                         <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
@@ -424,8 +424,8 @@ const VisionLab = () => {
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
-            <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 flex flex-col gap-4">
-                <div className="border-2 border-dashed border-slate-700 rounded-xl flex-1 flex flex-col items-center justify-center p-6 relative hover:bg-slate-800/50 transition-colors">
+            <div className="bg-black/20 border border-white/10 rounded-xl p-6 flex flex-col gap-4 backdrop-blur-sm">
+                <div className="border-2 border-dashed border-white/10 rounded-xl flex-1 flex flex-col items-center justify-center p-6 relative hover:bg-white/5 transition-colors">
                     <input 
                         type="file" 
                         accept="image/*,video/*" 
@@ -454,7 +454,7 @@ const VisionLab = () => {
                     使用 Gemini 3 Pro 分析
                 </button>
             </div>
-            <div className="bg-slate-950 border border-slate-800 rounded-xl p-6 overflow-y-auto">
+            <div className="bg-black/20 border border-white/10 rounded-xl p-6 overflow-y-auto backdrop-blur-sm">
                 <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase">分析结果</h3>
                 {analysis ? (
                     <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap">{analysis}</div>
@@ -573,7 +573,7 @@ const VoiceLab = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 h-full">
             <div className="space-y-6">
                 {/* Live Card */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 relative overflow-hidden">
+                <div className="bg-black/20 border border-white/10 rounded-xl p-6 relative overflow-hidden backdrop-blur-sm">
                     <div className="relative z-10">
                         <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
                             <Mic className="w-5 h-5 text-red-500" /> 实时对话 (Live API)
@@ -602,11 +602,11 @@ const VoiceLab = () => {
                 </div>
 
                 {/* Transcription Card */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6">
+                <div className="bg-black/20 border border-white/10 rounded-xl p-6 backdrop-blur-sm">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <RefreshCw className="w-5 h-5 text-blue-500" /> 语音转写 (Transcription)
                     </h3>
-                    <div className="bg-slate-950 p-4 rounded-lg min-h-[100px] mb-4 text-sm text-slate-300 border border-slate-800">
+                    <div className="bg-black/40 p-4 rounded-lg min-h-[100px] mb-4 text-sm text-slate-300 border border-white/10">
                         {transcription || "录制的文本将显示在这里..."}
                     </div>
                     <button 
@@ -621,14 +621,14 @@ const VoiceLab = () => {
 
             <div className="space-y-6">
                 {/* TTS Card */}
-                <div className="bg-slate-900 border border-slate-800 rounded-xl p-6 h-full flex flex-col">
+                <div className="bg-black/20 border border-white/10 rounded-xl p-6 h-full flex flex-col backdrop-blur-sm">
                     <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
                         <Speaker className="w-5 h-5 text-emerald-500" /> 文本转语音 (TTS)
                     </h3>
                     <textarea 
                         value={ttsText}
                         onChange={e => setTtsText(e.target.value)}
-                        className="flex-1 bg-slate-950 border border-slate-800 rounded-lg p-4 text-sm text-white focus:border-emerald-500 outline-none resize-none mb-4"
+                        className="flex-1 bg-black/40 border border-white/10 rounded-lg p-4 text-sm text-white focus:border-emerald-500 outline-none resize-none mb-4"
                         placeholder="输入要朗读的文本..."
                     />
                     <button 
@@ -653,7 +653,7 @@ const Intelligence: React.FC = () => {
   return (
     <div className="h-[calc(100vh-6rem)] flex flex-col gap-6">
         {/* Header Tabs */}
-        <div className="flex bg-slate-900 p-1.5 rounded-2xl border border-slate-800 w-fit shadow-xl mx-auto md:mx-0">
+        <div className="flex bg-black/60 p-1.5 rounded-2xl border border-white/10 w-fit shadow-xl mx-auto md:mx-0 backdrop-blur-md">
             {TABS.map(tab => (
                 <button
                     key={tab.id}
@@ -661,7 +661,7 @@ const Intelligence: React.FC = () => {
                     className={`px-5 py-2.5 rounded-xl text-sm font-bold flex items-center gap-2 transition-all duration-300 ${
                         activeTab === tab.id 
                         ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' 
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                        : 'text-slate-400 hover:text-white hover:bg-white/10'
                     }`}
                 >
                     <tab.icon className="w-4 h-4" />

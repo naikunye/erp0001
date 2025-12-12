@@ -245,7 +245,7 @@ const Tracking: React.FC = () => {
       <div className="w-full md:w-1/3 flex flex-col gap-4">
           
           {/* Action Bar */}
-          <div className="star-card p-4 rounded-xl shadow-sm flex flex-col gap-3">
+          <div className="ios-glass-panel p-4 rounded-xl shadow-sm flex flex-col gap-3">
               <div className="flex justify-between items-center">
                   <h2 className="text-white font-bold flex items-center gap-2">
                       <Map className="w-5 h-5 text-indigo-500" />
@@ -269,15 +269,15 @@ const Tracking: React.FC = () => {
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                       placeholder="搜索单号 / 物品 / 地区..."
-                      className="w-full pl-9 pr-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
+                      className="w-full pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 placeholder-slate-600"
                   />
                   <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
               </div>
           </div>
 
           {/* Shipment List */}
-          <div className="flex-1 star-card rounded-xl shadow-sm overflow-hidden flex flex-col">
-              <div className="p-3 border-b border-slate-800 bg-slate-950/50 flex justify-between items-center">
+          <div className="flex-1 ios-glass-panel rounded-xl shadow-sm overflow-hidden flex flex-col">
+              <div className="p-3 border-b border-white/10 bg-white/5 flex justify-between items-center">
                   <h3 className="text-xs font-bold text-slate-500 uppercase">监控列表 ({shipments.length})</h3>
                   <div className="flex gap-2">
                       <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="异常"></span>
@@ -285,14 +285,14 @@ const Tracking: React.FC = () => {
                       <span className="w-2 h-2 rounded-full bg-emerald-500" title="已送达"></span>
                   </div>
               </div>
-              <div className="flex-1 overflow-y-auto divide-y divide-slate-800/50">
+              <div className="flex-1 overflow-y-auto divide-y divide-white/5">
                   {shipments
                     .filter(s => s.trackingNo.toLowerCase().includes(searchQuery.toLowerCase()) || s.productName?.toLowerCase().includes(searchQuery.toLowerCase()) || s.carrier.toLowerCase().includes(searchQuery.toLowerCase()))
                     .map(shipment => (
                       <div 
                           key={shipment.id}
                           onClick={() => { setSelectedShipment(shipment); setAiAnalysis(null); }}
-                          className={`p-4 cursor-pointer transition-all hover:bg-slate-800/50 relative group ${selectedShipment?.id === shipment.id ? 'bg-slate-800/80 border-l-2 border-indigo-500' : 'border-l-2 border-transparent'}`}
+                          className={`p-4 cursor-pointer transition-all hover:bg-white/5 relative group ${selectedShipment?.id === shipment.id ? 'bg-white/5 border-l-2 border-indigo-500' : 'border-l-2 border-transparent'}`}
                       >
                           <div className="flex justify-between items-center mb-2">
                               <span className={`px-1.5 py-0.5 rounded text-[10px] font-bold border flex items-center gap-1 ${getCarrierColor(shipment.carrier)}`}>
@@ -312,7 +312,7 @@ const Tracking: React.FC = () => {
                               <span className="truncate max-w-[150px]">{shipment.productName || 'Unknown Package'}</span>
                           </div>
                           
-                          <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2 pt-2 border-t border-slate-800/50">
+                          <div className="flex items-center justify-between text-[10px] text-slate-500 mt-2 pt-2 border-t border-white/10">
                               <div className="flex items-center gap-1">
                                   <span>{shipment.origin.split(',')[0]}</span>
                                   <ArrowRight className="w-3 h-3" />
@@ -324,7 +324,7 @@ const Tracking: React.FC = () => {
                           {/* Delete Button */}
                           <button 
                               onClick={(e) => handleDelete(shipment.id, e)}
-                              className="absolute right-2 bottom-2 p-1.5 text-slate-600 hover:text-red-400 hover:bg-slate-900 rounded opacity-0 group-hover:opacity-100 transition-opacity"
+                              className="absolute right-2 bottom-2 p-1.5 text-slate-600 hover:text-red-400 hover:bg-black/80 rounded opacity-0 group-hover:opacity-100 transition-opacity"
                           >
                               <Trash2 className="w-4 h-4" />
                           </button>
@@ -340,17 +340,17 @@ const Tracking: React.FC = () => {
       </div>
 
       {/* Right Column: Detail View */}
-      <div className="flex-1 star-card rounded-xl shadow-sm overflow-hidden flex flex-col relative">
+      <div className="flex-1 ios-glass-panel rounded-xl shadow-sm overflow-hidden flex flex-col relative">
           {selectedShipment ? (
               <>
                   {/* Map Background Simulation */}
-                  <div className="h-48 bg-slate-950 relative overflow-hidden border-b border-slate-800 group shrink-0">
+                  <div className="h-48 bg-black/60 relative overflow-hidden border-b border-white/10 group shrink-0">
                       <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:16px_16px]"></div>
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-3/4 h-0.5 bg-gradient-to-r from-emerald-500/20 via-indigo-500 to-blue-500/20 relative">
                               <div className="absolute -top-1.5 left-0 w-3 h-3 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></div>
                               <div className="absolute -top-1.5 right-0 w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></div>
-                              <div className="absolute -top-3 left-1/2 p-1 bg-slate-950 rounded-full border border-indigo-500 shadow-lg shadow-indigo-500/50">
+                              <div className="absolute -top-3 left-1/2 p-1 bg-black/80 rounded-full border border-indigo-500 shadow-lg shadow-indigo-500/50">
                                   {selectedShipment.carrier === 'Matson' || selectedShipment.carrier === 'Cosco' ? 
                                     <Ship className="text-indigo-400 w-4 h-4" /> : 
                                     <Plane className="text-indigo-400 w-4 h-4" />
@@ -375,7 +375,7 @@ const Tracking: React.FC = () => {
                       
                       <button 
                         onClick={handleRefreshStatus}
-                        className="absolute top-4 right-4 p-2 bg-slate-900/80 border border-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm"
+                        className="absolute top-4 right-4 p-2 bg-black/80 border border-slate-700 rounded-lg text-slate-400 hover:text-white transition-colors opacity-0 group-hover:opacity-100 backdrop-blur-sm"
                         title="刷新状态"
                       >
                           <RefreshCw className="w-4 h-4" />
@@ -383,18 +383,18 @@ const Tracking: React.FC = () => {
                   </div>
 
                   {/* Header Info */}
-                  <div className="p-6 border-b border-slate-800 bg-slate-950/30 flex justify-between items-start shrink-0">
+                  <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-start shrink-0">
                        <div>
                            <div className="flex items-center gap-3 mb-1">
                                 <h1 className="text-2xl font-bold text-white font-mono tracking-tight">
                                     {selectedShipment.trackingNo}
                                 </h1>
-                                <a href="#" className="px-2 py-0.5 bg-slate-800 rounded text-[10px] text-indigo-300 hover:text-white hover:bg-slate-700 flex items-center gap-1">
+                                <a href="#" className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-indigo-300 hover:text-white hover:bg-white/10 flex items-center gap-1">
                                     <Globe className="w-3 h-3" /> 官网查询
                                 </a>
                            </div>
                            <div className="text-xs text-slate-400 flex items-center gap-2">
-                               <span className="bg-slate-800 px-2 py-0.5 rounded text-slate-300">{selectedShipment.productName}</span>
+                               <span className="bg-white/5 px-2 py-0.5 rounded text-slate-300">{selectedShipment.productName}</span>
                                <span>预计送达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery}</span></span>
                            </div>
                        </div>
@@ -430,12 +430,12 @@ const Tracking: React.FC = () => {
                                       <div className="text-[10px] text-slate-600">{event.date.substring(5)}</div>
                                   </div>
                                   
-                                  <div className={`w-3 h-3 rounded-full border-2 mt-1.5 shrink-0 bg-slate-900 transition-colors ${
+                                  <div className={`w-3 h-3 rounded-full border-2 mt-1.5 shrink-0 bg-black transition-colors ${
                                       index === 0 ? 'border-indigo-500 bg-indigo-500 shadow-[0_0_10px_#6366f1]' : 
                                       event.status === 'Exception' ? 'border-red-500 bg-red-500' : 'border-slate-600 group-hover:border-slate-400'
                                   }`}></div>
                                   
-                                  <div className="flex-1 pb-4 border-b border-slate-800/50 group-last:border-0 group-last:pb-0">
+                                  <div className="flex-1 pb-4 border-b border-white/5 group-last:border-0 group-last:pb-0">
                                       <div className={`text-sm font-medium ${index === 0 ? 'text-white' : 'text-slate-400'}`}>
                                           {event.description}
                                       </div>
@@ -459,7 +459,7 @@ const Tracking: React.FC = () => {
       {/* Add Modal */}
       {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowAddModal(false)}>
-              <div className="bg-slate-900 w-full max-w-lg rounded-2xl border border-slate-800 shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="ios-glass-panel w-full max-w-lg rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
                           <Plus className="w-5 h-5 text-indigo-500" /> 新增物流追踪
@@ -482,7 +482,7 @@ const Tracking: React.FC = () => {
                                       type="text" 
                                       value={manualForm.trackingNo} 
                                       onChange={(e) => setManualForm({...manualForm, trackingNo: e.target.value})}
-                                      className="flex-1 bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono uppercase"
+                                      className="flex-1 bg-black/40 border border-white/10 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-indigo-500 font-mono uppercase"
                                       placeholder="e.g. 1Z999..."
                                   />
                                   <button 
@@ -506,11 +506,11 @@ const Tracking: React.FC = () => {
                           <div className="grid grid-cols-2 gap-4">
                               <div>
                                   <label className="text-xs text-slate-400 block mb-1">单号 *</label>
-                                  <input type="text" value={manualForm.trackingNo} onChange={e => setManualForm({...manualForm, trackingNo: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white font-mono" />
+                                  <input type="text" value={manualForm.trackingNo} onChange={e => setManualForm({...manualForm, trackingNo: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white font-mono" />
                               </div>
                               <div>
                                   <label className="text-xs text-slate-400 block mb-1">承运商</label>
-                                  <select value={manualForm.carrier} onChange={e => setManualForm({...manualForm, carrier: e.target.value as any})} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white">
+                                  <select value={manualForm.carrier} onChange={e => setManualForm({...manualForm, carrier: e.target.value as any})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white">
                                       <option value="DHL">DHL</option>
                                       <option value="FedEx">FedEx</option>
                                       <option value="UPS">UPS</option>
@@ -522,16 +522,16 @@ const Tracking: React.FC = () => {
                           <div className="grid grid-cols-2 gap-4">
                               <div>
                                   <label className="text-xs text-slate-400 block mb-1">发货地</label>
-                                  <input type="text" value={manualForm.origin} onChange={e => setManualForm({...manualForm, origin: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white" placeholder="City, CN" />
+                                  <input type="text" value={manualForm.origin} onChange={e => setManualForm({...manualForm, origin: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" placeholder="City, CN" />
                               </div>
                               <div>
                                   <label className="text-xs text-slate-400 block mb-1">目的地</label>
-                                  <input type="text" value={manualForm.destination} onChange={e => setManualForm({...manualForm, destination: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white" placeholder="City, US" />
+                                  <input type="text" value={manualForm.destination} onChange={e => setManualForm({...manualForm, destination: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" placeholder="City, US" />
                               </div>
                           </div>
                           <div>
                               <label className="text-xs text-slate-400 block mb-1">商品名称</label>
-                              <input type="text" value={manualForm.productName} onChange={e => setManualForm({...manualForm, productName: e.target.value})} className="w-full bg-slate-950 border border-slate-700 rounded p-2 text-sm text-white" placeholder="e.g. 电子配件" />
+                              <input type="text" value={manualForm.productName} onChange={e => setManualForm({...manualForm, productName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" placeholder="e.g. 电子配件" />
                           </div>
                           
                           <button onClick={handleManualSubmit} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl mt-4">

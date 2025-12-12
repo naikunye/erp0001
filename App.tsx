@@ -112,7 +112,7 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden p-6 gap-6 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden p-4 gap-4 font-sans">
       <ToastContainer />
       <GlobalSearch />
       
@@ -128,9 +128,9 @@ const MainLayout: React.FC = () => {
         </div>
         
         {/* Scrollable Content */}
-        <main className="flex-1 overflow-y-auto scroll-smooth p-8 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
+        <main className="flex-1 overflow-y-auto scroll-smooth p-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           <ErrorBoundary>
-            <div className="max-w-[1600px] mx-auto h-full flex flex-col">
+            <div className="w-full h-full flex flex-col">
                 {renderContent()}
             </div>
           </ErrorBoundary>

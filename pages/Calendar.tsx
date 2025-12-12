@@ -251,7 +251,7 @@ const Calendar: React.FC = () => {
 
       // Padding
       for (let i = 0; i < padding; i++) {
-          days.push(<div key={`pad-${i}`} className="min-h-[120px] bg-slate-950/30 border border-slate-800/50"></div>);
+          days.push(<div key={`pad-${i}`} className="min-h-[120px] bg-black/60 border border-white/5"></div>);
       }
 
       // Days
@@ -265,7 +265,7 @@ const Calendar: React.FC = () => {
               <div 
                   key={day} 
                   onClick={() => handleDateClick(date)}
-                  className={`min-h-[120px] border border-slate-800 p-2 relative group hover:bg-slate-800/30 transition-colors cursor-pointer flex flex-col gap-1 ${isToday ? 'bg-indigo-900/10' : 'bg-slate-900'}`}
+                  className={`min-h-[120px] border border-white/5 p-2 relative group hover:bg-white/5 transition-colors cursor-pointer flex flex-col gap-1 ${isToday ? 'bg-indigo-900/10' : 'bg-black/20'}`}
               >
                   <div className="flex justify-between items-start">
                       <div className={`text-xs font-medium mb-1 ${isToday ? 'text-indigo-400 bg-indigo-500/10 px-2 py-0.5 rounded w-fit' : 'text-slate-500'}`}>
@@ -321,9 +321,9 @@ const Calendar: React.FC = () => {
               <div 
                   key={i} 
                   onClick={() => handleDateClick(date)}
-                  className={`border-r last:border-r-0 border-slate-800 p-3 relative group hover:bg-slate-800/20 transition-colors cursor-pointer flex flex-col h-full ${isToday ? 'bg-indigo-900/10' : 'bg-slate-900'}`}
+                  className={`border-r last:border-r-0 border-white/10 p-3 relative group hover:bg-white/5 transition-colors cursor-pointer flex flex-col h-full ${isToday ? 'bg-indigo-900/10' : 'bg-black/20'}`}
               >
-                  <div className={`text-center py-2 mb-2 border-b border-slate-800 ${isToday ? 'bg-indigo-500/10 text-indigo-400 rounded-lg' : ''}`}>
+                  <div className={`text-center py-2 mb-2 border-b border-white/10 ${isToday ? 'bg-indigo-500/10 text-indigo-400 rounded-lg' : ''}`}>
                       <div className="text-xs text-slate-500 uppercase">{getWeekDaysHeader()[i]}</div>
                       <div className={`text-xl font-bold ${isToday ? 'text-indigo-400' : 'text-slate-300'}`}>{date.getDate()}</div>
                   </div>
@@ -349,7 +349,7 @@ const Calendar: React.FC = () => {
                           );
                       })}
                       
-                      <button className="w-full py-2 border-2 border-dashed border-slate-800 rounded text-slate-600 hover:border-slate-600 hover:text-slate-400 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
+                      <button className="w-full py-2 border-2 border-dashed border-white/10 rounded text-slate-600 hover:border-slate-500 hover:text-slate-400 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all">
                           <Plus className="w-3 h-3 mr-1" /> 添加
                       </button>
                   </div>
@@ -384,21 +384,21 @@ const Calendar: React.FC = () => {
     <div className="h-[calc(100vh-6rem)] flex flex-col space-y-4">
       
       {/* Calendar Header */}
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-slate-900 p-4 rounded-xl border border-slate-800 shadow-sm">
+      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-black/20 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-sm">
           <div className="flex items-center gap-4">
               {/* Navigation */}
-              <div className="flex items-center bg-slate-950 rounded-lg p-1 border border-slate-800">
-                  <button onClick={handlePrev} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors">
+              <div className="flex items-center bg-black/40 rounded-lg p-1 border border-white/10">
+                  <button onClick={handlePrev} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
                       <ChevronLeft className="w-5 h-5" />
                   </button>
                   <div className="px-4 font-mono font-bold text-white text-lg w-48 text-center truncate">
                       {getHeaderTitle()}
                   </div>
-                  <button onClick={handleNext} className="p-1.5 hover:bg-slate-800 rounded text-slate-400 hover:text-white transition-colors">
+                  <button onClick={handleNext} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
                       <ChevronRight className="w-5 h-5" />
                   </button>
               </div>
-              <button onClick={handleToday} className="text-xs px-3 py-1.5 border border-slate-700 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors">
+              <button onClick={handleToday} className="text-xs px-3 py-1.5 border border-white/10 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition-colors">
                   今天
               </button>
               
@@ -416,7 +416,7 @@ const Calendar: React.FC = () => {
 
           <div className="flex items-center gap-4">
               {/* View Switcher */}
-              <div className="flex bg-slate-950 p-1 rounded-lg border border-slate-800">
+              <div className="flex bg-black/40 p-1 rounded-lg border border-white/10">
                   <button onClick={() => setViewMode('month')} className={`px-3 py-1 rounded-md text-xs font-bold transition-colors flex items-center gap-2 ${viewMode === 'month' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>
                       <LayoutGrid className="w-3 h-3" /> 月视图
                   </button>
@@ -428,7 +428,7 @@ const Calendar: React.FC = () => {
               {/* Start Day Toggle */}
               <button 
                   onClick={() => setWeekStartDay(weekStartDay === 1 ? 0 : 1)}
-                  className="flex items-center gap-2 px-3 py-1.5 border border-slate-700 rounded-lg text-slate-400 text-xs hover:text-white hover:bg-slate-800 transition-colors"
+                  className="flex items-center gap-2 px-3 py-1.5 border border-white/10 rounded-lg text-slate-400 text-xs hover:text-white hover:bg-white/10 transition-colors"
                   title="切换每周起始日"
               >
                   <Settings2 className="w-3 h-3" />
@@ -438,9 +438,9 @@ const Calendar: React.FC = () => {
       </div>
 
       {/* Calendar Grid */}
-      <div className="flex-1 bg-slate-900 rounded-xl border border-slate-800 shadow-sm overflow-hidden flex flex-col">
+      <div className="flex-1 bg-black/20 rounded-xl border border-white/10 shadow-sm overflow-hidden flex flex-col backdrop-blur-sm">
           {/* Grid Header */}
-          <div className={`grid ${viewMode === 'month' ? 'grid-cols-7' : 'grid-cols-7'} border-b border-slate-800 bg-slate-950/50`}>
+          <div className={`grid ${viewMode === 'month' ? 'grid-cols-7' : 'grid-cols-7'} border-b border-white/10 bg-black/40`}>
               {getWeekDaysHeader().map(day => (
                   <div key={day} className="py-3 text-center text-xs font-bold text-slate-500 tracking-wider">
                       {day}
@@ -449,13 +449,13 @@ const Calendar: React.FC = () => {
           </div>
           
           {/* Content */}
-          <div className={`grid ${viewMode === 'month' ? 'grid-cols-7 auto-rows-fr' : 'grid-cols-7 h-full'} flex-1 overflow-y-auto bg-slate-900`}>
+          <div className={`grid ${viewMode === 'month' ? 'grid-cols-7 auto-rows-fr' : 'grid-cols-7 h-full'} flex-1 overflow-y-auto bg-transparent`}>
               {viewMode === 'month' ? renderMonthView() : renderWeekView()}
           </div>
       </div>
 
       {/* Legend Footer */}
-      <div className="flex flex-wrap gap-4 px-4 py-2 bg-slate-950/30 rounded-xl border border-slate-800/50 justify-center text-xs text-slate-400">
+      <div className="flex flex-wrap gap-4 px-4 py-2 bg-black/40 rounded-xl border border-white/10 justify-center text-xs text-slate-400">
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-blue-500"></span> 物流</div>
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-purple-500"></span> 营销</div>
           <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> 财务</div>
@@ -467,7 +467,7 @@ const Calendar: React.FC = () => {
       {/* Add Event Modal */}
       {showAddModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowAddModal(false)}>
-              <div className="bg-slate-900 w-full max-w-md rounded-2xl border border-slate-800 shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+              <div className="bg-[#0a0a0a] w-full max-w-md rounded-2xl border border-white/10 shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
                           <CalendarIcon className="w-5 h-5 text-indigo-500" />
@@ -480,31 +480,31 @@ const Calendar: React.FC = () => {
                       <div className="space-y-1">
                           <label className="text-xs text-slate-400">事件类型</label>
                           <div className="grid grid-cols-2 gap-2">
-                              <button onClick={() => setNewEvent({ ...newEvent, type: 'logistics' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'logistics' ? 'bg-blue-500/20 border-blue-500 text-blue-300' : 'bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800'}`}><Truck className="w-3.5 h-3.5" /> 物流节点</button>
-                              <button onClick={() => setNewEvent({ ...newEvent, type: 'marketing' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'marketing' ? 'bg-purple-500/20 border-purple-500 text-purple-300' : 'bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800'}`}><Megaphone className="w-3.5 h-3.5" /> 营销活动</button>
-                              <button onClick={() => setNewEvent({ ...newEvent, type: 'finance' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'finance' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800'}`}><DollarSign className="w-3.5 h-3.5" /> 财务/付款</button>
-                              <button onClick={() => setNewEvent({ ...newEvent, type: 'product' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'product' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-slate-950 border-slate-700 text-slate-400 hover:bg-slate-800'}`}><Package className="w-3.5 h-3.5" /> 产品/备货</button>
+                              <button onClick={() => setNewEvent({ ...newEvent, type: 'logistics' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'logistics' ? 'bg-blue-500/20 border-blue-500 text-blue-300' : 'bg-black/60 border-white/10 text-slate-400 hover:bg-white/5'}`}><Truck className="w-3.5 h-3.5" /> 物流节点</button>
+                              <button onClick={() => setNewEvent({ ...newEvent, type: 'marketing' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'marketing' ? 'bg-purple-500/20 border-purple-500 text-purple-300' : 'bg-black/60 border-white/10 text-slate-400 hover:bg-white/5'}`}><Megaphone className="w-3.5 h-3.5" /> 营销活动</button>
+                              <button onClick={() => setNewEvent({ ...newEvent, type: 'finance' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'finance' ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300' : 'bg-black/60 border-white/10 text-slate-400 hover:bg-white/5'}`}><DollarSign className="w-3.5 h-3.5" /> 财务/付款</button>
+                              <button onClick={() => setNewEvent({ ...newEvent, type: 'product' })} className={`flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium border transition-all ${newEvent.type === 'product' ? 'bg-amber-500/20 border-amber-500 text-amber-300' : 'bg-black/60 border-white/10 text-slate-400 hover:bg-white/5'}`}><Package className="w-3.5 h-3.5" /> 产品/备货</button>
                           </div>
                       </div>
 
                       <div className="space-y-1">
                           <label className="text-xs text-slate-400">标题</label>
-                          <input type="text" value={newEvent.title} onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. 500件新品入库" />
+                          <input type="text" value={newEvent.title} onChange={(e) => setNewEvent({ ...newEvent, title: e.target.value })} className="w-full px-3 py-2 bg-black/60 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500" placeholder="e.g. 500件新品入库" />
                       </div>
 
                       <div className="space-y-1">
                           <label className="text-xs text-slate-400">日期</label>
-                          <input type="date" value={newEvent.date} onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} className="w-full px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500" />
+                          <input type="date" value={newEvent.date} onChange={(e) => setNewEvent({ ...newEvent, date: e.target.value })} className="w-full px-3 py-2 bg-black/60 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500" />
                       </div>
 
                       <div className="space-y-1">
                           <label className="text-xs text-slate-400">备注详情</label>
-                          <textarea value={newEvent.description} onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })} className="w-full h-20 px-3 py-2 bg-slate-950 border border-slate-700 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 resize-none" placeholder="添加详细说明..." />
+                          <textarea value={newEvent.description} onChange={(e) => setNewEvent({ ...newEvent, description: e.target.value })} className="w-full h-20 px-3 py-2 bg-black/60 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 resize-none" placeholder="添加详细说明..." />
                       </div>
                   </div>
 
                   <div className="mt-6 flex gap-3">
-                      <button onClick={() => setShowAddModal(false)} className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded-lg text-sm">取消</button>
+                      <button onClick={() => setShowAddModal(false)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm">取消</button>
                       <button onClick={handleAddEvent} className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-900/40 flex items-center justify-center gap-2"><Check className="w-4 h-4" /> 确认添加</button>
                   </div>
               </div>

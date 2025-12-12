@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Bell, Lock, KeyRound, X, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
@@ -40,7 +39,7 @@ const Settings: React.FC = () => {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-2 border-b border-slate-800">
+      <div className="flex gap-2 border-b border-white/10">
           <button onClick={() => setActiveTab('theme')} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'theme' ? 'border-indigo-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}>
               界面主题
           </button>
@@ -58,7 +57,7 @@ const Settings: React.FC = () => {
               {/* Option 1: iOS Dark */}
               <div 
                   onClick={() => handleThemeChange('ios')}
-                  className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios' ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-slate-800 opacity-70 hover:opacity-100'}`}
+                  className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios' ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}
               >
                   <div className="bg-[#000] rounded-lg p-6 h-40 flex flex-col justify-center items-center relative overflow-hidden">
                       <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#1c1c1e_0%,#000000_100%)]"></div>
@@ -74,7 +73,7 @@ const Settings: React.FC = () => {
               {/* Option 2: Cyberpunk */}
               <div 
                   onClick={() => handleThemeChange('cyber')}
-                  className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'cyber' ? 'border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]' : 'border-slate-800 opacity-70 hover:opacity-100'}`}
+                  className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'cyber' ? 'border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}
               >
                   <div className="bg-[#030508] rounded-lg p-6 h-40 flex flex-col justify-center items-center relative overflow-hidden font-display">
                       <div className="absolute inset-0 bg-[linear-gradient(rgba(0,240,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,240,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
@@ -89,7 +88,7 @@ const Settings: React.FC = () => {
               {/* Option 3: Obsidian */}
               <div 
                   onClick={() => handleThemeChange('obsidian')}
-                  className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'obsidian' ? 'border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'border-slate-800 opacity-70 hover:opacity-100'}`}
+                  className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'obsidian' ? 'border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}
               >
                   <div className="bg-[#050505] rounded-lg p-6 h-40 flex flex-col justify-center items-center relative overflow-hidden">
                       <div className="relative z-10 text-center">
@@ -102,9 +101,20 @@ const Settings: React.FC = () => {
           </div>
       )}
 
+      {/* GENERAL TAB */}
       {activeTab === 'general' && (
-          <div className="bg-slate-900 rounded-xl border border-slate-800 p-8 text-center text-slate-500">
-              常规设置内容... (此处省略，以突出主题切换功能)
+          <div className="bg-black/20 rounded-xl border border-white/10 p-6">
+              <h3 className="text-lg font-bold text-white mb-4">常规配置</h3>
+              <p className="text-slate-500 text-sm">这里可以放置数据库连接、API Key 设置等。</p>
+              {/* Add form elements as needed or keep placeholder */}
+          </div>
+      )}
+
+      {/* RECYCLE BIN TAB */}
+      {activeTab === 'recycle' && (
+          <div className="bg-black/20 rounded-xl border border-white/10 p-6">
+              <h3 className="text-lg font-bold text-white mb-4">数据回收站</h3>
+              <RecycleBin />
           </div>
       )}
     </div>
