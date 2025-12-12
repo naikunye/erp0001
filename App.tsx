@@ -16,6 +16,9 @@ import Marketing from './pages/Marketing';
 import Analytics from './pages/Analytics'; 
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
+import Integrations from './pages/Integrations'; 
+import InboundShipments from './pages/InboundShipments'; 
+import Suppliers from './pages/Suppliers'; 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
 import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
@@ -50,18 +53,18 @@ const MainLayout: React.FC = () => {
 
   const getPageTitle = (page: Page) => {
     switch (page) {
-      case 'dashboard': return 'Command Center';
-      case 'finance': return 'Finance & Capital';
-      case 'tracking': return 'Global Logistics';
-      case 'orders': return 'Order Fulfillment';
-      case 'customers': return 'Client Database';
-      case 'inventory': return 'Inventory & Supply';
-      case 'intelligence': return 'AI Laboratory';
-      case 'marketing': return 'Growth Engine';
-      case 'analytics': return 'Deep Analytics';
-      case 'calendar': return 'Operations Timeline';
-      case 'settings': return 'System Config';
-      default: return 'Quantum OS';
+      case 'dashboard': return '指挥中枢 (Command Center)';
+      case 'finance': return '资金财务 (Finance & Capital)';
+      case 'tracking': return '全球物流 (Global Logistics)';
+      case 'orders': return '订单履约 (Order Fulfillment)';
+      case 'customers': return '客户数据库 (Client Database)';
+      case 'inventory': return '库存供应链 (Inventory & Supply)';
+      case 'intelligence': return 'AI 实验室 (AI Laboratory)';
+      case 'marketing': return '增长引擎 (Growth Engine)';
+      case 'analytics': return '深度分析 (Deep Analytics)';
+      case 'calendar': return '运营日历 (Operations Timeline)';
+      case 'settings': return '系统配置 (System Config)';
+      default: return '探行 OS (Quantum Edition)';
     }
   };
 
@@ -78,7 +81,7 @@ const MainLayout: React.FC = () => {
       case 'marketing': return <Marketing />;
       case 'analytics': return <Analytics />;
       case 'settings': return <Settings />;
-      default: return <div className="p-12 text-center text-slate-500 font-mono">Module Offline</div>;
+      default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中 (Module Offline)</div>;
     }
   };
 

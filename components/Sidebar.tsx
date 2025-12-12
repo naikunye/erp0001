@@ -15,17 +15,17 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
   const isOpen = state.isMobileMenuOpen;
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', subLabel: '总览仪表盘', icon: LayoutDashboard },
-    { id: 'intelligence', label: 'AI Intelligence', subLabel: '智脑实验室', icon: BrainCircuit, highlight: true },
-    { id: 'inventory', label: 'Inventory', subLabel: '智能备货', icon: PackageCheck },
-    { id: 'finance', label: 'Finance', subLabel: '财务资金', icon: Wallet },
-    { id: 'analytics', label: 'Analytics', subLabel: '数据分析', icon: PieChart }, 
-    { id: 'tracking', label: 'Logistics', subLabel: '物流追踪', icon: Map },
-    { id: 'calendar', label: 'Calendar', subLabel: '运营日历', icon: CalendarDays },
-    { id: 'orders', label: 'Fulfillment', subLabel: '订单履约', icon: ShoppingCart },
-    { id: 'marketing', label: 'Marketing', subLabel: '营销与投放', icon: Megaphone },
-    { id: 'customers', label: 'CRM', subLabel: '客户管理', icon: Users },
-    { id: 'settings', label: 'Settings', subLabel: '系统设置', icon: Settings },
+    { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
+    { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit, highlight: true },
+    { id: 'inventory', label: '智能备货', subLabel: 'Inventory', icon: PackageCheck },
+    { id: 'finance', label: '财务资金', subLabel: 'Finance', icon: Wallet },
+    { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
+    { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },
+    { id: 'calendar', label: '运营日历', subLabel: 'Calendar', icon: CalendarDays },
+    { id: 'orders', label: '订单履约', subLabel: 'Orders', icon: ShoppingCart },
+    { id: 'marketing', label: '营销投放', subLabel: 'Marketing', icon: Megaphone },
+    { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
+    { id: 'settings', label: '系统设置', subLabel: 'Settings', icon: Settings },
   ];
 
   const handleNav = (page: Page) => {
@@ -59,7 +59,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                     </div>
                     <div>
                         <div className="font-display font-bold text-xl text-white tracking-wider leading-none">TANXING</div>
-                        <div className="text-[10px] text-white/40 font-mono tracking-[0.2em] mt-1 uppercase">OS v5.0</div>
+                        <div className="text-[10px] text-white/40 font-mono tracking-[0.2em] mt-1 uppercase">探行 OS v5.0</div>
                     </div>
                     <button 
                         onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: false })}
@@ -92,6 +92,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                                 
                                 <div className="flex flex-col items-start">
                                     <span className={`text-sm font-medium leading-none ${isActive ? 'font-bold' : 'text-slate-400 group-hover:text-slate-200'}`}>{item.label}</span>
+                                    <span className={`text-[10px] mt-1 font-mono tracking-wide ${isActive ? 'opacity-80' : 'text-slate-600 group-hover:text-slate-500'}`}>{item.subLabel}</span>
                                 </div>
                                 
                                 {isHighlight && !isActive && (
@@ -109,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                         className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-all text-xs font-bold border border-transparent hover:border-red-500/20"
                     >
                         <LogOut className="w-4 h-4" />
-                        <span>Disconnect</span>
+                        <span>断开连接 (Disconnect)</span>
                     </button>
                 </div>
             </div>

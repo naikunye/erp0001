@@ -203,7 +203,7 @@ const Dashboard: React.FC = () => {
               <div>
                   <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
                       <span className="w-1.5 h-6 bg-blue-500 rounded-full shadow-[0_0_10px_#3b82f6]"></span>
-                      $ TikTok 成本结构拆解 (Unit Economics)
+                      TikTok 成本结构拆解 (Unit Economics)
                   </h3>
                   <p className="text-xs text-slate-500 mt-2 pl-4 font-semibold">单品全链路成本透视 • 利润空间分析</p>
               </div>

@@ -42,12 +42,12 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         <div className="hidden xl:flex items-center gap-4 mr-2 text-xs font-mono text-white/50 bg-black/20 px-4 py-2 rounded-full border border-white/5">
             <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                <span>CN {currentTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+                <span>北京 {currentTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
             </div>
             <div className="w-px h-3 bg-white/10"></div>
             <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                <span>NY {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+                <span>纽约 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
             </div>
         </div>
 
@@ -59,7 +59,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           <input
             type="text"
             readOnly
-            placeholder="Search / AI Command..."
+            placeholder="全局搜索 / AI 指令..."
             className="block w-64 pl-10 pr-12 py-2 rounded-xl bg-white/5 border border-white/5 text-white placeholder-white/30 focus:outline-none focus:bg-white/10 focus:border-white/20 transition-all text-sm hover:bg-white/10 cursor-pointer"
             onClick={() => document.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))}
           />
@@ -82,7 +82,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             {showNotifications && (
                 <div className="absolute top-16 right-8 w-80 ios-glass-card z-50 animate-in fade-in zoom-in-95 overflow-hidden shadow-2xl">
                     <div className="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
-                        <span className="text-xs font-bold text-white/80">Notifications</span>
+                        <span className="text-xs font-bold text-white/80">消息通知 (Notifications)</span>
                         <button onClick={() => setShowNotifications(false)}><X className="w-3.5 h-3.5 text-white/50 hover:text-white"/></button>
                     </div>
                     <div className="max-h-64 overflow-y-auto">
@@ -104,7 +104,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     AD
                 </div>
                 <div className="text-left hidden md:block">
-                    <div className="text-xs font-bold text-white leading-none mb-0.5">Admin</div>
+                    <div className="text-xs font-bold text-white leading-none mb-0.5">管理员</div>
                     <div className="text-[9px] text-white/40 font-mono leading-none">ROOT</div>
                 </div>
                 <ChevronDown className="w-3 h-3 text-white/30" />
