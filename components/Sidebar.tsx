@@ -45,19 +45,19 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
             />
         )}
 
-        {/* Sidebar Container */}
-        <div className={`fixed lg:static inset-y-4 left-4 w-[260px] flex flex-col z-50 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-[120%] lg:translate-x-0'}`}>
-            <div className="glass-panel h-full flex flex-col p-4 rounded-2xl shadow-2xl">
+        {/* Sidebar Container - Width reduced to 240px */}
+        <div className={`fixed lg:static inset-y-4 left-4 w-[240px] flex flex-col z-50 transition-transform duration-300 ${isOpen ? 'translate-x-0' : '-translate-x-[120%] lg:translate-x-0'}`}>
+            <div className="glass-panel h-full flex flex-col p-3 rounded-2xl shadow-2xl">
                 
                 {/* Brand Header */}
-                <div className="h-20 flex items-center px-2 mb-2">
+                <div className="h-16 flex items-center px-2 mb-2">
                     <div className="flex items-center gap-3 w-full">
-                        <div className="w-10 h-10 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-white/20">
-                            <Hexagon className="w-6 h-6 fill-current" />
+                        <div className="w-9 h-9 bg-gradient-to-tr from-cyan-500 to-blue-600 rounded-lg flex items-center justify-center text-white shadow-[0_0_20px_rgba(0,240,255,0.3)] border border-white/20">
+                            <Hexagon className="w-5 h-5 fill-current" />
                         </div>
                         <div className="flex flex-col">
-                            <span className="text-xl font-display font-bold text-white tracking-widest leading-none">TANXING</span>
-                            <span className="text-[10px] text-cyan-400 font-mono tracking-widest mt-1">QUANTUM OS</span>
+                            <span className="text-lg font-display font-bold text-white tracking-widest leading-none">TANXING</span>
+                            <span className="text-[9px] text-cyan-400 font-mono tracking-widest mt-1">QUANTUM OS</span>
                         </div>
                         <button 
                             onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: false })}
@@ -80,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                             <button
                                 key={item.id}
                                 onClick={() => handleNav(item.id as Page)}
-                                className={`w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative border ${
+                                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-300 group relative border ${
                                     isActive
                                     ? 'bg-white/10 border-white/10 text-white shadow-[0_0_15px_rgba(255,255,255,0.05)]' 
                                     : 'border-transparent text-slate-400 hover:text-white hover:bg-white/5 hover:border-white/5'
@@ -90,7 +90,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                                 {isActive && <div className="absolute left-0 top-3 bottom-3 w-1 bg-cyan-400 rounded-r-full shadow-[0_0_10px_#00F0FF]"></div>}
 
                                 <div className={`relative z-10 transition-colors duration-300 ${isActive ? 'text-cyan-400' : 'text-slate-500 group-hover:text-cyan-200'}`}>
-                                    <Icon className="w-5 h-5" />
+                                    <Icon className="w-4 h-4" />
                                 </div>
                                 <span className={`relative z-10 ${isActive ? 'translate-x-1' : ''} transition-transform duration-300`}>{item.label}</span>
                                 
@@ -101,12 +101,12 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                 </nav>
 
                 {/* Footer */}
-                <div className="pt-4 mt-auto border-t border-white/5">
+                <div className="pt-3 mt-auto border-t border-white/5">
                     <button 
                         onClick={onLogout}
-                        className="w-full flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 border border-transparent hover:border-red-500/20 text-slate-500 transition-all text-sm group"
+                        className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-red-500/10 hover:text-red-400 border border-transparent hover:border-red-500/20 text-slate-500 transition-all text-sm group"
                     >
-                        <LogOut className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
+                        <LogOut className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                         <span>断开连接</span>
                     </button>
                 </div>

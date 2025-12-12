@@ -112,13 +112,13 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden p-4 gap-4 bg-transparent font-sans">
+    <div className="flex h-screen w-screen overflow-hidden p-2 gap-2 bg-transparent font-sans">
       <ToastContainer />
       <GlobalSearch />
       
       <Sidebar activePage={activePage} onNavigate={setActivePage} onLogout={handleLogout} />
       
-      <div className="flex-1 flex flex-col relative h-full min-w-0 glass-panel rounded-2xl shadow-2xl overflow-hidden">
+      <div className="flex-1 flex flex-col relative h-full min-w-0 glass-panel rounded-xl shadow-2xl overflow-hidden">
         <div className="relative z-10">
             <Header title={getPageTitle(activePage)} />
         </div>
