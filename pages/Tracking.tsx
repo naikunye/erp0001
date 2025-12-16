@@ -5,7 +5,7 @@ import {
   CheckCircle2, Plus, ArrowRight, Loader2, Bot, Sparkles, Navigation,
   Trash2, RefreshCw, MoreHorizontal, FileText, Save, X, Globe,
   AlertOctagon, Plane, Ship, AlertCircle, DollarSign, Zap, Anchor, Shield,
-  Edit2
+  Edit2, Calendar
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { Shipment, LogisticsEvent } from '../types';
@@ -43,6 +43,7 @@ const Tracking: React.FC = () => {
       destination: 'USA',
       productName: '',
       estimatedDelivery: '',
+      shipDate: '',
       notes: '',
       events: []
   });
@@ -104,6 +105,7 @@ const Tracking: React.FC = () => {
           destination: selectedShipment.destination,
           productName: selectedShipment.productName,
           estimatedDelivery: selectedShipment.estimatedDelivery,
+          shipDate: selectedShipment.shipDate || '',
           notes: selectedShipment.notes || '',
           events: selectedShipment.events
       });
@@ -221,6 +223,7 @@ const Tracking: React.FC = () => {
               origin: manualForm.origin!,
               destination: manualForm.destination!,
               estimatedDelivery: manualForm.estimatedDelivery || selectedShipment.estimatedDelivery,
+              shipDate: manualForm.shipDate || selectedShipment.shipDate,
               productName: manualForm.productName || selectedShipment.productName,
               notes: manualForm.notes || '',
            };
@@ -246,6 +249,7 @@ const Tracking: React.FC = () => {
               origin: manualForm.origin!,
               destination: manualForm.destination!,
               estimatedDelivery: manualForm.estimatedDelivery || new Date().toISOString().split('T')[0],
+              shipDate: manualForm.shipDate || new Date().toISOString().split('T')[0],
               productName: manualForm.productName || 'Standard Parcel',
               lastUpdate: events[0].description,
               events: events as LogisticsEvent[],
@@ -258,7 +262,7 @@ const Tracking: React.FC = () => {
       }
 
       setShowAddModal(false);
-      setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', notes: '', events: [] });
+      setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', notes: '', shipDate: '', events: [] });
       setAddMode('auto');
   };
 
@@ -378,7 +382,7 @@ const Tracking: React.FC = () => {
                       </button>
                       <button 
                           onClick={() => {
-                              setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', notes: '', events: [] });
+                              setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', shipDate: '', notes: '', events: [] });
                               setAddMode('auto');
                               setShowAddModal(true);
                           }}
@@ -542,8 +546,13 @@ const Tracking: React.FC = () => {
                                 </a>
                            </div>
                            <div className="text-xs text-slate-400 flex flex-col gap-1">
-                               <div className="flex items-center gap-2">
-                                   <span className="bg-white/5 px-2 py-0.5 rounded text-slate-300">{selectedShipment.productName}</span>
+                               <div className="flex items-center gap-3">
+                                   <div className="flex items-center gap-2">
+                                      <span className="bg-white/5 px-2 py-0.5 rounded text-slate-300">{selectedShipment.productName}</span>
+                                   </div>
+                                   {selectedShipment.shipDate && (
+                                      <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> 发货: <span className="text-white font-mono">{selectedShipment.shipDate}</span></span>
+                                   )}
                                    <span>预计送达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery}</span></span>
                                </div>
                                {selectedShipment.notes && (
@@ -813,16 +822,20 @@ const Tracking: React.FC = () => {
                                <div>
                                     <label className="text-xs text-slate-400 block mb-1">当前状态</label>
                                     <select value={manualForm.status} onChange={e => setManualForm({...manualForm, status: e.target.value as any})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white">
-                                        <option value="In Transit">In Transit</option>
-                                        <option value="Delivered">Delivered</option>
-                                        <option value="Exception">Exception</option>
-                                        <option value="Pending">Pending</option>
+                                        <option value="In Transit">运输中 (In Transit)</option>
+                                        <option value="Delivered">已送达 (Delivered)</option>
+                                        <option value="Exception">异常 (Exception)</option>
+                                        <option value="Pending">待处理 (Pending)</option>
                                     </select>
                                </div>
                                <div>
-                                    <label className="text-xs text-slate-400 block mb-1">预计送达</label>
-                                    <input type="date" value={manualForm.estimatedDelivery} onChange={e => setManualForm({...manualForm, estimatedDelivery: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" />
+                                    <label className="text-xs text-slate-400 block mb-1">发货日期 (Ship Date)</label>
+                                    <input type="date" value={manualForm.shipDate} onChange={e => setManualForm({...manualForm, shipDate: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" />
                                </div>
+                          </div>
+                          <div>
+                               <label className="text-xs text-slate-400 block mb-1">预计送达 (ETA)</label>
+                               <input type="date" value={manualForm.estimatedDelivery} onChange={e => setManualForm({...manualForm, estimatedDelivery: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" />
                           </div>
 
                           {/* Remarks / Notes field */}

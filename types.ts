@@ -288,6 +288,7 @@ export interface Shipment {
   origin: string;
   destination: string;
   estimatedDelivery: string;
+  shipDate?: string;
   events: LogisticsEvent[];
   productName?: string;
   lastUpdate: string;
