@@ -143,22 +143,33 @@ const Settings: React.FC = () => {
   const [showKey, setShowKey] = useState(false);
   const [showEchoTikPass, setShowEchoTikPass] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isSavingSupabase, setIsSavingSupabase] = useState(false);
+  const [isSavingEchoTik, setIsSavingEchoTik] = useState(false);
 
   // --- Handlers ---
   const handleThemeChange = (theme: Theme) => dispatch({ type: 'SET_THEME', payload: theme });
 
   const handleGeneralSave = () => {
-      setTimeout(() => showToast('系统设置已保存', 'success'), 500);
+      // Just simulate feedback
+      showToast('系统设置已保存', 'success');
   };
 
   const handleSupabaseSave = () => {
-      dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
-      showToast('云端配置已更新', 'success');
+      setIsSavingSupabase(true);
+      setTimeout(() => {
+          dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
+          showToast('云端配置已更新', 'success');
+          setIsSavingSupabase(false);
+      }, 500);
   };
 
   const handleEchotikSave = () => {
-      dispatch({ type: 'SET_ECHOTIK_CONFIG', payload: echotikForm as any });
-      showToast('EchoTik API 配置已更新', 'success');
+      setIsSavingEchoTik(true);
+      setTimeout(() => {
+          dispatch({ type: 'SET_ECHOTIK_CONFIG', payload: echotikForm as any });
+          showToast('EchoTik API 配置已更新', 'success');
+          setIsSavingEchoTik(false);
+      }, 500);
   };
 
   const handleTestConnection = () => {
@@ -314,8 +325,13 @@ const Settings: React.FC = () => {
                               </button>
                           </div>
                       </div>
-                      <button onClick={handleSupabaseSave} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg">
-                          保存配置
+                      <button 
+                        onClick={handleSupabaseSave} 
+                        disabled={isSavingSupabase}
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                      >
+                          {isSavingSupabase ? <Loader2 className="w-3 h-3 animate-spin"/> : <Save className="w-3 h-3"/>}
+                          {isSavingSupabase ? '保存中...' : '保存配置'}
                       </button>
                   </div>
 
@@ -390,8 +406,13 @@ const Settings: React.FC = () => {
                           <option value="SEA">东南亚 (SEA)</option>
                       </select>
                   </div>
-                  <button onClick={handleEchotikSave} className="px-6 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg">
-                      保存 EchoTik 配置
+                  <button 
+                    onClick={handleEchotikSave} 
+                    disabled={isSavingEchoTik}
+                    className="px-6 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                  >
+                      {isSavingEchoTik ? <Loader2 className="w-3 h-3 animate-spin"/> : <Save className="w-3 h-3"/>}
+                      {isSavingEchoTik ? '保存中...' : '保存 EchoTik 配置'}
                   </button>
               </div>
           </div>

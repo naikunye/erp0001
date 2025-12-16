@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText, Truck, CheckCircle, XCircle, Clock, ShoppingCart, X, Package, MapPin, CreditCard, ArrowRight, LayoutGrid, List, MoreHorizontal, Box, GripVertical, DollarSign, Calculator, Info, Zap, Plus, Trash2, PlayCircle, Search, Edit2, Save, Filter } from 'lucide-react';
+import { FileText, Truck, CheckCircle, XCircle, Clock, ShoppingCart, X, Package, MapPin, CreditCard, ArrowRight, LayoutGrid, List, MoreHorizontal, Box, GripVertical, DollarSign, Calculator, Info, Zap, Plus, Trash2, PlayCircle, Search, Edit2, Save, Filter, Loader2 } from 'lucide-react';
 import { Order, Product, AutomationRule, OrderLineItem } from '../types';
 import { useTanxing } from '../context/TanxingContext';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
@@ -12,6 +12,7 @@ const Orders: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'details' | 'profit'>('details');
   const [searchQuery, setSearchQuery] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('All');
+  const [isSaving, setIsSaving] = useState(false);
   
   // Automation Modal State
   const [showRulesModal, setShowRulesModal] = useState(false);
@@ -234,21 +235,27 @@ const Orders: React.FC = () => {
           return;
       }
 
-      if (isEditing && orderForm.id) {
-          dispatch({ type: 'UPDATE_ORDER', payload: orderForm as Order });
-          showToast('订单更新成功', 'success');
-          if (selectedOrder?.id === orderForm.id) setSelectedOrder(orderForm as Order);
-      } else {
-          const newOrder: Order = {
-              ...orderForm as Order,
-              id: `PO-${Date.now().toString().slice(-6)}`,
-              status: orderForm.status || 'pending',
-              itemsCount: orderForm.lineItems!.reduce((acc, i) => acc + i.quantity, 0)
-          };
-          dispatch({ type: 'ADD_ORDER', payload: newOrder });
-          showToast('订单创建成功', 'success');
-      }
-      setShowOrderModal(false);
+      setIsSaving(true);
+      
+      // Simulate API/Processing Delay
+      setTimeout(() => {
+          if (isEditing && orderForm.id) {
+              dispatch({ type: 'UPDATE_ORDER', payload: orderForm as Order });
+              showToast('订单更新成功', 'success');
+              if (selectedOrder?.id === orderForm.id) setSelectedOrder(orderForm as Order);
+          } else {
+              const newOrder: Order = {
+                  ...orderForm as Order,
+                  id: `PO-${Date.now().toString().slice(-6)}`,
+                  status: orderForm.status || 'pending',
+                  itemsCount: orderForm.lineItems!.reduce((acc, i) => acc + i.quantity, 0)
+              };
+              dispatch({ type: 'ADD_ORDER', payload: newOrder });
+              showToast('订单创建成功', 'success');
+          }
+          setIsSaving(false);
+          setShowOrderModal(false);
+      }, 600);
   };
 
   // --- Automation Logic ---
@@ -359,7 +366,7 @@ const Orders: React.FC = () => {
         </div>
       </div>
       
-      {/* --- KANBAN VIEW --- */}
+      {/* ... (View Modes remain the same) ... */}
       {viewMode === 'kanban' && (
           <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
               <div className="flex gap-4 h-full min-w-[1000px]">
@@ -435,7 +442,7 @@ const Orders: React.FC = () => {
         </div>
       )}
 
-      {/* Rules Engine Modal */}
+      {/* Rules Engine Modal (No changes here, keeping brevity) */}
       {showRulesModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowRulesModal(false)}>
               <div className="ios-glass-panel w-full max-w-2xl h-[70vh] rounded-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -506,6 +513,7 @@ const Orders: React.FC = () => {
                   </div>
                   
                   <div className="p-6 overflow-y-auto flex-1 bg-black/20 space-y-6">
+                      {/* ... (Existing form fields remain same) ... */}
                       <div className="grid grid-cols-2 gap-4">
                           <div>
                               <label className="text-xs text-slate-400 block mb-1">客户名称 *</label>
@@ -573,16 +581,21 @@ const Orders: React.FC = () => {
                   </div>
 
                   <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end gap-3">
-                      <button onClick={() => setShowOrderModal(false)} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm">取消</button>
-                      <button onClick={handleSaveOrder} className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2">
-                          <Save className="w-4 h-4"/> 保存订单
+                      <button onClick={() => setShowOrderModal(false)} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm transition-colors">取消</button>
+                      <button 
+                        onClick={handleSaveOrder} 
+                        disabled={isSaving}
+                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
+                      >
+                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
+                          {isSaving ? '保存中...' : '保存订单'}
                       </button>
                   </div>
               </div>
           </div>
       )}
 
-      {/* Order Detail Modal */}
+      {/* Order Detail Modal and Shipping Modal remain largely same, just ensuring style consistency via global CSS */}
       {selectedOrder && !showShipModal && !showOrderModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-black/60" onClick={handleCloseOrder}>
              <div className="ios-glass-panel w-full max-w-3xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -745,7 +758,7 @@ const Orders: React.FC = () => {
                       <Info className="w-3 h-3 inline mr-1" />
                       确认发货后，系统将自动扣减对应 SKU 的库存。
                   </div>
-                  <div className="flex gap-3 mt-6"><button onClick={() => setShowShipModal(false)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm">取消</button><button onClick={confirmShip} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-lg">确认发货</button></div>
+                  <div className="flex gap-3 mt-6"><button onClick={() => setShowShipModal(false)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm transition-colors">取消</button><button onClick={confirmShip} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-lg">确认发货</button></div>
               </div>
           </div>
       )}

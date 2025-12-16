@@ -48,6 +48,7 @@
         --glass-bg: rgba(18, 18, 23, 0.65);
         --glass-border: rgba(255, 255, 255, 0.08);
         --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
+        --card-bg: rgba(255, 255, 255, 0.03);
         --accent-color: #3b82f6;
         --sidebar-active-bg: rgba(255, 255, 255, 0.08);
         --sidebar-active-text: #ffffff;
@@ -55,84 +56,89 @@
 
       /* 1. Vision Glass (Default) - Apple Vision Pro Style */
       body.theme-ios-glass {
-        --glass-bg: rgba(20, 20, 25, 0.55);
-        --glass-border: rgba(255, 255, 255, 0.12);
-        --glass-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
-        --accent-color: #0a84ff; /* System Blue */
-        --sidebar-active-bg: rgba(255, 255, 255, 0.15);
+        --glass-bg: rgba(30, 30, 35, 0.45); /* More translucent */
+        --glass-border: rgba(255, 255, 255, 0.15);
+        --glass-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.3), inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+        --card-bg: rgba(255, 255, 255, 0.05); /* Lighter cards */
+        --accent-color: #0a84ff;
+        --sidebar-active-bg: rgba(255, 255, 255, 0.2);
         --sidebar-active-text: #ffffff;
-        background-color: #050505;
+        background-color: #000000;
         color: #f5f5f7;
       }
       body.theme-ios-glass .ambient-bg {
-        background: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #000000 100%);
+        /* Richer, visible gradient to show off glass effect */
+        background: 
+          radial-gradient(circle at 15% 50%, rgba(76, 29, 149, 0.15), transparent 40%),
+          radial-gradient(circle at 85% 30%, rgba(56, 189, 248, 0.15), transparent 40%),
+          radial-gradient(circle at 50% 0%, #111118 0%, #020203 100%);
       }
       body.theme-ios-glass .orb {
-        opacity: 0.35;
-        filter: blur(90px);
-        mix-blend-mode: screen;
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.6;
+        z-index: 0;
+        animation: blob 20s infinite;
       }
+      body.theme-ios-glass .orb-1 { top: -10%; left: 30%; width: 40vw; height: 40vw; background: #2e1065; }
+      body.theme-ios-glass .orb-2 { top: 40%; right: -10%; width: 35vw; height: 35vw; background: #0c4a6e; }
+      body.theme-ios-glass .orb-3 { bottom: -20%; left: 10%; width: 50vw; height: 50vw; background: #1e1b4b; }
+
       body.theme-ios-glass .ios-glass-panel {
-        backdrop-filter: blur(50px) saturate(180%);
-        -webkit-backdrop-filter: blur(50px) saturate(180%);
+        backdrop-filter: blur(40px) saturate(160%);
+        -webkit-backdrop-filter: blur(40px) saturate(160%);
         border: 1px solid var(--glass-border);
         box-shadow: var(--glass-shadow);
       }
 
       /* 2. Deep Depth (Classic iOS Dark) */
       body.theme-ios-depth {
-        --glass-bg: #1c1c1e; /* System Gray 6 Dark */
-        --glass-border: #38383a; /* Separator Color */
-        --glass-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        --glass-bg: #1c1c1e; /* Solid Dark Grey */
+        --glass-border: #333333;
+        --glass-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+        --card-bg: #2c2c2e; /* Solid Lighter Grey */
         --accent-color: #0a84ff;
-        --sidebar-active-bg: #2c2c2e; /* System Gray 5 */
+        --sidebar-active-bg: #2c2c2e;
         --sidebar-active-text: #0a84ff;
         background-color: #000000;
         color: #ffffff;
       }
       body.theme-ios-depth .ambient-bg {
-        background: #000000;
+        background: #000000; /* Pure black background */
       }
-      body.theme-ios-depth .orb {
-        opacity: 0.08; /* Very subtle */
-        filter: blur(150px);
-      }
-      body.theme-ios-depth .ios-glass-panel,
-      body.theme-ios-depth .ios-glass-card {
+      body.theme-ios-depth .orb { display: none; }
+      body.theme-ios-depth .ios-glass-panel {
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
         box-shadow: var(--glass-shadow);
-        backdrop-filter: none; /* Performance optimization */
-      }
-      /* Ensure cards pop off the background */
-      body.theme-ios-depth .ios-glass-card {
-        background: #2c2c2e; 
+        backdrop-filter: none;
       }
 
       /* 3. Pro Titanium (Apple Watch Ultra Style) */
       body.theme-ios-titanium {
-        --glass-bg: #242426; /* Titanium Grey */
-        --glass-border: #48484a;
+        --glass-bg: #262629; /* Titanium Grey */
+        --glass-border: #424245; /* Lighter borders */
         --glass-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        --card-bg: #323236;
         --accent-color: #ff4f00; /* International Orange */
         --sidebar-active-bg: #ff4f00;
         --sidebar-active-text: #ffffff;
-        background-color: #000000;
+        background-color: #121214;
         color: #e5e5e7;
-        font-family: 'Inter', sans-serif; /* Clean, technical */
+        font-family: 'Inter', sans-serif;
       }
       body.theme-ios-titanium .ambient-bg {
-        background: radial-gradient(circle at 50% 50%, #1c1c1e 0%, #000000 100%);
+        background: #121214;
       }
       body.theme-ios-titanium .orb { display: none; }
       body.theme-ios-titanium .ios-glass-panel {
-        background: #1c1c1e;
-        border: 1px solid #333;
-        border-radius: 4px !important; /* Rugged corners option, or stick to rounded */
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        border-radius: 4px !important; /* Rugged sharp corners */
       }
       body.theme-ios-titanium .ios-glass-card {
-        background: #2c2c2e;
-        border: 1px solid #48484a;
+        border-radius: 4px !important;
       }
       /* Specific override for Titanium accent buttons */
       body.theme-ios-titanium .text-indigo-500, 
@@ -142,11 +148,12 @@
 
       /* 4. Ceramic Light */
       body.theme-light {
-        background-color: #f2f2f7; /* System Gray 6 Light */
+        background-color: #f2f2f7; 
         color: #000000; 
-        --glass-bg: rgba(255, 255, 255, 0.75); 
+        --glass-bg: rgba(255, 255, 255, 0.85); 
         --glass-border: rgba(0, 0, 0, 0.05);
-        --glass-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        --glass-shadow: 0 4px 20px rgba(0,0,0,0.05);
+        --card-bg: #ffffff;
         --accent-color: #007aff; 
         --sidebar-active-bg: #ffffff; 
         --sidebar-active-text: #007aff; 
@@ -158,6 +165,7 @@
         opacity: 0.15;
         mix-blend-mode: multiply;
         filter: blur(80px);
+        background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
       }
       
       /* --- Common Glass Classes --- */
@@ -169,8 +177,8 @@
       }
 
       .ios-glass-card {
-        background: rgba(255, 255, 255, 0.03); /* Default fallback */
-        border: 1px solid rgba(255, 255, 255, 0.05);
+        background: var(--card-bg);
+        border: 1px solid var(--glass-border);
         border-radius: 16px;
         transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
         position: relative;
@@ -205,6 +213,27 @@
           background-color: rgba(0,0,0,0.05) !important; 
           border: none !important;
           color: #000 !important;
+      }
+
+      /* --- Global Button & Interaction Fixes --- */
+      /* Remove default white outline on click/focus */
+      button:focus, input:focus, select:focus, textarea:focus {
+        outline: none !important;
+      }
+      
+      /* Add subtle custom ring for keyboard accessibility or focus states */
+      button:focus-visible {
+        box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5); /* Indigo glow */
+      }
+
+      /* Enforce transition on all interactive elements */
+      button, a, input[type="button"], input[type="submit"] {
+        transition: transform 0.1s ease, background-color 0.2s ease, opacity 0.2s ease;
+      }
+
+      /* Active state click effect */
+      button:active {
+        transform: scale(0.97);
       }
 
       /* --- Utilities --- */
