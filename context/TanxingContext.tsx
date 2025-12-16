@@ -5,7 +5,7 @@ import { Product, Order, Transaction, PurchaseOrder, Toast, Customer, Shipment, 
 import { MOCK_PRODUCTS, MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SHIPMENTS, MOCK_SUPPLIERS, MOCK_INBOUND_SHIPMENTS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS } from '../constants';
 
 // --- Theme Types ---
-export type Theme = 'ios-glass' | 'ios-depth' | 'ios-titanium';
+export type Theme = 'ios-glass' | 'ios-depth' | 'ios-titanium' | 'ceramic-light';
 
 const DB_KEY = 'TANXING_DB_V2'; // Version bump
 

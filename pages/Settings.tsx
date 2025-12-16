@@ -366,7 +366,7 @@ with check (true);`;
 
       {/* THEME TAB */}
       {activeTab === 'theme' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4">
               {/* Option 1: Vision Glass */}
               <div onClick={() => handleThemeChange('ios-glass')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios-glass' ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
                   <div className="bg-[#000] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
@@ -407,6 +407,20 @@ with check (true);`;
                           <p className="text-[10px] text-orange-500/80 mt-1 font-bold">High Contrast</p>
                       </div>
                       {state.theme === 'ios-titanium' && <div className="absolute top-3 right-3 text-orange-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
+                  </div>
+              </div>
+
+              {/* Option 4: Ceramic Light */}
+              <div onClick={() => handleThemeChange('ceramic-light')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ceramic-light' ? 'border-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
+                  <div className="bg-[#f0f9ff] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#ffffff_0%,#e0f2fe_100%)]"></div>
+                      <div className="relative z-10 text-center">
+                          <Sun className="w-10 h-10 text-sky-500 mx-auto mb-3" />
+                          <h3 className="text-slate-800 font-bold text-lg">Ceramic Light</h3>
+                          <p className="text-xs text-slate-500 mt-2">陶瓷白高亮模式</p>
+                          <p className="text-[10px] text-sky-600 mt-1 font-bold">Clean • Bright</p>
+                      </div>
+                      {state.theme === 'ceramic-light' && <div className="absolute top-3 right-3 text-sky-500"><CheckCircle2 className="w-5 h-5 fill-current text-white"/></div>}
                   </div>
               </div>
           </div>

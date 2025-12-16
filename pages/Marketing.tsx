@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -666,6 +667,12 @@ const ContentEngine = () => {
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [report, setReport] = useState<string | null>(null);
 
+    // --- A/B Test States ---
+    const [abCopies, setAbCopies] = useState<{a: string, b: string} | null>(null);
+    const [abResult, setAbResult] = useState<any>(null);
+    const [isGenAb, setIsGenAb] = useState(false);
+    const [isSimAb, setIsSimAb] = useState(false);
+
     const handleAnalyze = async () => {
         setIsAnalyzing(true);
         setReport(null);
@@ -713,6 +720,82 @@ const ContentEngine = () => {
             setReport("AI 分析服务暂时不可用，请检查网络或 API Key。");
         } finally {
             setIsAnalyzing(false);
+        }
+    };
+
+    const handleGenerateAbCopies = async () => {
+        setIsGenAb(true);
+        setAbResult(null);
+        try {
+            if (!process.env.API_KEY) throw new Error("API Key missing");
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const prompt = `
+                Generate 2 distinct short ad copy versions (Title + Body) for a product priced at $${sellingPrice}.
+                Target Audience: E-commerce shoppers.
+                Version A Strategy: Value/Savings/Deal focus.
+                Version B Strategy: Premium Quality/Lifestyle/Feature focus.
+                
+                Return VALID JSON in this format:
+                { 
+                  "versionA": "Title: ...\nBody: ...", 
+                  "versionB": "Title: ...\nBody: ..." 
+                }
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-lite',
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+            
+            const result = JSON.parse(response.text || '{}');
+            if (result.versionA && result.versionB) {
+                setAbCopies({ a: result.versionA, b: result.versionB });
+            }
+        } catch(e) {
+            console.error("Gen Copy Error", e);
+        } finally {
+            setIsGenAb(false);
+        }
+    };
+
+    const handleSimulateAb = async () => {
+        if (!abCopies) return;
+        setIsSimAb(true);
+        try {
+            if (!process.env.API_KEY) throw new Error("API Key missing");
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            
+            const prompt = `
+                Simulate an A/B test performance for these two ad copies targeting tech-savvy buyers.
+                Copy A: "${abCopies.a}"
+                Copy B: "${abCopies.b}"
+                
+                Predict CTR (Click Through Rate) and CVR (Conversion Rate) based on copywriting psychology.
+                Pick a winner.
+                
+                Return VALID JSON in this format:
+                { 
+                  "a": { "ctr": number (e.g. 1.5), "cvr": number (e.g. 2.2) }, 
+                  "b": { "ctr": number, "cvr": number }, 
+                  "winner": "A" or "B", 
+                  "reason": "Short explanation why" 
+                }
+            `;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-lite',
+                contents: prompt,
+                config: { responseMimeType: "application/json" }
+            });
+            
+            const result = JSON.parse(response.text || '{}');
+            setAbResult(result);
+        } catch(e) {
+            console.error("Sim Error", e);
+        } finally {
+            setIsSimAb(false);
         }
     };
 
@@ -778,15 +861,102 @@ const ContentEngine = () => {
                         AI 深度分析报告 (Analysis Report)
                     </div>
                     
-                    <div className="flex-1 overflow-y-auto pr-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10">
+                    <div className="flex-1 overflow-y-auto pr-2 relative z-10 scrollbar-thin scrollbar-thumb-white/10 mb-6">
                         {report ? (
                             <div className="prose prose-invert prose-sm max-w-none text-slate-300 leading-relaxed">
                                 <div dangerouslySetInnerHTML={{ __html: report }}></div>
                             </div>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-600 opacity-50">
-                                <BarChart3 className="w-16 h-16 mb-4" />
-                                <p>输入成本数据，获取利润优化建议</p>
+                            <div className="h-40 flex flex-col items-center justify-center text-slate-600 opacity-50 border border-dashed border-white/10 rounded-xl bg-white/5">
+                                <BarChart3 className="w-12 h-12 mb-2" />
+                                <p className="text-xs">输入成本数据，获取利润优化建议</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* A/B Test Section */}
+                    <div className="border-t border-white/10 pt-6 relative z-10">
+                        <h4 className="text-white font-bold mb-4 flex items-center gap-2 text-sm">
+                            <Split className="w-4 h-4 text-purple-500" /> A/B 测试实验室 (Simulation)
+                        </h4>
+                        
+                        {!abCopies ? (
+                            <div className="text-center py-6 bg-white/5 border border-white/10 rounded-xl">
+                                <p className="text-xs text-slate-400 mb-3">暂无测试文案。点击生成以基于当前产品创建两组不同策略的广告语。</p>
+                                <button 
+                                    onClick={handleGenerateAbCopies}
+                                    disabled={isGenAb}
+                                    className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg flex items-center gap-2 mx-auto disabled:opacity-50"
+                                >
+                                    {isGenAb ? <Loader2 className="w-3 h-3 animate-spin"/> : <Wand2 className="w-3 h-3"/>}
+                                    生成 A/B 测试文案
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    {/* Version A */}
+                                    <div className={`p-4 rounded-xl border transition-all relative ${abResult?.winner === 'A' ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-white/10 bg-black/40'}`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs text-indigo-400 font-bold uppercase tracking-wider">Version A (Value)</span>
+                                            {abResult?.winner === 'A' && <span className="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-bold">WINNER</span>}
+                                        </div>
+                                        <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed min-h-[60px]">{abCopies.a}</div>
+                                        {abResult && (
+                                            <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 gap-2 text-xs">
+                                                <div className="bg-black/30 rounded p-1 text-center">
+                                                    <div className="text-slate-500 text-[10px]">CTR</div>
+                                                    <div className="font-mono font-bold text-white">{abResult.a.ctr}%</div>
+                                                </div>
+                                                <div className="bg-black/30 rounded p-1 text-center">
+                                                    <div className="text-slate-500 text-[10px]">CVR</div>
+                                                    <div className="font-mono font-bold text-white">{abResult.a.cvr}%</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Version B */}
+                                    <div className={`p-4 rounded-xl border transition-all relative ${abResult?.winner === 'B' ? 'border-emerald-500 bg-emerald-500/10 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'border-white/10 bg-black/40'}`}>
+                                        <div className="flex justify-between items-center mb-2">
+                                            <span className="text-xs text-pink-400 font-bold uppercase tracking-wider">Version B (Quality)</span>
+                                            {abResult?.winner === 'B' && <span className="text-[10px] bg-emerald-500 text-white px-2 py-0.5 rounded-full font-bold">WINNER</span>}
+                                        </div>
+                                        <div className="text-xs text-slate-300 whitespace-pre-wrap leading-relaxed min-h-[60px]">{abCopies.b}</div>
+                                        {abResult && (
+                                            <div className="mt-3 pt-3 border-t border-white/10 grid grid-cols-2 gap-2 text-xs">
+                                                <div className="bg-black/30 rounded p-1 text-center">
+                                                    <div className="text-slate-500 text-[10px]">CTR</div>
+                                                    <div className="font-mono font-bold text-white">{abResult.b.ctr}%</div>
+                                                </div>
+                                                <div className="bg-black/30 rounded p-1 text-center">
+                                                    <div className="text-slate-500 text-[10px]">CVR</div>
+                                                    <div className="font-mono font-bold text-white">{abResult.b.cvr}%</div>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {!abResult ? (
+                                    <button 
+                                        onClick={handleSimulateAb}
+                                        disabled={isSimAb}
+                                        className="w-full py-2 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-500 hover:to-pink-500 text-white rounded-lg text-xs font-bold shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                                    >
+                                        {isSimAb ? <Loader2 className="w-3 h-3 animate-spin"/> : <FlaskConical className="w-3 h-3"/>}
+                                        开始 A/B 模拟测试 (Run Simulation)
+                                    </button>
+                                ) : (
+                                    <div className="bg-indigo-500/20 p-3 rounded border border-indigo-500/30 text-xs text-indigo-200 flex gap-2 items-start animate-in fade-in">
+                                        <Bot className="w-4 h-4 mt-0.5 shrink-0" />
+                                        <div>
+                                            <span className="font-bold text-indigo-400 block mb-1">AI 预测结论:</span> 
+                                            {abResult.reason}
+                                        </div>
+                                        <button onClick={() => { setAbResult(null); setAbCopies(null); }} className="ml-auto text-indigo-400 hover:text-white underline text-[10px]">重置</button>
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

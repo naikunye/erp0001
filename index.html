@@ -146,6 +146,67 @@
       body.theme-ios-titanium .bg-indigo-600 { background-color: #ff4f00 !important; }
       body.theme-ios-titanium .bg-indigo-600:hover { background-color: #cc3f00 !important; }
 
+      /* 4. Ceramic Light (Bright) */
+      body.theme-ceramic-light {
+        --glass-bg: rgba(255, 255, 255, 0.7);
+        --glass-border: rgba(0, 0, 0, 0.06);
+        --glass-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+        --card-bg: rgba(255, 255, 255, 0.6);
+        --accent-color: #2563eb; /* Stronger Blue */
+        --sidebar-active-bg: #e0e7ff;
+        --sidebar-active-text: #1d4ed8;
+        background-color: #f8fafc;
+        color: #0f172a;
+      }
+      body.theme-ceramic-light .ambient-bg {
+        background: radial-gradient(circle at 0% 0%, #e0f2fe 0%, #f0f9ff 100%);
+      }
+      /* Orbs for light theme */
+      body.theme-ceramic-light .orb {
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(80px);
+        opacity: 0.6;
+        z-index: 0;
+        animation: blob 20s infinite;
+      }
+      body.theme-ceramic-light .orb-1 { top: -10%; left: 30%; width: 40vw; height: 40vw; background: #bae6fd; opacity: 0.6; }
+      body.theme-ceramic-light .orb-2 { top: 40%; right: -10%; width: 35vw; height: 35vw; background: #e9d5ff; opacity: 0.6; }
+      body.theme-ceramic-light .orb-3 { bottom: -20%; left: 10%; width: 50vw; height: 50vw; background: #ddd6fe; opacity: 0.6; }
+
+      body.theme-ceramic-light .ios-glass-panel {
+        backdrop-filter: blur(24px);
+        -webkit-backdrop-filter: blur(24px);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+      }
+
+      /* CRITICAL: Invert Colors for Light Mode compatibility with existing dark-mode-first markup */
+      body.theme-ceramic-light .text-white { color: #1e293b !important; }
+      body.theme-ceramic-light .text-slate-200 { color: #334155 !important; }
+      body.theme-ceramic-light .text-slate-300 { color: #475569 !important; }
+      body.theme-ceramic-light .text-slate-400 { color: #64748b !important; }
+      body.theme-ceramic-light .text-slate-500 { color: #94a3b8 !important; }
+      
+      /* Invert backgrounds that are hardcoded as black/dark */
+      body.theme-ceramic-light .bg-black\/40 { background-color: rgba(255,255,255,0.5) !important; border-color: rgba(0,0,0,0.05) !important; }
+      body.theme-ceramic-light .bg-black\/20 { background-color: rgba(255,255,255,0.3) !important; }
+      body.theme-ceramic-light .bg-slate-900 { background-color: #ffffff !important; border-color: #e2e8f0 !important; color: #0f172a !important;}
+      body.theme-ceramic-light .bg-white\/5 { background-color: rgba(0,0,0,0.03) !important; }
+      body.theme-ceramic-light .bg-white\/10 { background-color: rgba(0,0,0,0.06) !important; }
+      body.theme-ceramic-light .border-white\/10 { border-color: rgba(0,0,0,0.08) !important; }
+      body.theme-ceramic-light .border-white\/5 { border-color: rgba(0,0,0,0.04) !important; }
+      
+      /* Specific override for inputs */
+      body.theme-ceramic-light input, 
+      body.theme-ceramic-light select, 
+      body.theme-ceramic-light textarea {
+          color: #1e293b !important;
+          background-color: rgba(255,255,255,0.6) !important;
+          border-color: #e2e8f0 !important;
+      }
+      body.theme-ceramic-light input::placeholder { color: #94a3b8 !important; }
+
       /* --- Common Glass Classes --- */
       .ios-glass-panel {
         background: var(--glass-bg);
@@ -169,7 +230,17 @@
         outline: none !important;
       }
       
-      /* Add subtle custom ring for keyboard accessibility or focus states */
+      /* Fix for Recharts focus outline - user reported white box on click */
+      .recharts-wrapper path:focus,
+      .recharts-wrapper g:focus,
+      .recharts-surface:focus,
+      .recharts-sector:focus,
+      .recharts-rectangle:focus,
+      *:focus {
+        outline: none !important;
+      }
+      
+      /* Add subtle custom ring for keyboard accessibility or focus states if needed, but suppressing generic click focus */
       button:focus-visible {
         box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.5); /* Indigo glow */
       }
