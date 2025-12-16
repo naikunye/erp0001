@@ -18,7 +18,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
     { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit, highlight: true },
     { id: 'inventory', label: '智能备货', subLabel: 'Inventory', icon: PackageCheck },
-    { id: 'inbound', label: 'FBA 发货', subLabel: 'Inbound', icon: Container },
     { id: 'finance', label: '财务资金', subLabel: 'Finance', icon: Wallet },
     { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
     { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },

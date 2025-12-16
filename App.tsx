@@ -17,7 +17,6 @@ import Analytics from './pages/Analytics';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import Integrations from './pages/Integrations'; 
-import InboundShipments from './pages/InboundShipments'; 
 import Suppliers from './pages/Suppliers'; 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
@@ -65,7 +64,6 @@ const MainLayout: React.FC = () => {
       case 'calendar': return '运营日历 (Operations Timeline)';
       case 'settings': return '系统配置 (System Config)';
       case 'integrations': return '店铺集成 (Integrations)';
-      case 'inbound': return 'FBA 发货 (Inbound)';
       case 'suppliers': return '供应商管理 (Suppliers)';
       default: return '探行 OS (Quantum Edition)';
     }
@@ -85,7 +83,6 @@ const MainLayout: React.FC = () => {
       case 'analytics': return <Analytics />;
       case 'settings': return <Settings />;
       case 'integrations': return <Integrations />;
-      case 'inbound': return <InboundShipments />;
       case 'suppliers': return <Suppliers />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
