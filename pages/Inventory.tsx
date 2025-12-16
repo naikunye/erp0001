@@ -74,6 +74,28 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
     };
 
+    // Global paste handler for the modal to catch images
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (items) {
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            setForm(prev => ({ ...prev, image: event.target?.result as string }));
+                            showToast('图片已从剪贴板粘贴', 'success');
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    return;
+                }
+            }
+        }
+    };
+
     const handleSubmit = () => {
         if (!form.name || !form.sku) {
             showToast('请填写产品名称和 SKU', 'warning');
@@ -99,7 +121,11 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/70" onClick={onClose}>
-            <div className="ios-glass-panel w-full max-w-2xl rounded-xl shadow-2xl p-6 animate-in zoom-in-95 border border-white/10" onClick={e => e.stopPropagation()}>
+            <div 
+                className="ios-glass-panel w-full max-w-2xl rounded-xl shadow-2xl p-6 animate-in zoom-in-95 border border-white/10" 
+                onClick={e => e.stopPropagation()}
+                onPaste={handlePaste}
+            >
                 <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Plus className="w-5 h-5 text-indigo-500" />
@@ -117,7 +143,7 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             ) : (
                                 <>
                                     <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                    <span className="text-xs font-medium">上传图片</span>
+                                    <span className="text-xs font-medium text-center px-2">点击上传<br/>或 Ctrl+V 粘贴</span>
                                 </>
                             )}
                             <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -125,12 +151,12 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                                 <Upload className="w-6 h-6 text-white" />
                             </div>
                         </div>
-                        <div className="relative">
-                            <Link className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                        <div className="relative group">
+                            <Link className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500 pointer-events-none" />
                             <input 
                                 type="text" 
-                                placeholder="或粘贴图片链接 (URL)" 
-                                className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-2 py-2 text-xs text-white focus:border-indigo-500 outline-none placeholder-slate-600"
+                                placeholder="粘贴图片链接 (URL)..." 
+                                className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-2 py-2 text-xs text-white focus:border-indigo-500 outline-none placeholder-slate-600 transition-colors hover:bg-black/60"
                                 value={form.image?.startsWith('data:') ? '' : form.image || ''}
                                 onChange={(e) => setForm({...form, image: e.target.value})}
                             />
@@ -167,8 +193,8 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <input type="number" value={form.stock} onChange={e => setForm({...form, stock: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
                         </div>
                         <div>
-                            <label className="text-xs text-slate-400 block mb-1">供应商</label>
-                            <input type="text" value={form.supplier} onChange={e => setForm({...form, supplier: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                            <label className="text-xs text-slate-400 block mb-1">每箱数量 (Pcs/Box)</label>
+                            <input type="number" value={form.itemsPerBox} onChange={e => setForm({...form, itemsPerBox: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
                         </div>
                     </div>
                 </div>
@@ -201,7 +227,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
     const [isSaving, setIsSaving] = useState(false);
     
     // Initial values
-    const [boxCount, setBoxCount] = useState(Math.ceil((product.stock || 0) / (product.itemsPerBox || 1)));
+    const [boxCount, setBoxCount] = useState<number>(0); 
     const [stockTotal, setStockTotal] = useState(product.stock || 0);
 
     const [formData, setFormData] = useState({
@@ -242,6 +268,27 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         }
     };
 
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (items) {
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            setFormData(prev => ({ ...prev, image: event.target?.result as string }));
+                            showToast('图片已从剪贴板粘贴', 'success');
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    return;
+                }
+            }
+        }
+    };
+
     // Manual Calculation Helper
     const calculateStockFromBoxes = () => {
         const total = boxCount * (formData.itemsPerBox || 1);
@@ -260,7 +307,11 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
             {/* Dark Glass Theme for this Modal */}
-            <div className="ios-glass-panel w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-200 animate-in zoom-in-95 font-sans border border-white/10" onClick={e => e.stopPropagation()}>
+            <div 
+                className="ios-glass-panel w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-200 animate-in zoom-in-95 font-sans border border-white/10" 
+                onClick={e => e.stopPropagation()}
+                onPaste={handlePaste}
+            >
                 
                 {/* Header */}
                 <div className="px-6 py-4 bg-white/5 border-b border-white/10 flex justify-between items-center shrink-0">
@@ -299,7 +350,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     ) : (
                                         <>
                                             <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                            <span className="text-xs font-medium">点击上传</span>
+                                            <span className="text-xs font-medium text-center px-1">点击上传<br/>或粘贴</span>
                                         </>
                                     )}
                                     <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
@@ -307,12 +358,12 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                         <Upload className="w-6 h-6 text-white" />
                                     </div>
                                 </div>
-                                <div className="relative">
-                                    <Link className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500" />
+                                <div className="relative group">
+                                    <Link className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500 pointer-events-none" />
                                     <input 
                                         type="text" 
                                         placeholder="或粘贴 URL..." 
-                                        className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 pl-8 text-xs text-white outline-none focus:border-indigo-500 placeholder-slate-600"
+                                        className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 pl-8 text-xs text-white outline-none focus:border-indigo-500 placeholder-slate-600 transition-colors hover:bg-black/60"
                                         value={formData.image?.startsWith('data:') ? '' : formData.image || ''}
                                         onChange={(e) => setFormData({...formData, image: e.target.value})}
                                     />
@@ -396,15 +447,6 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     <input type="number" value={formData.unitWeight} onChange={e => setFormData({...formData, unitWeight: parseFloat(e.target.value)})} className={inputClass} />
                                 </div>
                                 <div>
-                                    <label className={labelClass}>备货箱数 (Box)</label>
-                                    <input 
-                                        type="number" 
-                                        className={inputClass} 
-                                        value={boxCount}
-                                        onChange={(e) => setBoxCount(parseInt(e.target.value) || 0)}
-                                    />
-                                </div>
-                                <div>
                                     <label className={labelClass}>预估日销 (Daily Sales)</label>
                                     <div className="relative">
                                         <BarChart3 className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
@@ -435,30 +477,47 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4 mb-4">
-                                <div>
-                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">每箱数量 (Items/Box)</label>
-                                    <div className="relative">
-                                        <Box className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
-                                        <input type="number" value={formData.itemsPerBox} onChange={e => setFormData({...formData, itemsPerBox: parseInt(e.target.value)})} className="w-full pl-9 bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <div className="flex justify-between mb-1">
-                                        <label className="text-xs font-semibold text-amber-200/70">备货总数 (Manual)</label>
-                                        <button onClick={calculateStockFromBoxes} className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline cursor-pointer bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hover:bg-blue-500/20"><Calculator className="w-3 h-3"/> 按箱数计算</button>
-                                    </div>
+                            <div className="flex items-end gap-3 mb-4">
+                                <div className="flex-1">
+                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">每箱数量 (Pcs)</label>
                                     <input 
                                         type="number" 
-                                        value={stockTotal} 
-                                        onChange={(e) => setStockTotal(parseInt(e.target.value) || 0)}
-                                        className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm font-bold text-amber-100 outline-none focus:border-amber-500" 
+                                        value={formData.itemsPerBox} 
+                                        onChange={e => setFormData({...formData, itemsPerBox: parseInt(e.target.value)})} 
+                                        className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" 
                                     />
                                 </div>
+                                <div className="pb-2 text-amber-500/50 font-bold">x</div>
+                                <div className="flex-1">
+                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">备货箱数 (Box)</label>
+                                    <input 
+                                        type="number" 
+                                        value={boxCount || ''} 
+                                        onChange={e => setBoxCount(parseInt(e.target.value))} 
+                                        className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100 placeholder-amber-500/30"
+                                        placeholder="手工录入..."
+                                    />
+                                </div>
+                                <button 
+                                    onClick={calculateStockFromBoxes}
+                                    className="mb-[1px] px-3 py-2 bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500 hover:text-white rounded text-xs font-bold transition-all"
+                                >
+                                    <Calculator className="w-4 h-4" />
+                                </button>
+                            </div>
+
+                            <div className="bg-black/20 p-3 rounded border border-amber-500/10">
+                                <label className="text-xs font-semibold text-amber-200/70 mb-1 block">当前库存总数 (Total Stock)</label>
+                                <input 
+                                    type="number" 
+                                    value={stockTotal} 
+                                    onChange={(e) => setStockTotal(parseInt(e.target.value) || 0)}
+                                    className="w-full bg-transparent border-none text-xl font-bold text-amber-100 outline-none placeholder-amber-500/30 font-mono" 
+                                />
                             </div>
                             
                             {/* LingXing ID */}
-                            <div>
+                            <div className="mt-4">
                                 <label className="text-xs font-semibold text-amber-200/70 mb-1 block">领星入库单号</label>
                                 <input 
                                     type="text" 
