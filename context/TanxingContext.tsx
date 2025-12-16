@@ -5,7 +5,7 @@ import { Product, Order, Transaction, PurchaseOrder, Toast, Customer, Shipment, 
 import { MOCK_PRODUCTS, MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SHIPMENTS, MOCK_SUPPLIERS, MOCK_INBOUND_SHIPMENTS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS } from '../constants';
 
 // --- Theme Types ---
-export type Theme = 'ios-glass' | 'ios-depth' | 'ios-titanium' | 'light';
+export type Theme = 'ios-glass' | 'ios-depth' | 'ios-titanium';
 
 const DB_KEY = 'TANXING_DB_V2'; // Version bump
 
@@ -17,11 +17,6 @@ interface AppState {
         url: string;
         key: string;
         lastSync: string | null;
-    };
-    echotikConfig: {
-        username: string; // Changed from apiKey
-        password: string; // Added password
-        region: 'US' | 'UK' | 'SEA';
     };
     // Data
     products: Product[];
@@ -47,7 +42,6 @@ type Action =
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     // Config Actions
     | { type: 'SET_SUPABASE_CONFIG'; payload: { url: string; key: string } }
-    | { type: 'SET_ECHOTIK_CONFIG'; payload: { username: string; password: string; region: 'US' | 'UK' | 'SEA' } }
     | { type: 'SET_LAST_SYNC'; payload: string }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     // Product Actions
@@ -94,7 +88,6 @@ type Action =
 const mockState: AppState = {
     theme: 'ios-glass',
     supabaseConfig: { url: '', key: '', lastSync: null },
-    echotikConfig: { username: '', password: '', region: 'US' },
     products: MOCK_PRODUCTS,
     orders: MOCK_ORDERS.map(o => ({
         ...o,
@@ -120,12 +113,16 @@ const init = (initial: AppState): AppState => {
         const saved = localStorage.getItem(DB_KEY);
         if (saved) {
             const parsed = JSON.parse(saved);
+            // Handle legacy theme if 'light' was saved
+            let theme = parsed.theme;
+            if (theme === 'light') theme = 'ios-glass';
+
             return { 
                 ...initial, 
-                ...parsed, 
+                ...parsed,
+                theme: theme, 
                 // Ensure configs exist even if loading old state
                 supabaseConfig: parsed.supabaseConfig || { url: '', key: '', lastSync: null },
-                echotikConfig: parsed.echotikConfig || { username: '', password: '', region: 'US' },
                 toasts: [], 
                 isMobileMenuOpen: false 
             };
@@ -143,8 +140,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
             return { ...state, theme: action.payload };
         case 'SET_SUPABASE_CONFIG':
             return { ...state, supabaseConfig: { ...state.supabaseConfig, ...action.payload } };
-        case 'SET_ECHOTIK_CONFIG':
-            return { ...state, echotikConfig: { ...state.echotikConfig, ...action.payload } };
         case 'SET_LAST_SYNC':
             return { ...state, supabaseConfig: { ...state.supabaseConfig, lastSync: action.payload } };
         case 'HYDRATE_STATE':

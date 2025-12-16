@@ -146,28 +146,6 @@
       body.theme-ios-titanium .bg-indigo-600 { background-color: #ff4f00 !important; }
       body.theme-ios-titanium .bg-indigo-600:hover { background-color: #cc3f00 !important; }
 
-      /* 4. Ceramic Light */
-      body.theme-light {
-        background-color: #f2f2f7; 
-        color: #000000; 
-        --glass-bg: rgba(255, 255, 255, 0.85); 
-        --glass-border: rgba(0, 0, 0, 0.05);
-        --glass-shadow: 0 4px 20px rgba(0,0,0,0.05);
-        --card-bg: #ffffff;
-        --accent-color: #007aff; 
-        --sidebar-active-bg: #ffffff; 
-        --sidebar-active-text: #007aff; 
-      }
-      body.theme-light .ambient-bg {
-        background: #f2f2f7;
-      }
-      body.theme-light .orb {
-        opacity: 0.15;
-        mix-blend-mode: multiply;
-        filter: blur(80px);
-        background: radial-gradient(circle, #3b82f6 0%, transparent 70%);
-      }
-      
       /* --- Common Glass Classes --- */
       .ios-glass-panel {
         background: var(--glass-bg);
@@ -185,36 +163,6 @@
         overflow: hidden;
       }
       
-      /* --- Light Mode Specific Overrides --- */
-      body.theme-light .text-white { color: #000000 !important; } 
-      body.theme-light .text-slate-200 { color: #1c1c1e !important; }
-      body.theme-light .text-slate-300 { color: #3a3a3c !important; } 
-      body.theme-light .text-slate-400 { color: #8e8e93 !important; } 
-      body.theme-light .text-slate-500 { color: #aeaeb2 !important; }
-      
-      body.theme-light .ios-glass-panel {
-          background: rgba(255, 255, 255, 0.8); 
-          backdrop-filter: blur(30px) saturate(120%);
-      }
-      
-      body.theme-light .ios-glass-card,
-      body.theme-light .bg-black\/20,
-      body.theme-light .bg-black\/40,
-      body.theme-light .bg-slate-900 {
-          background-color: #ffffff !important; 
-          border: 1px solid rgba(0,0,0,0.05) !important;
-          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
-          color: #1c1c1e !important;
-      }
-      
-      body.theme-light input, 
-      body.theme-light select, 
-      body.theme-light textarea {
-          background-color: rgba(0,0,0,0.05) !important; 
-          border: none !important;
-          color: #000 !important;
-      }
-
       /* --- Global Button & Interaction Fixes --- */
       /* Remove default white outline on click/focus */
       button:focus, input:focus, select:focus, textarea:focus {
@@ -261,7 +209,6 @@
         pointer-events: none;
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
       }
-      body.theme-light .noise-texture { opacity: 0.02; mix-blend-mode: multiply; }
     </style>
   <script type="importmap">
 {

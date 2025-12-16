@@ -1,6 +1,6 @@
 
-import React, { useState, useEffect, useMemo } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon, Package, ShoppingCart, Loader2, RotateCcw as ResetIcon, UploadCloud, DownloadCloud, Server, Radio, BarChart4, X, Sun, Layers, Watch, Layout } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon, Package, ShoppingCart, Loader2, RotateCcw as ResetIcon, UploadCloud, DownloadCloud, Server, Radio, BarChart4, X, Sun, Layers, Watch, Layout, HardDrive, FileJson, Upload, Download } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { Theme } from '../context/TanxingContext';
 
@@ -113,7 +113,7 @@ const RecycleBin = () => {
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, syncToCloud, pullFromCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'integrations' | 'recycle'>('theme');
+  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'backup' | 'recycle'>('theme');
 
   // General Settings State
   const [generalForm, setGeneralForm] = useState({
@@ -131,20 +131,12 @@ const Settings: React.FC = () => {
       key: state.supabaseConfig.key || ''
   });
 
-  // EchoTik State
-  const [echotikForm, setEchotikForm] = useState({
-      username: state.echotikConfig?.username || '',
-      password: state.echotikConfig?.password || '',
-      region: state.echotikConfig?.region || 'US'
-  });
-
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   const [showKey, setShowKey] = useState(false);
-  const [showEchoTikPass, setShowEchoTikPass] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSavingSupabase, setIsSavingSupabase] = useState(false);
-  const [isSavingEchoTik, setIsSavingEchoTik] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Handlers ---
   const handleThemeChange = (theme: Theme) => dispatch({ type: 'SET_THEME', payload: theme });
@@ -160,15 +152,6 @@ const Settings: React.FC = () => {
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
           showToast('云端配置已更新', 'success');
           setIsSavingSupabase(false);
-      }, 500);
-  };
-
-  const handleEchotikSave = () => {
-      setIsSavingEchoTik(true);
-      setTimeout(() => {
-          dispatch({ type: 'SET_ECHOTIK_CONFIG', payload: echotikForm as any });
-          showToast('EchoTik API 配置已更新', 'success');
-          setIsSavingEchoTik(false);
       }, 500);
   };
 
@@ -202,6 +185,81 @@ const Settings: React.FC = () => {
       }
   };
 
+  // --- Local Backup Handlers ---
+  const handleExportBackup = () => {
+      try {
+          const backupData = {
+              products: state.products,
+              orders: state.orders,
+              transactions: state.transactions,
+              customers: state.customers,
+              shipments: state.shipments,
+              suppliers: state.suppliers,
+              inboundShipments: state.inboundShipments,
+              adCampaigns: state.adCampaigns,
+              influencers: state.influencers,
+              calendarEvents: state.calendarEvents,
+              // Metadata
+              timestamp: new Date().toISOString(),
+              version: '2.0',
+              app: 'Tanxing-ERP'
+          };
+
+          const jsonString = JSON.stringify(backupData, null, 2);
+          const blob = new Blob([jsonString], { type: 'application/json' });
+          const url = URL.createObjectURL(blob);
+          
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Tanxing_Backup_${new Date().toISOString().slice(0,10)}.json`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          
+          showToast('本地备份文件已下载', 'success');
+      } catch (e) {
+          console.error("Export failed", e);
+          showToast('导出失败', 'error');
+      }
+  };
+
+  const handleImportBackup = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+          try {
+              const content = e.target?.result as string;
+              const data = JSON.parse(content);
+
+              // Simple validation
+              if (!data.products || !data.orders || data.app !== 'Tanxing-ERP') {
+                  throw new Error('无效的备份文件格式');
+              }
+
+              const itemCount = (data.products?.length || 0) + (data.orders?.length || 0);
+              
+              if (confirm(`检测到备份文件 (生成于 ${new Date(data.timestamp).toLocaleString()})。\n包含约 ${itemCount} 条数据。\n\n⚠️ 确定要导入吗？当前本地数据将被覆盖。`)) {
+                  dispatch({ type: 'HYDRATE_STATE', payload: data });
+                  showToast('数据已成功恢复', 'success');
+              }
+          } catch (err: any) {
+              console.error("Import failed", err);
+              showToast(`导入失败: ${err.message}`, 'error');
+          } finally {
+              // Reset input so same file can be selected again if needed
+              if (fileInputRef.current) fileInputRef.current.value = '';
+          }
+      };
+      reader.readAsText(file);
+  };
+
+  const triggerImport = () => {
+      fileInputRef.current?.click();
+  };
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10">
       <div className="flex items-center justify-between">
@@ -220,7 +278,7 @@ const Settings: React.FC = () => {
               { id: 'theme', icon: Palette, label: 'UI 主题风格' },
               { id: 'general', icon: Globe, label: '常规配置' },
               { id: 'cloud', icon: Cloud, label: '云端同步' },
-              { id: 'integrations', icon: BarChart4, label: 'EchoTik 集成' },
+              { id: 'backup', icon: HardDrive, label: '本地备份' },
               { id: 'recycle', icon: Trash2, label: '数据回收站' }
           ].map(tab => (
               <button 
@@ -235,8 +293,7 @@ const Settings: React.FC = () => {
 
       {/* THEME TAB */}
       {activeTab === 'theme' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4">
-              
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
               {/* Option 1: Vision Glass */}
               <div onClick={() => handleThemeChange('ios-glass')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios-glass' ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
                   <div className="bg-[#000] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
@@ -279,19 +336,59 @@ const Settings: React.FC = () => {
                       {state.theme === 'ios-titanium' && <div className="absolute top-3 right-3 text-orange-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
                   </div>
               </div>
+          </div>
+      )}
 
-              {/* Option 4: Ceramic Light */}
-              <div onClick={() => handleThemeChange('light')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'light' ? 'border-slate-300 shadow-[0_0_20px_rgba(0,0,0,0.1)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
-                  <div className="bg-[#f2f2f7] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#ffffff_0%,#f2f2f7_100%)]"></div>
-                      <div className="relative z-10 text-center">
-                          <Sun className="w-10 h-10 text-slate-900 mx-auto mb-3" />
-                          <h3 className="text-slate-900 font-bold text-lg">Ceramic</h3>
-                          <p className="text-xs text-slate-500 mt-2">清透陶瓷白</p>
-                          <p className="text-[10px] text-slate-400 mt-1">Light • Clean</p>
+      {/* BACKUP TAB */}
+      {activeTab === 'backup' && (
+          <div className="bg-black/20 rounded-xl border border-white/10 p-8 animate-in fade-in slide-in-from-bottom-2 grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Export Card */}
+              <div className="bg-gradient-to-br from-indigo-900/20 to-black border border-indigo-500/30 rounded-xl p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-all">
+                  <div>
+                      <div className="w-12 h-12 bg-indigo-600/20 rounded-xl flex items-center justify-center mb-4 text-indigo-400 border border-indigo-500/30">
+                          <DownloadCloud className="w-6 h-6" />
                       </div>
-                      {state.theme === 'light' && <div className="absolute top-3 right-3 text-slate-900"><CheckCircle2 className="w-5 h-5 fill-current text-white"/></div>}
+                      <h3 className="text-lg font-bold text-white mb-2">导出本地备份</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed mb-6">
+                          将系统中的所有数据（商品、订单、客户、配置等）打包为 JSON 文件下载到本地。
+                          <br/><br/>
+                          建议定期手动备份，以防意外数据丢失。
+                      </p>
                   </div>
+                  <button 
+                      onClick={handleExportBackup}
+                      className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                      <Download className="w-4 h-4" /> 立即导出 (Export JSON)
+                  </button>
+              </div>
+
+              {/* Import Card */}
+              <div className="bg-gradient-to-br from-emerald-900/20 to-black border border-emerald-500/30 rounded-xl p-6 flex flex-col justify-between hover:border-emerald-500/50 transition-all">
+                  <div>
+                      <div className="w-12 h-12 bg-emerald-600/20 rounded-xl flex items-center justify-center mb-4 text-emerald-400 border border-emerald-500/30">
+                          <UploadCloud className="w-6 h-6" />
+                      </div>
+                      <h3 className="text-lg font-bold text-white mb-2">恢复本地数据</h3>
+                      <p className="text-xs text-slate-400 leading-relaxed mb-6">
+                          从 JSON 备份文件中恢复数据。
+                          <br/><br/>
+                          <span className="text-red-400 font-bold">⚠️ 注意：</span> 导入操作将覆盖当前的系统数据，请确保已备份现有数据。
+                      </p>
+                  </div>
+                  <input 
+                      type="file" 
+                      accept=".json" 
+                      className="hidden" 
+                      ref={fileInputRef} 
+                      onChange={handleImportBackup} 
+                  />
+                  <button 
+                      onClick={triggerImport}
+                      className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all active:scale-95"
+                  >
+                      <Upload className="w-4 h-4" /> 选择文件导入 (Import JSON)
+                  </button>
               </div>
           </div>
       )}
@@ -350,70 +447,6 @@ const Settings: React.FC = () => {
                           </button>
                       </div>
                   </div>
-              </div>
-          </div>
-      )}
-
-      {/* ECHOTIK INTEGRATION TAB */}
-      {activeTab === 'integrations' && (
-          <div className="bg-black/20 rounded-xl border border-white/10 p-8 animate-in fade-in slide-in-from-bottom-2 space-y-8">
-              <div className="flex items-start gap-4 p-4 bg-pink-900/20 border border-pink-500/30 rounded-lg">
-                  <BarChart4 className="w-6 h-6 text-pink-400 mt-1" />
-                  <div>
-                      <h4 className="text-sm font-bold text-white mb-1">EchoTik API 集成</h4>
-                      <p className="text-xs text-slate-300 leading-relaxed">
-                          接入 EchoTik 第三方数据服务，用于 TikTok Shop 市场情报、达人搜索与选品分析。
-                          请填写 API 密钥管理中的 Username 和 Password。
-                      </p>
-                  </div>
-              </div>
-
-              <div className="space-y-4 max-w-lg">
-                  <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Username / Access Key</label>
-                      <input 
-                          type="text" 
-                          value={echotikForm.username} 
-                          onChange={e => setEchotikForm({...echotikForm, username: e.target.value})} 
-                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white font-mono focus:border-pink-500 outline-none" 
-                          placeholder="e.g. 240906..." 
-                      />
-                  </div>
-                  <div className="space-y-1">
-                      <label className="text-xs text-slate-400">Password / Secret Key</label>
-                      <div className="relative">
-                          <input 
-                              type={showEchoTikPass ? "text" : "password"} 
-                              value={echotikForm.password} 
-                              onChange={e => setEchotikForm({...echotikForm, password: e.target.value})} 
-                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white font-mono focus:border-pink-500 outline-none pr-10" 
-                              placeholder="e.g. 962749..." 
-                          />
-                          <button onClick={() => setShowEchoTikPass(!showEchoTikPass)} className="absolute right-3 top-2.5 text-slate-500 hover:text-white">
-                              {showEchoTikPass ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
-                          </button>
-                      </div>
-                  </div>
-                  <div className="space-y-1">
-                      <label className="text-xs text-slate-400">默认市场区域 (Region)</label>
-                      <select 
-                          value={echotikForm.region} 
-                          onChange={e => setEchotikForm({...echotikForm, region: e.target.value as any})} 
-                          className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white focus:border-pink-500 outline-none"
-                      >
-                          <option value="US">美国 (US)</option>
-                          <option value="UK">英国 (UK)</option>
-                          <option value="SEA">东南亚 (SEA)</option>
-                      </select>
-                  </div>
-                  <button 
-                    onClick={handleEchotikSave} 
-                    disabled={isSavingEchoTik}
-                    className="px-6 py-2 bg-pink-600 hover:bg-pink-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                  >
-                      {isSavingEchoTik ? <Loader2 className="w-3 h-3 animate-spin"/> : <Save className="w-3 h-3"/>}
-                      {isSavingEchoTik ? '保存中...' : '保存 EchoTik 配置'}
-                  </button>
               </div>
           </div>
       )}

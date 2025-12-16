@@ -38,19 +38,19 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       </div>
 
       <div className="flex items-center space-x-6">
-        {/* Clock Pill */}
+        {/* Clock Pill - Cross Border Context */}
         <div className="hidden xl:flex items-center gap-4 mr-2 text-xs font-mono text-white/50 bg-black/20 px-4 py-2 rounded-full border border-white/5">
-            {/* Date */}
+            {/* US Date Format (Chinese) - Using US West as reference for date */}
             <div className="flex items-center gap-2 text-slate-300">
                 <CalendarDays className="w-3.5 h-3.5 text-slate-500" />
-                <span>{currentTime.toLocaleDateString('zh-CN', { month: '2-digit', day: '2-digit', weekday: 'short' })}</span>
+                <span>{currentTime.toLocaleDateString('zh-CN', { timeZone: 'America/Los_Angeles', month: 'long', day: 'numeric', weekday: 'short' })}</span>
             </div>
             
             <div className="w-px h-3 bg-white/10"></div>
 
-            {/* Beijing */}
+            {/* Beijing (Supply Chain) */}
             <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
                 <span>北京 {currentTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
             </div>
             
@@ -64,10 +64,18 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
 
             <div className="w-px h-3 bg-white/10"></div>
 
+            {/* US Central (Chicago) */}
+            <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
+                <span>美中 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+
+            <div className="w-px h-3 bg-white/10"></div>
+
             {/* US East (NY) */}
             <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-                <span>纽约 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+                <span>美东 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
             </div>
         </div>
 

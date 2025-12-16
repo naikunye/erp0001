@@ -11,7 +11,7 @@ import {
   Plane, Ship, Info, Factory, Image as ImageIcon, History, FileText, Loader2, Bot,
   AlertCircle, TrendingUp, Target, BarChart3, Zap, Megaphone, BrainCircuit,
   Plus, Trash2, MoreHorizontal, CheckSquare, Square, Edit2, Calendar,
-  Clock, ShieldCheck, Truck
+  Clock, ShieldCheck, Truck, Scale, Ruler, Users, Layers, Activity
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
@@ -143,25 +143,16 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     );
 };
 
-// --- High Fidelity Edit Modal ---
+// --- High Fidelity Edit Modal (Tanxing OS Dark/Glass Style) ---
 const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ product, onClose }) => {
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
     const [formData, setFormData] = useState({
         ...product,
         // Ensure nested objects exist
-        dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
-        economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0, refundRatePercent: 0 },
-        logistics: product.logistics || { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0 }
-    });
-
-    // Local state for extended fields not in main type (visual only for this demo)
-    const [extraFields, setExtraFields] = useState({
-        consumablesFee: 30,
-        customsFee: 0,
-        portFee: 0,
-        billingWeight: 0,
-        warehouse: '火星/休斯顿/美中'
+        dimensions: product.dimensions || { l: 32, w: 24, h: 18 },
+        economics: product.economics || { platformFeePercent: 2, creatorFeePercent: 10, fixedCost: 0.3, lastLegShipping: 5.44, adCost: 10, refundRatePercent: 3 },
+        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62 }
     });
 
     const handleSave = () => {
@@ -175,119 +166,319 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         }, 600);
     };
 
-    const updateNested = (section: string, field: string, value: any) => {
-        setFormData(prev => ({
-            ...prev,
-            [section]: {
-                ...prev[section as keyof typeof prev],
-                [field]: value
-            }
-        }));
-    };
+    const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (formData.itemsPerBox || 1); 
 
-    const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * 8; // Assuming 8 boxes for demo
+    // Helper for input classes to maintain consistency in Dark UI
+    const inputClass = "w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all shadow-sm placeholder-white/20";
+    const labelClass = "text-xs font-semibold text-slate-400 mb-1.5 block";
+    const sectionTitleClass = "text-sm font-bold text-slate-200 mb-4 flex items-center gap-2";
+    const badgeClass = "w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xs font-bold mr-2";
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
-            <div className="bg-[#f8f9fc] dark:bg-[#0f172a] w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-800 dark:text-slate-200 border border-white/10" onClick={e => e.stopPropagation()}>
+            {/* Dark Glass Theme for this Modal */}
+            <div className="ios-glass-panel w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-200 animate-in zoom-in-95 font-sans border border-white/10" onClick={e => e.stopPropagation()}>
                 
                 {/* Header */}
-                <div className="px-6 py-4 border-b border-gray-200 dark:border-white/10 bg-white dark:bg-white/5 flex justify-between items-center shrink-0">
+                <div className="px-6 py-4 bg-white/5 border-b border-white/10 flex justify-between items-center shrink-0">
                     <div>
-                        <h3 className="text-xl font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
                             编辑: {formData.name}
                         </h3>
-                        <p className="text-xs text-slate-500 mt-1">完善参数以获得更准确的智能补货建议</p>
+                        <p className="text-xs text-slate-400 mt-1">完善参数以获得更准确的智能补货建议</p>
                     </div>
                     <div className="flex gap-2">
-                        <button className="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-white/10 flex items-center gap-1 font-medium transition-colors">
+                        <button className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded text-xs text-slate-300 flex items-center gap-1 font-medium transition-colors shadow-sm">
                             <FileText className="w-3.5 h-3.5"/> 详情
                         </button>
-                        <button className="px-3 py-1.5 bg-gray-100 dark:bg-white/5 border border-gray-200 dark:border-white/10 rounded text-xs text-slate-600 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-white/10 flex items-center gap-1 font-medium transition-colors">
+                        <button className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded text-xs text-slate-300 flex items-center gap-1 font-medium transition-colors shadow-sm">
                             <History className="w-3.5 h-3.5"/> 变更历史
                         </button>
-                        <button onClick={onClose} className="p-1.5 hover:bg-gray-200 dark:hover:bg-white/10 rounded-full text-slate-400 transition-colors ml-2">
+                        <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors ml-2">
                             <X className="w-5 h-5"/>
                         </button>
                     </div>
                 </div>
 
-                {/* Body */}
-                <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-black/20 custom-scrollbar">
+                {/* Body - Dark Glass Layout */}
+                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
                     
                     {/* SECTION 1: Product & Supply Chain */}
-                    <div className="bg-white dark:bg-white/5 border border-gray-200 dark:border-white/5 rounded-xl p-5 mb-6 shadow-sm relative group">
-                        <div className="absolute top-4 left-4 bg-blue-100 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full z-10">1</div>
-                        <h4 className="text-sm font-bold text-slate-800 dark:text-white mb-6 pl-8">产品与供应链</h4>
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-5 mb-6 shadow-lg">
+                        <h4 className={sectionTitleClass}><span className={badgeClass}>1</span> 产品与供应链</h4>
                         
-                        <div className="flex gap-6 pl-8">
-                            <div className="w-32 h-32 bg-gray-100 dark:bg-black/40 border-2 border-dashed border-gray-300 dark:border-white/10 rounded-lg flex flex-col items-center justify-center text-slate-400 cursor-pointer hover:border-blue-400 transition-colors shrink-0">
+                        <div className="flex gap-6">
+                            {/* Image Placeholder */}
+                            <div className="w-40 h-40 bg-black/40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-500 cursor-pointer hover:border-indigo-500/50 hover:text-indigo-400 transition-all shrink-0">
                                 <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                <span className="text-xs">点击上传</span>
+                                <span className="text-xs font-medium">点击上传</span>
                             </div>
                             
-                            <div className="flex-1 grid grid-cols-2 gap-x-8 gap-y-5">
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-slate-500">日期</label>
+                            <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-4">
+                                <div>
+                                    <label className={labelClass}>日期</label>
                                     <div className="relative">
-                                        <input type="text" defaultValue={new Date().toISOString().split('T')[0]} className="w-full bg-white dark:bg-black/40 border border-gray-200 dark:border-white/10 rounded px-3 py-2 text-sm outline-none focus:border-blue-500" />
-                                        <Calendar className="w-4 h-4 absolute right-3 top-2.5 text-slate-400" />
+                                        <input type="text" defaultValue={new Date().toISOString().split('T')[0]} className={inputClass} />
+                                        <Calendar className="w-4 h-4 absolute right-3 top-2.5 text-slate-500" />
                                     </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-slate-500">生命周期阶段</label>
-                                    <select value={formData.lifecycle} onChange={e => setFormData({...formData, lifecycle: e.target.value})} className="w-full bg-white dark:bg-black/40 border border-gray-200 dark:border-white/10 rounded px-3 py-2 text-sm outline-none focus:border-blue-500">
-                                        <option value="New">⚡ 新品测试 (New)</option>
-                                        <option value="Stable">🔥 稳定热卖 (Stable)</option>
-                                        <option value="Growing">🚀 爆品增长 (Growing)</option>
+                                <div>
+                                    <label className={labelClass}>生命周期阶段</label>
+                                    <select value={formData.lifecycle} onChange={e => setFormData({...formData, lifecycle: e.target.value})} className={inputClass}>
+                                        <option value="New">⚡ 稳定热卖 (Stable)</option>
+                                        <option value="Stable">🔥 爆品增长 (Growing)</option>
+                                        <option value="Growing">🚀 新品测试 (New)</option>
                                         <option value="Clearance">📉 清仓处理 (Clearance)</option>
                                     </select>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-slate-500">产品名称</label>
-                                    <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className="w-full bg-white dark:bg-black/40 border border-gray-200 dark:border-white/10 rounded px-3 py-2 text-sm outline-none focus:border-blue-500" />
+                                <div>
+                                    <label className={labelClass}>产品名称</label>
+                                    <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={inputClass} />
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-slate-500">SKU (支持多标签)</label>
-                                    <div className="flex items-center gap-2 w-full bg-white dark:bg-black/40 border border-gray-200 dark:border-white/10 rounded px-2 py-1.5 text-sm focus-within:border-blue-500">
-                                        <span className="bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 px-2 py-0.5 rounded text-xs flex items-center gap-1 border border-blue-100 dark:border-blue-500/30">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span> {formData.sku} <X className="w-3 h-3 cursor-pointer"/>
+                                <div>
+                                    <label className={labelClass}>SKU (支持多标签，按回车添加)</label>
+                                    <div className="flex items-center gap-2 w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm focus-within:border-indigo-500 shadow-sm">
+                                        <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-xs flex items-center gap-1 border border-blue-500/30 font-bold">
+                                            <Layers className="w-3 h-3"/> {formData.sku} <X className="w-3 h-3 cursor-pointer hover:text-blue-100"/>
                                         </span>
-                                        <input type="text" className="bg-transparent outline-none flex-1 min-w-0" placeholder="" />
+                                        <input type="text" className="bg-transparent outline-none flex-1 min-w-0 h-full py-0.5 text-white" placeholder="" />
                                     </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-amber-600 dark:text-amber-500/80 flex items-center gap-1">生产+物流总时效 (Days)</label>
+                                <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                                    <label className="text-xs font-bold text-amber-400 mb-1 block">生产+物流总时效 (Days)</label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-2 text-amber-500"><Clock className="w-4 h-4"/></span>
-                                        <input type="number" value={formData.leadTime} onChange={e => setFormData({...formData, leadTime: parseInt(e.target.value)})} className="w-full pl-9 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded px-3 py-2 text-sm text-amber-700 dark:text-amber-400 font-bold outline-none focus:border-amber-500" />
+                                        <Clock className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
+                                        <input type="number" value={formData.leadTime} onChange={e => setFormData({...formData, leadTime: parseInt(e.target.value)})} className="w-full pl-9 bg-black/40 border border-amber-500/30 rounded px-3 py-2 text-sm text-amber-100 font-bold outline-none focus:border-amber-500" />
                                     </div>
                                 </div>
-                                <div className="space-y-1">
-                                    <label className="text-xs font-medium text-amber-600 dark:text-amber-500/80 flex items-center gap-1">安全库存天数 (Days)</label>
+                                <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
+                                    <label className="text-xs font-bold text-amber-400 mb-1 block">安全库存天数 (Days)</label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-2 text-amber-500"><ShieldCheck className="w-4 h-4" /></span>
-                                        <input type="number" value={formData.safetyStockDays} onChange={e => setFormData({...formData, safetyStockDays: parseInt(e.target.value)})} className="w-full pl-9 bg-amber-50 dark:bg-amber-500/5 border border-amber-200 dark:border-amber-500/20 rounded px-3 py-2 text-sm text-amber-700 dark:text-amber-400 font-bold outline-none focus:border-amber-500" />
+                                        <ShieldCheck className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
+                                        <input type="number" value={formData.safetyStockDays} onChange={e => setFormData({...formData, safetyStockDays: parseInt(e.target.value)})} className="w-full pl-9 bg-black/40 border border-amber-500/30 rounded px-3 py-2 text-sm text-amber-100 font-bold outline-none focus:border-amber-500" />
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* ... (Sections 2-5 remain mostly the same, ensuring inputs are responsive) ... */}
-                    {/* Simplified for brevity as they are just inputs, main focus is on the action button */}
-                    <div className="text-center p-4 text-slate-500 text-xs italic">
-                        (详细参数配置区域 - 保持原样)
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                        
+                        {/* SECTION 2: Procurement */}
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg flex flex-col h-full">
+                            <h4 className={sectionTitleClass}><span className={badgeClass}>2</span> 采购与供应商 (CRM)</h4>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className={labelClass}>供应商名称</label>
+                                    <div className="relative">
+                                        <Factory className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                                        <input type="text" value={formData.supplier} placeholder="工厂名称" onChange={e => setFormData({...formData, supplier: e.target.value})} className={`${inputClass} pl-9`} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>联系方式</label>
+                                    <input type="text" value={formData.supplierContact} placeholder="微信/Email" onChange={e => setFormData({...formData, supplierContact: e.target.value})} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>采购单价 (¥/pcs)</label>
+                                    <input type="number" value={formData.costPrice} onChange={e => setFormData({...formData, costPrice: parseFloat(e.target.value)})} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>单个重量 (KG)</label>
+                                    <input type="number" value={formData.unitWeight} onChange={e => setFormData({...formData, unitWeight: parseFloat(e.target.value)})} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>备货箱数 (Box)</label>
+                                    <input type="number" className={inputClass} defaultValue={8} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>预估日销 (Daily Sales)</label>
+                                    <div className="relative">
+                                        <BarChart3 className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                                        <input type="number" value={formData.dailyBurnRate} onChange={e => setFormData({...formData, dailyBurnRate: parseFloat(e.target.value)})} className={`${inputClass} pl-9`} />
+                                    </div>
+                                    <div className="text-[10px] text-emerald-400 mt-1 font-medium text-right">可售天数: {Math.floor(formData.stock / (formData.dailyBurnRate || 1))}天</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SECTION 3: Box Settings */}
+                        <div className="bg-amber-900/10 border border-amber-500/20 rounded-xl p-5 shadow-lg flex flex-col h-full relative overflow-hidden">
+                            <div className="absolute top-0 right-0 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-1 rounded-bl-lg font-bold border-l border-b border-amber-500/20">8 箱 | 0.111 CBM</div>
+                            <h4 className="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold mr-2 border border-amber-500/30">3</span> 箱规设置</h4>
+                            
+                            <div className="grid grid-cols-3 gap-3 mb-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">长 (cm)</label>
+                                    <input type="number" value={formData.dimensions?.l} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions!, l: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">宽 (cm)</label>
+                                    <input type="number" value={formData.dimensions?.w} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions!, w: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
+                                </div>
+                                <div>
+                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">高 (cm)</label>
+                                    <input type="number" value={formData.dimensions?.h} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions!, h: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">每箱数量 (Items/Box)</label>
+                                    <div className="relative">
+                                        <Box className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
+                                        <input type="number" value={formData.itemsPerBox} onChange={e => setFormData({...formData, itemsPerBox: parseInt(e.target.value)})} className="w-full pl-9 bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
+                                    </div>
+                                </div>
+                                <div>
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-semibold text-amber-200/70">备货总数 (Total Pcs)</label>
+                                        <button className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline"><Calculator className="w-3 h-3"/> 自动计算</button>
+                                    </div>
+                                    <input type="number" value={150} readOnly className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm font-bold text-amber-100" />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        
+                        {/* SECTION 4: Logistics */}
+                        <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg">
+                            <h4 className={sectionTitleClass}><span className={badgeClass}>4</span> 头程物流 (First Leg)</h4>
+                            
+                            <div className="mb-4">
+                                <label className={labelClass}>运输渠道</label>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <button 
+                                        className={`flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-all ${formData.logistics?.method === 'Air' ? 'bg-sky-500/20 border-sky-500 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                                        onClick={() => setFormData({...formData, logistics: {...formData.logistics!, method: 'Air'}})}
+                                    >
+                                        <Plane className="w-4 h-4" /> 空运 (Air)
+                                    </button>
+                                    <button 
+                                        className={`flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-all ${formData.logistics?.method === 'Sea' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
+                                        onClick={() => setFormData({...formData, logistics: {...formData.logistics!, method: 'Sea'}})}
+                                    >
+                                        <Ship className="w-4 h-4" /> 海运 (Sea)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className={labelClass}>承运商 / 船司</label>
+                                    <input type="text" value={formData.logistics?.carrier} onChange={e => setFormData({...formData, logistics: {...formData.logistics!, carrier: e.target.value}})} className={inputClass} placeholder="Matson/UPS" />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>物流追踪号</label>
+                                    <div className="relative">
+                                        <Truck className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                                        <input type="text" value={formData.logistics?.trackingNo} placeholder="Tracking No." onChange={e => setFormData({...formData, logistics: {...formData.logistics!, trackingNo: e.target.value}})} className={`${inputClass} pl-9`} />
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>空运单价 (/KG)</label>
+                                    <div className="flex">
+                                        <div className="relative w-full">
+                                            <span className="absolute left-3 top-2 text-slate-500 text-xs">¥</span>
+                                            <input type="number" value={formData.logistics?.unitFreightCost} onChange={e => setFormData({...formData, logistics: {...formData.logistics!, unitFreightCost: parseFloat(e.target.value)}})} className={`${inputClass} pl-6`} />
+                                        </div>
+                                        <div className="flex ml-2 border border-white/10 rounded overflow-hidden shrink-0">
+                                            <button className="px-2 bg-blue-500/20 text-blue-400 text-xs font-bold border-r border-white/10">CNY</button>
+                                            <button className="px-2 bg-black/40 text-slate-400 text-xs hover:bg-white/5">USD</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>计费总重 (Manual)</label>
+                                    <div className="relative">
+                                        <Scale className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
+                                        <input type="number" placeholder="0" className={`${inputClass} pl-9`} />
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 text-right mt-1">理论实重: 12.75 kg</div>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>耗材/贴标费 (¥)</label>
+                                    <input type="number" defaultValue={30} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>报关费 (¥)</label>
+                                    <input type="number" defaultValue={0} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>港口/操作费 (¥)</label>
+                                    <input type="number" defaultValue={0} className={inputClass} />
+                                </div>
+                                <div>
+                                    <label className={labelClass}>目的仓库</label>
+                                    <input type="text" defaultValue="火星/休斯顿/美中" className={inputClass} />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* SECTION 5: Sales & Market */}
+                        <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-5 shadow-lg">
+                            <h4 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold mr-2 border border-purple-500/30">5</span> TikTok 销售与竞品 (Market Intel)</h4>
+                            
+                            <div className="mb-4">
+                                <label className="text-xs font-semibold text-purple-200/70 mb-1 block">我方销售价格 ($)</label>
+                                <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-3 py-3 text-lg font-bold text-white outline-none focus:border-purple-500" />
+                            </div>
+
+                            <div className="bg-black/20 p-3 rounded-lg border border-purple-500/20 mb-4">
+                                <div className="flex justify-between items-center mb-2">
+                                    <div className="text-xs font-bold text-red-400 flex items-center gap-1"><Target className="w-3.5 h-3.5" /> 竞品监控</div>
+                                    <button className="bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded font-bold border border-white/10 hover:bg-slate-700">AI 攻防分析</button>
+                                </div>
+                                <div className="flex gap-2">
+                                    <input type="text" placeholder="竞品链接/ASIN" className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none" />
+                                    <input type="number" placeholder="$ 0" className="w-20 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none" />
+                                </div>
+                            </div>
+
+                            <div className="border-t border-purple-500/20 pt-4 mt-2">
+                                <h5 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-1"><Zap className="w-3 h-3"/> TikTok Cost Structure</h5>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">平台佣金 (%)</label>
+                                        <input type="number" value={formData.economics?.platformFeePercent} onChange={e => setFormData({...formData, economics: {...formData.economics!, platformFeePercent: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">达人佣金 (%)</label>
+                                        <input type="number" value={formData.economics?.creatorFeePercent} onChange={e => setFormData({...formData, economics: {...formData.economics!, creatorFeePercent: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">每单固定费 ($)</label>
+                                        <input type="number" value={formData.economics?.fixedCost} onChange={e => setFormData({...formData, economics: {...formData.economics!, fixedCost: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
+                                    </div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-3 mt-3">
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">预估退货率 (%)</label>
+                                        <input type="number" value={formData.economics?.refundRatePercent} onChange={e => setFormData({...formData, economics: {...formData.economics!, refundRatePercent: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
+                                    </div>
+                                    <div>
+                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">尾程派送费 ($)</label>
+                                        <input type="number" value={formData.economics?.lastLegShipping} onChange={e => setFormData({...formData, economics: {...formData.economics!, lastLegShipping: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
+                                    </div>
+                                </div>
+                                <div className="mt-3">
+                                    <label className="text-[10px] font-bold text-slate-400 block mb-1">预估广告费 ($)</label>
+                                    <input type="number" value={formData.economics?.adCost} onChange={e => setFormData({...formData, economics: {...formData.economics!, adCost: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                 </div>
                 
                 {/* Footer Actions */}
-                <div className="bg-white dark:bg-white/5 border-t border-gray-200 dark:border-white/10 p-4 shrink-0 z-20">
+                <div className="bg-black/40 backdrop-blur-md border-t border-white/10 p-4 shrink-0 z-20 flex justify-center">
                     <button 
                         onClick={handleSave} 
                         disabled={isSaving}
-                        className="w-full bg-blue-600 hover:bg-blue-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
                     >
                         {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckSquare className="w-4 h-4" />}
                         {isSaving ? '正在保存更改...' : '保存修改并记录日志'}
@@ -468,64 +659,53 @@ const Inventory: React.FC = () => {
                           <div>
                               <div className="flex items-center gap-2 mb-1">
                                   {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5 text-blue-400"/> : <Plane className="w-3.5 h-3.5 text-sky-400"/>}
-                                  <span className="text-xs font-bold text-slate-300">{item.logistics?.method === 'Sea' ? '海运' : '空运'}</span>
+                                  <span className="text-xs font-bold text-slate-300">{item.logistics?.method}</span>
                               </div>
-                              <div className="text-[10px] text-slate-500 font-mono space-y-0.5">
-                                  <div>{item.boxes}箱 · {item.totalWeight.toFixed(1)}kg</div>
-                                  <div className="text-slate-600">Unit: {item.unitWeight}kg</div>
-                              </div>
+                              <div className="text-[10px] text-slate-500 font-mono">{item.logistics?.trackingNo || '-'}</div>
+                              <div className="text-[10px] text-slate-600 mt-0.5">{item.totalWeight?.toFixed(1)}kg / {item.boxes}box</div>
                           </div>
 
-                          {/* 5. Financials */}
+                          {/* 5. Capital */}
                           <div>
-                              <div className="text-sm font-bold text-white font-mono">¥{item.totalInvestment.toLocaleString()}</div>
-                              <div className="flex gap-2 mt-1">
-                                  <div className="flex items-center gap-1 text-[9px] text-slate-500">
-                                      <span className="w-1 h-3 bg-blue-500 rounded-full"></span>
-                                      货: ¥{item.goodsCost.toLocaleString()}
-                                  </div>
-                                  <div className="flex items-center gap-1 text-[9px] text-slate-500">
-                                      <span className="w-1 h-3 bg-orange-500 rounded-full"></span>
-                                      运: ¥{item.freightCost.toLocaleString()}
-                                  </div>
-                              </div>
+                              <div className="text-xs font-bold text-emerald-400 font-mono">¥{item.totalInvestment.toLocaleString()}</div>
+                              <div className="text-[9px] text-slate-500 mt-1">Cost: ¥{item.goodsCost.toLocaleString()}</div>
+                              <div className="text-[9px] text-slate-500">Freight: ¥{item.freightCost.toLocaleString()}</div>
                           </div>
 
                           {/* 6. Stock */}
                           <div>
-                              <div className="flex items-end gap-1 mb-1">
-                                  <span className="text-sm font-bold text-white font-mono">{item.stock}</span>
-                                  <span className={`text-[10px] px-1 rounded border ${item.daysRemaining < 20 ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-                                      {item.daysRemaining}d
-                                  </span>
+                              <div className="text-sm font-bold text-white font-mono">{item.stock} <span className="text-[10px] text-slate-500 font-sans font-normal">pcs</span></div>
+                              <div className={`text-[10px] font-bold mt-1 ${item.daysRemaining < 30 ? 'text-red-400' : 'text-emerald-500'}`}>
+                                  DOS: {item.daysRemaining} days
                               </div>
-                              <div className="text-[10px] text-slate-500 mb-1">日销: {item.dailyBurnRate}</div>
-                              {/* Stock Health Bar */}
-                              <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                                  <div 
-                                      className={`h-full ${item.daysRemaining < 20 ? 'bg-red-500' : 'bg-emerald-500'}`} 
-                                      style={{width: `${Math.min(100, (item.stock / (item.reorderPoint * 2)) * 100)}%`}}
-                                  ></div>
+                              <div className="w-full bg-slate-800 h-1 mt-1 rounded-full overflow-hidden">
+                                  <div className={`h-full ${item.daysRemaining < 20 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(100, (item.daysRemaining/60)*100)}%`}}></div>
                               </div>
                           </div>
 
                           {/* 7. Sales Performance */}
                           <div className="text-right">
-                              <div className="text-sm font-bold text-white font-mono">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
-                              <div className={`text-[10px] font-bold flex items-center justify-end gap-0.5 ${item.growth > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {item.growth > 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingUp className="w-3 h-3 rotate-180"/>}
+                              <div className="text-xs font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-[9px] text-slate-500">/30d</span></div>
+                              <div className={`text-[10px] font-bold mt-0.5 flex items-center justify-end gap-1 ${item.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {item.growth >= 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingUp className="w-3 h-3 rotate-180"/>}
                                   {Math.abs(item.growth).toFixed(1)}%
                               </div>
-                              <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Profit: ${item.profit.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+                              <div className="text-[9px] text-slate-600 mt-0.5">Daily: {item.dailyBurnRate} pcs</div>
                           </div>
 
-                          {/* 8. Actions (Dedicated Column) - Always visible on hover or fix */}
-                          <div className="flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={(e) => handleEditClick(item, e)} className="p-1.5 hover:bg-indigo-600 hover:text-white text-slate-400 bg-white/5 rounded transition-colors border border-transparent hover:border-indigo-500/30" title="编辑">
-                                  <Edit2 className="w-3.5 h-3.5" />
+                          {/* 8. Actions */}
+                          <div className="flex justify-center">
+                              <button 
+                                onClick={(e) => handleEditClick(item, e)}
+                                className="p-1.5 hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-400 rounded-lg transition-colors"
+                              >
+                                  <Edit2 className="w-4 h-4" />
                               </button>
-                              <button onClick={(e) => handleDeleteSKU(item.id, e)} className="p-1.5 hover:bg-red-600 hover:text-white text-slate-400 bg-white/5 rounded transition-colors border border-transparent hover:border-red-500/30" title="删除">
-                                  <Trash2 className="w-3.5 h-3.5" />
+                              <button 
+                                onClick={(e) => handleDeleteSKU(item.id, e)}
+                                className="p-1.5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-colors ml-1"
+                              >
+                                  <Trash2 className="w-4 h-4" />
                               </button>
                           </div>
 

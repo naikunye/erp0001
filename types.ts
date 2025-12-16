@@ -1,5 +1,5 @@
 
-export type Page = 'dashboard' | 'inventory' | 'orders' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics';
+export type Page = 'dashboard' | 'inventory' | 'orders' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'inbound' | 'integrations';
 
 export interface User {
   id: string;
@@ -267,7 +267,7 @@ export interface Transaction {
   status: 'completed' | 'pending';
   paymentMethod?: PaymentMethod;
   attachment?: string;
-  tags?: string[];
+  tags?: string[]; // Ensure this exists
   relatedOrderId?: string; 
   relatedPOId?: string; 
 }
