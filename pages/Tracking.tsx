@@ -63,6 +63,20 @@ const Tracking: React.FC = () => {
 
   // --- CRUD Handlers ---
 
+  const handleAddNew = () => {
+      setSelectedShipment(null); // Clear selection to indicate creation mode
+      setEditForm({
+          trackingNo: '',
+          carrier: 'DHL',
+          status: 'Pending',
+          productName: '',
+          notes: '',
+          shipDate: new Date().toISOString().split('T')[0],
+          events: []
+      });
+      setShowEditModal(true);
+  };
+
   const handleEditClick = () => {
       if (!selectedShipment) return;
       setEditForm({ ...selectedShipment });
@@ -70,14 +84,37 @@ const Tracking: React.FC = () => {
   };
 
   const handleSaveEdit = () => {
-      if (!selectedShipment || !editForm.id) return;
-      
-      const updatedShipment = { ...selectedShipment, ...editForm } as Shipment;
-      
-      dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedShipment });
-      setSelectedShipment(updatedShipment); // Update local view
+      if (!editForm.trackingNo) {
+          showToast('请输入运单号', 'warning');
+          return;
+      }
+
+      if (selectedShipment) {
+          // Update existing
+          const updatedShipment = { ...selectedShipment, ...editForm } as Shipment;
+          dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedShipment });
+          setSelectedShipment(updatedShipment); 
+          showToast('物流信息已更新', 'success');
+      } else {
+          // Create new
+          const newShipment: Shipment = {
+              id: `SH-${Date.now()}`,
+              trackingNo: editForm.trackingNo,
+              carrier: (editForm.carrier as any) || 'Other',
+              status: (editForm.status as any) || 'Pending',
+              productName: editForm.productName || 'Unspecified Product',
+              origin: 'Unknown',
+              destination: 'Unknown',
+              estimatedDelivery: 'TBD',
+              shipDate: editForm.shipDate,
+              lastUpdate: new Date().toISOString().split('T')[0],
+              events: [],
+              notes: editForm.notes
+          };
+          dispatch({ type: 'ADD_SHIPMENT', payload: newShipment });
+          showToast('新物流单已创建', 'success');
+      }
       setShowEditModal(false);
-      showToast('物流信息已更新', 'success');
   };
 
   const handleDelete = () => {
@@ -121,7 +158,10 @@ const Tracking: React.FC = () => {
                 />
                 <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5" />
             </div>
-            <button className="flex items-center justify-center space-x-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shadow-lg text-sm font-medium">
+            <button 
+                onClick={handleAddNew}
+                className="flex items-center justify-center space-x-2 px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-500 transition-colors shadow-lg text-sm font-medium"
+            >
                 <Plus className="w-3.5 h-3.5" />
                 <span>新增</span>
             </button>
@@ -254,7 +294,7 @@ const Tracking: React.FC = () => {
           ) : (
               <div className="flex-1 flex flex-col items-center justify-center text-slate-500">
                   <Truck className="w-16 h-16 mb-4 opacity-20" />
-                  <p>请选择一个物流单号查看详情</p>
+                  <p>请选择一个物流单号查看详情，或点击“新增”创建新运单</p>
               </div>
           )}
       </div>
@@ -265,7 +305,8 @@ const Tracking: React.FC = () => {
               <div className="ios-glass-panel w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                          <Edit2 className="w-5 h-5 text-indigo-500" /> 编辑物流信息
+                          <Edit2 className="w-5 h-5 text-indigo-500" /> 
+                          {selectedShipment ? '编辑物流信息' : '创建新物流运单'}
                       </h3>
                       <button onClick={() => setShowEditModal(false)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
                   </div>
@@ -278,6 +319,7 @@ const Tracking: React.FC = () => {
                               value={editForm.trackingNo || ''} 
                               onChange={e => setEditForm({...editForm, trackingNo: e.target.value})}
                               className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white font-mono"
+                              placeholder="例如: DHL123456789"
                           />
                       </div>
                       <div className="grid grid-cols-2 gap-4">
@@ -311,14 +353,26 @@ const Tracking: React.FC = () => {
                               </select>
                           </div>
                       </div>
-                      <div>
-                          <label className="text-xs text-slate-400 block mb-1">商品名称 (Product)</label>
-                          <input 
-                              type="text" 
-                              value={editForm.productName || ''} 
-                              onChange={e => setEditForm({...editForm, productName: e.target.value})}
-                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
-                          />
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="col-span-1">
+                              <label className="text-xs text-slate-400 block mb-1">发货时间 (Ship Date)</label>
+                              <input 
+                                  type="date" 
+                                  value={editForm.shipDate || ''} 
+                                  onChange={e => setEditForm({...editForm, shipDate: e.target.value})}
+                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
+                              />
+                          </div>
+                          <div className="col-span-1">
+                              <label className="text-xs text-slate-400 block mb-1">商品名称 (Product)</label>
+                              <input 
+                                  type="text" 
+                                  value={editForm.productName || ''} 
+                                  onChange={e => setEditForm({...editForm, productName: e.target.value})}
+                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
+                                  placeholder="简要描述..."
+                              />
+                          </div>
                       </div>
                       <div>
                           <label className="text-xs text-slate-400 block mb-1">备注 (Notes)</label>

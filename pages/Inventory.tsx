@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -147,6 +146,9 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ product, onClose }) => {
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
+    const [boxCount, setBoxCount] = useState(8); // Controlled state for box calculator
+    const [calculatedTotal, setCalculatedTotal] = useState(0);
+
     const [formData, setFormData] = useState({
         ...product,
         // Ensure nested objects exist
@@ -164,6 +166,13 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
             setIsSaving(false);
             onClose();
         }, 600);
+    };
+
+    const handleCalculateTotal = () => {
+        const total = boxCount * (formData.itemsPerBox || 1);
+        setCalculatedTotal(total);
+        // Optional: Update stock or just show calculation? Let's just show it for planning
+        showToast(`计算结果: ${boxCount}箱 x ${formData.itemsPerBox}件 = ${total}件`, 'info');
     };
 
     const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (formData.itemsPerBox || 1); 
@@ -289,7 +298,12 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 </div>
                                 <div>
                                     <label className={labelClass}>备货箱数 (Box)</label>
-                                    <input type="number" className={inputClass} defaultValue={8} />
+                                    <input 
+                                        type="number" 
+                                        className={inputClass} 
+                                        value={boxCount}
+                                        onChange={(e) => setBoxCount(parseInt(e.target.value) || 0)}
+                                    />
                                 </div>
                                 <div>
                                     <label className={labelClass}>预估日销 (Daily Sales)</label>
@@ -304,7 +318,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
 
                         {/* SECTION 3: Box Settings */}
                         <div className="bg-amber-900/10 border border-amber-500/20 rounded-xl p-5 shadow-lg flex flex-col h-full relative overflow-hidden">
-                            <div className="absolute top-0 right-0 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-1 rounded-bl-lg font-bold border-l border-b border-amber-500/20">8 箱 | 0.111 CBM</div>
+                            <div className="absolute top-0 right-0 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-1 rounded-bl-lg font-bold border-l border-b border-amber-500/20">{boxCount} 箱 | {(totalCBM * boxCount).toFixed(3)} CBM</div>
                             <h4 className="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold mr-2 border border-amber-500/30">3</span> 箱规设置</h4>
                             
                             <div className="grid grid-cols-3 gap-3 mb-4">
@@ -333,9 +347,9 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 <div>
                                     <div className="flex justify-between mb-1">
                                         <label className="text-xs font-semibold text-amber-200/70">备货总数 (Total Pcs)</label>
-                                        <button className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline"><Calculator className="w-3 h-3"/> 自动计算</button>
+                                        <button onClick={handleCalculateTotal} className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline cursor-pointer bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hover:bg-blue-500/20"><Calculator className="w-3 h-3"/> 自动计算</button>
                                     </div>
-                                    <input type="number" value={150} readOnly className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm font-bold text-amber-100" />
+                                    <input type="number" value={calculatedTotal || ''} readOnly placeholder="点击计算" className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm font-bold text-amber-100" />
                                 </div>
                             </div>
                         </div>
@@ -560,6 +574,31 @@ const Inventory: React.FC = () => {
       setEditingProduct(product);
   };
 
+  const handleExportCSV = () => {
+      const headers = ['SKU', 'Name', 'Stock', 'Days Remaining', 'Burn Rate', 'Total Cost'];
+      const rows = replenishmentItems.map(item => [
+          item.sku, 
+          `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
+          item.stock,
+          item.daysRemaining,
+          item.dailyBurnRate,
+          item.totalInvestment
+      ].join(','));
+      
+      const csvContent = "data:text/csv;charset=utf-8," 
+          + headers.join(',') + "\n" 
+          + rows.join('\n');
+      
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Inventory_Export_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('库存清单 CSV 已下载', 'success');
+  };
+
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)]">
       {showAddModal && <AddProductModal onClose={() => setShowAddModal(false)} />}
@@ -598,7 +637,11 @@ const Inventory: React.FC = () => {
                   >
                       <Plus className="w-3.5 h-3.5" /> 添加 SKU
                   </button>
-                  <button className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-slate-400 hover:text-white">
+                  <button 
+                    onClick={handleExportCSV}
+                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
+                    title="导出 CSV"
+                  >
                       <Download className="w-4 h-4" />
                   </button>
               </div>
@@ -612,9 +655,9 @@ const Inventory: React.FC = () => {
                   <div className="flex items-center justify-center"><Square className="w-3.5 h-3.5" /></div>
                   <div>SKU / 阶段</div>
                   <div>产品信息 / 供应商</div>
-                  <div>物流 (Live)</div>
+                  <div>物流状态</div>
                   <div>资金投入</div>
-                  <div>库存 (Stock)</div>
+                  <div>库存数量</div>
                   <div className="text-right">销售表现</div>
                   <div className="text-center">操作</div>
               </div>
@@ -649,7 +692,7 @@ const Inventory: React.FC = () => {
                                   <div className="text-xs font-bold text-slate-200 truncate" title={item.name}>{item.name}</div>
                                   <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
                                       <Factory className="w-3 h-3" />
-                                      <span className="truncate">{item.supplier || 'Unknown Supplier'}</span>
+                                      <span className="truncate">{item.supplier || '未指定供应商'}</span>
                                   </div>
                                   <div className="text-[10px] text-slate-600 font-mono mt-0.5">{item.lastUpdated?.split('T')[0]}</div>
                               </div>
@@ -668,15 +711,15 @@ const Inventory: React.FC = () => {
                           {/* 5. Capital */}
                           <div>
                               <div className="text-xs font-bold text-emerald-400 font-mono">¥{item.totalInvestment.toLocaleString()}</div>
-                              <div className="text-[9px] text-slate-500 mt-1">Cost: ¥{item.goodsCost.toLocaleString()}</div>
-                              <div className="text-[9px] text-slate-500">Freight: ¥{item.freightCost.toLocaleString()}</div>
+                              <div className="text-[9px] text-slate-500 mt-1">货值: ¥{item.goodsCost.toLocaleString()}</div>
+                              <div className="text-[9px] text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
                           </div>
 
                           {/* 6. Stock */}
                           <div>
-                              <div className="text-sm font-bold text-white font-mono">{item.stock} <span className="text-[10px] text-slate-500 font-sans font-normal">pcs</span></div>
+                              <div className="text-sm font-bold text-white font-mono">{item.stock} <span className="text-[10px] text-slate-500 font-sans font-normal">件</span></div>
                               <div className={`text-[10px] font-bold mt-1 ${item.daysRemaining < 30 ? 'text-red-400' : 'text-emerald-500'}`}>
-                                  DOS: {item.daysRemaining} days
+                                  可售: {item.daysRemaining} 天
                               </div>
                               <div className="w-full bg-slate-800 h-1 mt-1 rounded-full overflow-hidden">
                                   <div className={`h-full ${item.daysRemaining < 20 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(100, (item.daysRemaining/60)*100)}%`}}></div>
@@ -685,12 +728,12 @@ const Inventory: React.FC = () => {
 
                           {/* 7. Sales Performance */}
                           <div className="text-right">
-                              <div className="text-xs font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-[9px] text-slate-500">/30d</span></div>
+                              <div className="text-xs font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-[9px] text-slate-500">/30天</span></div>
                               <div className={`text-[10px] font-bold mt-0.5 flex items-center justify-end gap-1 ${item.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
                                   {item.growth >= 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingUp className="w-3 h-3 rotate-180"/>}
                                   {Math.abs(item.growth).toFixed(1)}%
                               </div>
-                              <div className="text-[9px] text-slate-600 mt-0.5">Daily: {item.dailyBurnRate} pcs</div>
+                              <div className="text-[9px] text-slate-600 mt-0.5">日销: {item.dailyBurnRate} 件</div>
                           </div>
 
                           {/* 8. Actions */}

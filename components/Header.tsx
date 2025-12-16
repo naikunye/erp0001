@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, X, Menu, ChevronDown, Command, CalendarDays } from 'lucide-react';
+import { Bell, Search, X, Menu, ChevronDown, Command, CalendarDays, LogOut, Settings, User } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -9,8 +8,9 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ title }) => {
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { dispatch } = useTanxing();
+  const { dispatch, showToast } = useTanxing();
 
   const mockNotifications = [
       { id: 1, title: '库存紧急预警', desc: 'SKU: MA-001 库存不足 10 件', time: '10分钟前', type: 'alert' },
@@ -22,8 +22,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       return () => clearInterval(timer);
   }, []);
 
+  const handleLogout = () => {
+      if (confirm('确认退出系统？')) {
+          window.location.reload();
+      }
+  };
+
   return (
-    <header className="h-20 flex items-center justify-between px-8 border-b border-white/5">
+    <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
       <div className="flex items-center gap-4">
         <button 
             className="lg:hidden p-2 text-white/60 hover:text-white"
@@ -108,7 +114,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </button>
             
             {showNotifications && (
-                <div className="absolute top-16 right-8 w-80 ios-glass-card z-50 animate-in fade-in zoom-in-95 overflow-hidden shadow-2xl">
+                <div className="absolute top-16 right-20 w-80 ios-glass-card z-50 animate-in fade-in zoom-in-95 overflow-hidden shadow-2xl">
                     <div className="p-3 border-b border-white/10 flex justify-between items-center bg-white/5">
                         <span className="text-xs font-bold text-white/80">消息通知 (Notifications)</span>
                         <button onClick={() => setShowNotifications(false)}><X className="w-3.5 h-3.5 text-white/50 hover:text-white"/></button>
@@ -127,16 +133,48 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                 </div>
             )}
             
-            <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent hover:border-white/5">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">
-                    AD
-                </div>
-                <div className="text-left hidden md:block">
-                    <div className="text-xs font-bold text-white leading-none mb-0.5">管理员</div>
-                    <div className="text-[9px] text-white/40 font-mono leading-none">ROOT</div>
-                </div>
-                <ChevronDown className="w-3 h-3 text-white/30" />
-            </button>
+            {/* User Profile Dropdown */}
+            <div className="relative">
+                <button 
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className={`flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent ${showUserMenu ? 'bg-white/5 border-white/5' : 'hover:border-white/5'}`}
+                >
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">
+                        AD
+                    </div>
+                    <div className="text-left hidden md:block">
+                        <div className="text-xs font-bold text-white leading-none mb-0.5">管理员</div>
+                        <div className="text-[9px] text-white/40 font-mono leading-none">ROOT</div>
+                    </div>
+                    <ChevronDown className={`w-3 h-3 text-white/30 transition-transform ${showUserMenu ? 'rotate-180' : ''}`} />
+                </button>
+
+                {showUserMenu && (
+                    <div className="absolute top-12 right-0 w-48 ios-glass-card z-50 animate-in fade-in zoom-in-95 overflow-hidden shadow-2xl">
+                        <div className="p-2 space-y-1">
+                            <button 
+                                onClick={() => showToast('功能开发中', 'info')}
+                                className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-white/10 rounded flex items-center gap-2"
+                            >
+                                <User className="w-4 h-4" /> 个人资料
+                            </button>
+                            <button 
+                                onClick={() => window.location.href = '/settings'}
+                                className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-white/10 rounded flex items-center gap-2"
+                            >
+                                <Settings className="w-4 h-4" /> 系统设置
+                            </button>
+                            <div className="h-px bg-white/10 my-1"></div>
+                            <button 
+                                onClick={handleLogout}
+                                className="w-full text-left px-3 py-2 text-xs text-red-400 hover:bg-white/10 rounded flex items-center gap-2"
+                            >
+                                <LogOut className="w-4 h-4" /> 退出登录
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
         </div>
       </div>
     </header>

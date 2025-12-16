@@ -1,5 +1,4 @@
-
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { 
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, FileText, 
   PieChart as PieIcon, ArrowUpRight, ArrowDownRight, Filter, Calendar, 
@@ -37,6 +36,7 @@ const Finance: React.FC = () => {
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 15;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // New Transaction State
   const [newTx, setNewTx] = useState<Partial<Transaction>>({
@@ -236,6 +236,41 @@ const Finance: React.FC = () => {
       }
   };
 
+  const handleExportCSV = () => {
+      const headers = ['Date', 'ID', 'Category', 'Description', 'Amount', 'Currency', 'Type', 'Status'];
+      const rows = filteredData.map(tx => [
+          tx.date,
+          tx.id,
+          tx.category,
+          `"${tx.description.replace(/"/g, '""')}"`,
+          tx.amount,
+          tx.currency,
+          tx.type,
+          tx.status
+      ].join(','));
+      
+      const csvContent = "data:text/csv;charset=utf-8," + headers.join(',') + "\n" + rows.join('\n');
+      const encodedUri = encodeURI(csvContent);
+      const link = document.createElement("a");
+      link.setAttribute("href", encodedUri);
+      link.setAttribute("download", `Finance_Export_${new Date().toISOString().slice(0,10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      showToast('财务报表 CSV 已下载', 'success');
+  };
+
+  const handleBatchImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0];
+      if (!file) return;
+      // In a real app, parse CSV/Excel here.
+      // For mock:
+      setTimeout(() => {
+          showToast(`已成功导入文件: ${file.name} (模拟)`, 'success');
+      }, 800);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
   return (
     <div className="space-y-6 h-full flex flex-col">
       {/* 1. Top Navigation Bar */}
@@ -342,10 +377,18 @@ const Finance: React.FC = () => {
                   </select>
 
                   <div className="ml-auto flex gap-2">
-                      <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-xs flex items-center gap-2 border border-white/10">
+                      <button 
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-xs flex items-center gap-2 border border-white/10"
+                      >
                           <Upload className="w-3.5 h-3.5" /> 批量导入
                       </button>
-                      <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-xs flex items-center gap-2 border border-white/10">
+                      <input type="file" ref={fileInputRef} className="hidden" onChange={handleBatchImport} accept=".csv,.xlsx" />
+                      
+                      <button 
+                        onClick={handleExportCSV}
+                        className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg text-xs flex items-center gap-2 border border-white/10"
+                      >
                           <Download className="w-3.5 h-3.5" /> 导出 CSV
                       </button>
                   </div>

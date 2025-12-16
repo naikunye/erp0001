@@ -14,6 +14,7 @@ import Tracking from './pages/Tracking';
 import Calendar from './pages/Calendar';
 import Marketing from './pages/Marketing';
 import Analytics from './pages/Analytics'; 
+import CalculatorCenter from './pages/CalculatorCenter';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import Integrations from './pages/Integrations'; 
@@ -61,6 +62,7 @@ const MainLayout: React.FC = () => {
       case 'intelligence': return 'AI 实验室 (AI Laboratory)';
       case 'marketing': return '增长引擎 (Growth Engine)';
       case 'analytics': return '深度分析 (Deep Analytics)';
+      case 'calculator': return '智能计算 (Intelligent Calc)';
       case 'calendar': return '运营日历 (Operations Timeline)';
       case 'settings': return '系统配置 (System Config)';
       case 'integrations': return '店铺集成 (Integrations)';
@@ -81,6 +83,7 @@ const MainLayout: React.FC = () => {
       case 'intelligence': return <Intelligence />;
       case 'marketing': return <Marketing />;
       case 'analytics': return <Analytics />;
+      case 'calculator': return <CalculatorCenter />;
       case 'settings': return <Settings />;
       case 'integrations': return <Integrations />;
       case 'suppliers': return <Suppliers />;

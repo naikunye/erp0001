@@ -161,6 +161,12 @@ const InfluencerCRM = () => {
         dispatch({ type: 'UPDATE_INFLUENCER', payload: { ...inf, status: newStatus } });
     };
 
+    const handleCopyEmail = () => {
+        if (!emailDraft) return;
+        navigator.clipboard.writeText(emailDraft);
+        showToast('邮件内容已复制到剪贴板', 'success');
+    };
+
     // --- AI Outreach Logic ---
     const handleOpenOutreach = (inf: Influencer) => {
         setShowOutreachModal(inf);
@@ -361,7 +367,7 @@ const InfluencerCRM = () => {
                                     placeholder="正在生成..."
                                 />
                                 <div className="mt-4 flex justify-end gap-3">
-                                    <button className="px-4 py-2 text-slate-400 hover:text-white text-sm flex items-center gap-2"><Copy className="w-4 h-4"/> 复制</button>
+                                    <button onClick={handleCopyEmail} className="px-4 py-2 text-slate-400 hover:text-white text-sm flex items-center gap-2"><Copy className="w-4 h-4"/> 复制</button>
                                     <button 
                                         onClick={() => { showToast('邮件已发送', 'success'); setShowOutreachModal(null); }}
                                         className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2"
