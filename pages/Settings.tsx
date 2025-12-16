@@ -136,7 +136,9 @@ const Settings: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
   // Supabase specific connection status
-  const [supabaseConnectionStatus, setSupabaseConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+  const [supabaseConnectionStatus, setSupabaseConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>(
+      (state.supabaseConfig.url && state.supabaseConfig.key) ? 'success' : 'idle'
+  );
 
   const [showKey, setShowKey] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -144,13 +146,12 @@ const Settings: React.FC = () => {
   const [showSql, setShowSql] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initial check on mount
+  // Initial check on mount (Re-confirm state logic)
   useEffect(() => {
       if (state.supabaseConfig.url && state.supabaseConfig.key) {
-          // If we have config, we can optimistically set to success or idle
-          // Let's assume idle until tested by user or operation
+          setSupabaseConnectionStatus('success');
       }
-  }, []);
+  }, [state.supabaseConfig]);
 
   const SUPABASE_SQL = `-- 1. 创建 app_backups 表
 create table app_backups (

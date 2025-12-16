@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, X, Menu, ChevronDown, Command, CalendarDays, LogOut, Settings, User } from 'lucide-react';
+import { Bell, Search, X, Menu, ChevronDown, Command, CalendarDays, LogOut, Settings, User, Cloud, RefreshCw } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -10,7 +11,8 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   const [showNotifications, setShowNotifications] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
-  const { dispatch, showToast } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud } = useTanxing();
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const mockNotifications = [
       { id: 1, title: '库存紧急预警', desc: 'SKU: MA-001 库存不足 10 件', time: '10分钟前', type: 'alert' },
@@ -27,6 +29,18 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           window.location.reload();
       }
   };
+
+  const handleCloudSync = async () => {
+      if (!state.supabaseConfig.url || !state.supabaseConfig.key) {
+          showToast('请先在 [系统设置 > 云端同步] 中配置连接', 'warning');
+          return;
+      }
+      setIsSyncing(true);
+      await syncToCloud();
+      setIsSyncing(false);
+  };
+
+  const isCloudConnected = !!(state.supabaseConfig.url && state.supabaseConfig.key);
 
   return (
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
@@ -105,6 +119,16 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         <div className="h-6 w-px bg-white/10"></div>
 
         <div className="flex items-center space-x-4">
+            {/* Cloud Sync Button */}
+            <button 
+                onClick={handleCloudSync}
+                className={`relative p-2 rounded-full transition-all ${isCloudConnected ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-slate-600 hover:text-slate-400'}`}
+                title={isCloudConnected ? `云端已连接 (点击同步)` : "云端未配置"}
+            >
+                {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
+                {isCloudConnected && !isSyncing && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-emerald-500 rounded-full ring-2 ring-[#121217]"></span>}
+            </button>
+
             <button 
                 onClick={() => setShowNotifications(!showNotifications)}
                 className={`relative p-2 rounded-full transition-all ${showNotifications ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
