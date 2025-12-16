@@ -1,8 +1,9 @@
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon, Package, ShoppingCart, Loader2, RotateCcw as ResetIcon, UploadCloud, DownloadCloud, Server, Radio, BarChart4, X, Sun, Layers, Watch, Layout, HardDrive, FileJson, Upload, Download, ChevronDown, ChevronUp, Copy, Terminal } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon, Package, ShoppingCart, Loader2, RotateCcw as ResetIcon, UploadCloud, DownloadCloud, Server, Radio, BarChart4, X, Sun, Layers, Watch, Layout, HardDrive, FileJson, Upload, Download, ChevronDown, ChevronUp, Copy, Terminal, Wifi, CheckCircle } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { Theme } from '../context/TanxingContext';
+import { createClient } from '@supabase/supabase-js';
 
 // --- Sub-Component: Recycle Bin ---
 const RecycleBin = () => {
@@ -133,11 +134,23 @@ const Settings: React.FC = () => {
 
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  
+  // Supabase specific connection status
+  const [supabaseConnectionStatus, setSupabaseConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>('idle');
+
   const [showKey, setShowKey] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [isSavingSupabase, setIsSavingSupabase] = useState(false);
   const [showSql, setShowSql] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Initial check on mount
+  useEffect(() => {
+      if (state.supabaseConfig.url && state.supabaseConfig.key) {
+          // If we have config, we can optimistically set to success or idle
+          // Let's assume idle until tested by user or operation
+      }
+  }, []);
 
   const SUPABASE_SQL = `-- 1. 创建 app_backups 表
 create table app_backups (
@@ -164,13 +177,50 @@ with check (true);`;
       showToast('系统设置已保存', 'success');
   };
 
-  const handleSupabaseSave = () => {
+  const handleSupabaseSave = async () => {
       setIsSavingSupabase(true);
-      setTimeout(() => {
+      setSupabaseConnectionStatus('testing');
+      
+      try {
+          if (!supabaseForm.url || !supabaseForm.key) {
+              throw new Error("请填写完整的 Project URL 和 API Key");
+          }
+
+          // Validate URL format
+          try {
+              new URL(supabaseForm.url);
+          } catch {
+              throw new Error("Project URL 格式不正确");
+          }
+
+          // Create a temporary client just for testing
+          const supabase = createClient(supabaseForm.url, supabaseForm.key);
+          
+          // Try to access the table metadata (head request)
+          // Use a simple select count to verify connectivity and table existence
+          const { error } = await supabase.from('app_backups').select('id', { count: 'exact', head: true });
+          
+          if (error) {
+              console.error("Supabase Error:", error);
+              // Distinguish common errors
+              if (error.code === 'PGRST301' || error.code === '42501') throw new Error("连接成功 but 权限被拒绝 (请检查 RLS 策略)");
+              if (error.code === '401' || error.message.includes('JWT')) throw new Error("API Key 无效或已过期");
+              if (error.message.includes('fetch') || error.message.includes('network')) throw new Error("无法连接 (请检查 URL 或网络状态)");
+              if (error.code === '404' || error.message.includes('relation "app_backups" does not exist')) throw new Error("未找到 app_backups 表 (请运行 SQL)");
+              throw error; // Unknown error
+          }
+
+          // Success path - Save to global state
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
-          showToast('云端配置已更新', 'success');
+          setSupabaseConnectionStatus('success');
+          showToast('✅ 配置已保存，云端连接成功！', 'success');
+      } catch (e: any) {
+          console.error("Supabase Connection Error:", e);
+          setSupabaseConnectionStatus('error');
+          showToast(`❌ 连接失败: ${e.message}`, 'error');
+      } finally {
           setIsSavingSupabase(false);
-      }, 500);
+      }
   };
 
   const handleTestConnection = () => {
@@ -423,7 +473,11 @@ with check (true);`;
                   <div className="flex items-start gap-4">
                       <Server className="w-6 h-6 text-indigo-400 mt-1" />
                       <div>
-                          <h4 className="text-sm font-bold text-white mb-1">Supabase 云端同步</h4>
+                          <h4 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
+                              Supabase 云端同步
+                              {supabaseConnectionStatus === 'success' && <span className="text-xs text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1 animate-pulse"><Wifi className="w-3 h-3" /> 已连接</span>}
+                              {supabaseConnectionStatus === 'error' && <span className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 px-2 py-0.5 rounded-full flex items-center gap-1"><AlertCircle className="w-3 h-3" /> 连接失败</span>}
+                          </h4>
                           <p className="text-xs text-slate-300 leading-relaxed">
                               配置 Supabase 数据库连接，实现多设备间的数据同步与备份。
                               请确保您的 Supabase 数据库包含 <code className="bg-black/40 px-1 py-0.5 rounded border border-white/10">app_backups</code> 表。
@@ -477,10 +531,10 @@ with check (true);`;
                       <button 
                         onClick={handleSupabaseSave} 
                         disabled={isSavingSupabase}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold transition-all shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
+                        className={`w-full px-6 py-2 rounded-lg text-xs font-bold transition-all shadow-lg flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed ${supabaseConnectionStatus === 'success' ? 'bg-emerald-600 hover:bg-emerald-500 text-white' : 'bg-indigo-600 hover:bg-indigo-500 text-white'}`}
                       >
-                          {isSavingSupabase ? <Loader2 className="w-3 h-3 animate-spin"/> : <Save className="w-3 h-3"/>}
-                          {isSavingSupabase ? '保存中...' : '保存配置'}
+                          {isSavingSupabase ? <Loader2 className="w-3 h-3 animate-spin"/> : (supabaseConnectionStatus === 'success' ? <CheckCircle className="w-3 h-3"/> : <Save className="w-3 h-3"/>)}
+                          {isSavingSupabase ? '连接测试中...' : (supabaseConnectionStatus === 'success' ? '配置已保存 (已连接)' : '保存配置并测试连接')}
                       </button>
                   </div>
 
