@@ -1,3 +1,4 @@
+
 export type Page = 'dashboard' | 'inventory' | 'orders' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'integrations' | 'calculator';
 
 export interface User {
@@ -34,6 +35,10 @@ export interface Product {
   logistics?: { method: 'Air' | 'Sea'; carrier: string; trackingNo: string; unitFreightCost: number; targetWarehouse: string };
   economics?: { platformFeePercent: number; creatorFeePercent: number; fixedCost: number; lastLegShipping: number; adCost: number; refundRatePercent?: number };
   deletedAt?: string;
+  // New fields
+  image?: string;
+  lingXingId?: string;
+  notes?: string;
 }
 
 export interface ReplenishmentItem extends Product {

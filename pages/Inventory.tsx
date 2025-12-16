@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -10,7 +11,7 @@ import {
   Plane, Ship, Info, Factory, Image as ImageIcon, History, FileText, Loader2, Bot,
   AlertCircle, TrendingUp, Target, BarChart3, Zap, Megaphone, BrainCircuit,
   Plus, Trash2, MoreHorizontal, CheckSquare, Square, Edit2, Calendar,
-  Clock, ShieldCheck, Truck, Scale, Ruler, Users, Layers, Activity
+  Clock, ShieldCheck, Truck, Scale, Ruler, Users, Layers, Activity, Copy, Upload, ExternalLink
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
@@ -35,7 +36,7 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     }
 
     return (
-        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-[10px] font-bold uppercase w-fit ${color}`}>
+        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-bold uppercase w-fit ${color}`}>
             {icon}
             <span>{type}</span>
         </div>
@@ -57,8 +58,21 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         lifecycle: 'New',
         supplier: '',
         leadTime: 15,
-        itemsPerBox: 20
+        itemsPerBox: 20,
+        lingXingId: '',
+        notes: ''
     });
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setForm(prev => ({ ...prev, image: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
 
     const handleSubmit = () => {
         if (!form.name || !form.sku) {
@@ -85,7 +99,7 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/70" onClick={onClose}>
-            <div className="ios-glass-panel w-full max-w-lg rounded-xl shadow-2xl p-6 animate-in zoom-in-95 border border-white/10" onClick={e => e.stopPropagation()}>
+            <div className="ios-glass-panel w-full max-w-2xl rounded-xl shadow-2xl p-6 animate-in zoom-in-95 border border-white/10" onClick={e => e.stopPropagation()}>
                 <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
                     <h3 className="text-lg font-bold text-white flex items-center gap-2">
                         <Plus className="w-5 h-5 text-indigo-500" />
@@ -94,38 +108,67 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     <button onClick={onClose}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
                 </div>
                 
-                <div className="grid grid-cols-2 gap-4 mb-6">
-                    <div className="col-span-2">
-                        <label className="text-xs text-slate-400 block mb-1">产品名称 Name</label>
-                        <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                <div className="grid grid-cols-3 gap-6 mb-6">
+                    {/* Image Upload Column */}
+                    <div className="col-span-1 flex flex-col gap-4">
+                        <div className="aspect-square bg-black/40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-500 relative overflow-hidden group">
+                            {form.image ? (
+                                <img src={form.image} alt="Preview" className="w-full h-full object-cover" />
+                            ) : (
+                                <>
+                                    <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                                    <span className="text-xs font-medium">上传图片</span>
+                                </>
+                            )}
+                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                <Upload className="w-6 h-6 text-white" />
+                            </div>
+                        </div>
                     </div>
-                    <div>
-                        <label className="text-xs text-slate-400 block mb-1">SKU</label>
-                        <input type="text" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none font-mono uppercase" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-400 block mb-1">类目 Category</label>
-                        <input type="text" value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-400 block mb-1">销售价 ($)</label>
-                        <input type="number" value={form.price} onChange={e => setForm({...form, price: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-400 block mb-1">采购成本 (¥)</label>
-                        <input type="number" value={form.costPrice} onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-400 block mb-1">初始库存</label>
-                        <input type="number" value={form.stock} onChange={e => setForm({...form, stock: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                    </div>
-                    <div>
-                        <label className="text-xs text-slate-400 block mb-1">供应商</label>
-                        <input type="text" value={form.supplier} onChange={e => setForm({...form, supplier: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+
+                    <div className="col-span-2 grid grid-cols-2 gap-4">
+                        <div className="col-span-2">
+                            <label className="text-xs text-slate-400 block mb-1">产品名称 Name</label>
+                            <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                        </div>
+                        <div className="col-span-2">
+                            <label className="text-xs text-slate-400 block mb-1">SKU (支持逗号分隔多个)</label>
+                            <input type="text" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none font-mono uppercase" placeholder="SKU-A, SKU-B" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">类目 Category</label>
+                            <input type="text" value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">领星入库单号</label>
+                            <input type="text" value={form.lingXingId} onChange={e => setForm({...form, lingXingId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" placeholder="LX-..." />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">销售价 ($)</label>
+                            <input type="number" value={form.price} onChange={e => setForm({...form, price: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">采购成本 (¥)</label>
+                            <input type="number" value={form.costPrice} onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">初始库存</label>
+                            <input type="number" value={form.stock} onChange={e => setForm({...form, stock: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                        </div>
+                        <div>
+                            <label className="text-xs text-slate-400 block mb-1">供应商</label>
+                            <input type="text" value={form.supplier} onChange={e => setForm({...form, supplier: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                        </div>
                     </div>
                 </div>
+                
+                <div>
+                    <label className="text-xs text-slate-400 block mb-1">备注 (Notes)</label>
+                    <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full h-20 bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none resize-none" placeholder="添加备注..." />
+                </div>
 
-                <div className="flex justify-end gap-3">
+                <div className="flex justify-end gap-3 mt-6">
                     <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white text-sm transition-colors">取消</button>
                     <button 
                         onClick={handleSubmit} 
@@ -146,33 +189,70 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
 const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ product, onClose }) => {
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
-    const [boxCount, setBoxCount] = useState(8); // Controlled state for box calculator
-    const [calculatedTotal, setCalculatedTotal] = useState(0);
+    
+    // Initial calculation based on props
+    const initialBoxes = Math.ceil((product.stock || 0) / (product.itemsPerBox || 1));
+    const [boxCount, setBoxCount] = useState(initialBoxes);
+    
+    // State for manual override
+    const [calculatedTotal, setCalculatedTotal] = useState(product.stock || 0);
+    const [isManualTotal, setIsManualTotal] = useState(false);
 
     const [formData, setFormData] = useState({
         ...product,
         // Ensure nested objects exist
         dimensions: product.dimensions || { l: 32, w: 24, h: 18 },
         economics: product.economics || { platformFeePercent: 2, creatorFeePercent: 10, fixedCost: 0.3, lastLegShipping: 5.44, adCost: 10, refundRatePercent: 3 },
-        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62 }
+        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62 },
+        lingXingId: product.lingXingId || '',
+        notes: product.notes || ''
     });
 
     const handleSave = () => {
         setIsSaving(true);
+        // Important: Update the stock with the calculated/manual total
+        const updatedProduct = {
+            ...formData,
+            stock: calculatedTotal
+        };
+
         // Simulate processing delay
         setTimeout(() => {
-            dispatch({ type: 'UPDATE_PRODUCT', payload: formData });
+            dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
             showToast('SKU 信息已更新并记录日志', 'success');
             setIsSaving(false);
             onClose();
         }, 600);
     };
 
-    const handleCalculateTotal = () => {
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                setFormData(prev => ({ ...prev, image: reader.result as string }));
+            };
+            reader.readAsDataURL(file);
+        }
+    };
+
+    // Auto-calculate unless manual
+    useEffect(() => {
+        if (!isManualTotal) {
+            const total = boxCount * (formData.itemsPerBox || 1);
+            setCalculatedTotal(total);
+        }
+    }, [boxCount, formData.itemsPerBox, isManualTotal]);
+
+    const handleManualTotalChange = (val: string) => {
+        setIsManualTotal(true);
+        setCalculatedTotal(parseInt(val) || 0);
+    };
+
+    const resetCalculation = () => {
+        setIsManualTotal(false);
         const total = boxCount * (formData.itemsPerBox || 1);
         setCalculatedTotal(total);
-        // Optional: Update stock or just show calculation? Let's just show it for planning
-        showToast(`计算结果: ${boxCount}箱 x ${formData.itemsPerBox}件 = ${total}件`, 'info');
     };
 
     const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (formData.itemsPerBox || 1); 
@@ -218,9 +298,19 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                         
                         <div className="flex gap-6">
                             {/* Image Placeholder */}
-                            <div className="w-40 h-40 bg-black/40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-500 cursor-pointer hover:border-indigo-500/50 hover:text-indigo-400 transition-all shrink-0">
-                                <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                <span className="text-xs font-medium">点击上传</span>
+                            <div className="w-40 h-40 bg-black/40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-500 cursor-pointer hover:border-indigo-500/50 hover:text-indigo-400 transition-all shrink-0 relative overflow-hidden group">
+                                {formData.image ? (
+                                    <img src={formData.image} alt="Product" className="w-full h-full object-cover" />
+                                ) : (
+                                    <>
+                                        <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
+                                        <span className="text-xs font-medium">点击上传</span>
+                                    </>
+                                )}
+                                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
+                                <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
+                                    <Upload className="w-6 h-6 text-white" />
+                                </div>
                             </div>
                             
                             <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-4">
@@ -245,12 +335,15 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={inputClass} />
                                 </div>
                                 <div>
-                                    <label className={labelClass}>SKU (支持多标签，按回车添加)</label>
+                                    <label className={labelClass}>SKU (多标签)</label>
                                     <div className="flex items-center gap-2 w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm focus-within:border-indigo-500 shadow-sm">
-                                        <span className="bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded text-xs flex items-center gap-1 border border-blue-500/30 font-bold">
-                                            <Layers className="w-3 h-3"/> {formData.sku} <X className="w-3 h-3 cursor-pointer hover:text-blue-100"/>
-                                        </span>
-                                        <input type="text" className="bg-transparent outline-none flex-1 min-w-0 h-full py-0.5 text-white" placeholder="" />
+                                        <input 
+                                            type="text" 
+                                            value={formData.sku} 
+                                            onChange={e => setFormData({...formData, sku: e.target.value})}
+                                            className="bg-transparent outline-none flex-1 min-w-0 h-full py-0.5 text-white placeholder-slate-500 font-mono" 
+                                            placeholder="SKU-A, SKU-B..." 
+                                        />
                                     </div>
                                 </div>
                                 <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
@@ -319,7 +412,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                         {/* SECTION 3: Box Settings */}
                         <div className="bg-amber-900/10 border border-amber-500/20 rounded-xl p-5 shadow-lg flex flex-col h-full relative overflow-hidden">
                             <div className="absolute top-0 right-0 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-1 rounded-bl-lg font-bold border-l border-b border-amber-500/20">{boxCount} 箱 | {(totalCBM * boxCount).toFixed(3)} CBM</div>
-                            <h4 className="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold mr-2 border border-amber-500/30">3</span> 箱规设置</h4>
+                            <h4 className="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold mr-2 border border-amber-500/30">3</span> 箱规与入库</h4>
                             
                             <div className="grid grid-cols-3 gap-3 mb-4">
                                 <div>
@@ -336,7 +429,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 </div>
                             </div>
 
-                            <div className="grid grid-cols-2 gap-4">
+                            <div className="grid grid-cols-2 gap-4 mb-4">
                                 <div>
                                     <label className="text-xs font-semibold text-amber-200/70 mb-1 block">每箱数量 (Items/Box)</label>
                                     <div className="relative">
@@ -346,16 +439,33 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 </div>
                                 <div>
                                     <div className="flex justify-between mb-1">
-                                        <label className="text-xs font-semibold text-amber-200/70">备货总数 (Total Pcs)</label>
-                                        <button onClick={handleCalculateTotal} className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline cursor-pointer bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hover:bg-blue-500/20"><Calculator className="w-3 h-3"/> 自动计算</button>
+                                        <label className="text-xs font-semibold text-amber-200/70">备货总数 (Editable)</label>
+                                        <button onClick={resetCalculation} className="text-[10px] text-blue-400 flex items-center gap-1 hover:underline cursor-pointer bg-blue-500/10 px-1.5 py-0.5 rounded border border-blue-500/20 hover:bg-blue-500/20"><Calculator className="w-3 h-3"/> 重置自动计算</button>
                                     </div>
-                                    <input type="number" value={calculatedTotal || ''} readOnly placeholder="点击计算" className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm font-bold text-amber-100" />
+                                    <input 
+                                        type="number" 
+                                        value={calculatedTotal} 
+                                        onChange={(e) => handleManualTotalChange(e.target.value)}
+                                        className={`w-full bg-black/40 border rounded px-3 py-2 text-sm font-bold text-amber-100 outline-none focus:border-amber-500 ${isManualTotal ? 'border-amber-500 ring-1 ring-amber-500/30' : 'border-amber-500/20'}`} 
+                                    />
                                 </div>
+                            </div>
+                            
+                            {/* LingXing ID */}
+                            <div>
+                                <label className="text-xs font-semibold text-amber-200/70 mb-1 block">领星入库单号</label>
+                                <input 
+                                    type="text" 
+                                    value={formData.lingXingId} 
+                                    onChange={e => setFormData({...formData, lingXingId: e.target.value})}
+                                    placeholder="LX-2023..."
+                                    className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm text-amber-100 outline-none focus:border-amber-500 font-mono"
+                                />
                             </div>
                         </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         
                         {/* SECTION 4: Logistics */}
                         <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg">
@@ -410,7 +520,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                         <Scale className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
                                         <input type="number" placeholder="0" className={`${inputClass} pl-9`} />
                                     </div>
-                                    <div className="text-[10px] text-slate-500 text-right mt-1">理论实重: 12.75 kg</div>
+                                    <div className="text-[10px] text-slate-500 text-right mt-1">理论实重: {((calculatedTotal || 0) * (formData.unitWeight || 0)).toFixed(2)} kg</div>
                                 </div>
                                 <div>
                                     <label className={labelClass}>耗材/贴标费 (¥)</label>
@@ -432,7 +542,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                         </div>
 
                         {/* SECTION 5: Sales & Market */}
-                        <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-5 shadow-lg">
+                        <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-5 shadow-lg flex flex-col h-full">
                             <h4 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold mr-2 border border-purple-500/30">5</span> TikTok 销售与竞品 (Market Intel)</h4>
                             
                             <div className="mb-4">
@@ -483,6 +593,17 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    
+                    {/* SECTION 6: Notes */}
+                    <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg mb-6">
+                        <h4 className={sectionTitleClass}>备注信息 (Notes)</h4>
+                        <textarea 
+                            value={formData.notes} 
+                            onChange={e => setFormData({...formData, notes: e.target.value})} 
+                            className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-indigo-500 outline-none resize-none"
+                            placeholder="填写备货注意事项、产品细节说明等..."
+                        />
                     </div>
 
                 </div>
@@ -574,15 +695,22 @@ const Inventory: React.FC = () => {
       setEditingProduct(product);
   };
 
+  const handleCopySku = (sku: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      navigator.clipboard.writeText(sku);
+      showToast(`SKU: ${sku} 已复制`, 'success');
+  }
+
   const handleExportCSV = () => {
-      const headers = ['SKU', 'Name', 'Stock', 'Days Remaining', 'Burn Rate', 'Total Cost'];
+      const headers = ['SKU', 'Name', 'Stock', 'Days Remaining', 'Burn Rate', 'Total Cost', 'Tracking'];
       const rows = replenishmentItems.map(item => [
           item.sku, 
           `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
           item.stock,
           item.daysRemaining,
           item.dailyBurnRate,
-          item.totalInvestment
+          item.totalInvestment,
+          item.logistics?.trackingNo
       ].join(','));
       
       const csvContent = "data:text/csv;charset=utf-8," 
@@ -610,11 +738,11 @@ const Inventory: React.FC = () => {
           {/* Header Section */}
           <div className="p-5 border-b border-white/10 bg-white/5 relative z-10 shrink-0 flex justify-between items-center">
               <div>
-                  <h1 className="text-lg font-bold text-white flex items-center gap-2">
-                      <PackageCheck className="w-5 h-5 text-indigo-500" />
+                  <h1 className="text-xl font-bold text-white flex items-center gap-2">
+                      <PackageCheck className="w-6 h-6 text-indigo-500" />
                       智能备货清单 (Replenishment List)
                   </h1>
-                  <p className="text-[10px] text-slate-400 mt-1">
+                  <p className="text-xs text-slate-400 mt-1">
                       SKU 总数: <span className="text-white font-mono">{replenishmentItems.length}</span> | 
                       资金占用: <span className="text-emerald-400 font-mono">¥{replenishmentItems.reduce((a,b)=>a+b.totalInvestment,0).toLocaleString()}</span>
                   </p>
@@ -627,22 +755,22 @@ const Inventory: React.FC = () => {
                           placeholder="搜索 SKU / 名称..." 
                           value={searchTerm}
                           onChange={e => setSearchTerm(e.target.value)}
-                          className="pl-8 pr-3 py-1.5 bg-black/40 border border-white/10 rounded-lg text-xs text-white w-48 focus:border-indigo-500 outline-none"
+                          className="pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-white w-64 focus:border-indigo-500 outline-none"
                       />
-                      <Search className="w-3.5 h-3.5 text-slate-500 absolute left-2.5 top-2" />
+                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
                   </div>
                   <button 
                       onClick={() => setShowAddModal(true)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-lg shadow-lg transition-all active:scale-95"
+                      className="flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg shadow-lg transition-all active:scale-95"
                   >
-                      <Plus className="w-3.5 h-3.5" /> 添加 SKU
+                      <Plus className="w-4 h-4" /> 添加 SKU
                   </button>
                   <button 
                     onClick={handleExportCSV}
-                    className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
+                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
                     title="导出 CSV"
                   >
-                      <Download className="w-4 h-4" />
+                      <Download className="w-5 h-5" />
                   </button>
               </div>
           </div>
@@ -650,12 +778,12 @@ const Inventory: React.FC = () => {
           {/* List Section (ERP Style) */}
           <div className="flex-1 overflow-y-auto bg-black/20 scrollbar-thin scrollbar-thumb-white/10">
               
-              {/* Table Header with Custom Grid - Optimized widths to reduce gap */}
-              <div className="sticky top-0 z-20 grid grid-cols-[40px_1.5fr_3fr_1.5fr_1.5fr_1fr_1.2fr_80px] gap-3 px-4 py-3 bg-[#0f1218] border-b border-white/10 text-[10px] font-bold text-slate-500 uppercase tracking-wider shadow-lg">
-                  <div className="flex items-center justify-center"><Square className="w-3.5 h-3.5" /></div>
+              {/* Table Header with Custom Grid - Updated for slightly larger font */}
+              <div className="sticky top-0 z-20 grid grid-cols-[40px_1.5fr_3fr_1.5fr_1.5fr_1fr_1.2fr_80px] gap-3 px-4 py-3 bg-[#0f1218] border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider shadow-lg">
+                  <div className="flex items-center justify-center"><Square className="w-4 h-4" /></div>
                   <div>SKU / 阶段</div>
                   <div>产品信息 / 供应商</div>
-                  <div>物流状态</div>
+                  <div>物流状态 (Tracking)</div>
                   <div>资金投入</div>
                   <div>库存数量</div>
                   <div className="text-right">销售表现</div>
@@ -670,83 +798,104 @@ const Inventory: React.FC = () => {
                           {/* 1. Selection */}
                           <div className="flex items-center justify-center">
                               <button onClick={() => toggleSelect(item.id)} className="text-slate-600 hover:text-indigo-500 transition-colors">
-                                  {selectedItems.has(item.id) ? <CheckSquare className="w-4 h-4 text-indigo-500" /> : <Square className="w-4 h-4" />}
+                                  {selectedItems.has(item.id) ? <CheckSquare className="w-5 h-5 text-indigo-500" /> : <Square className="w-5 h-5" />}
                               </button>
                           </div>
 
                           {/* 2. SKU / Status */}
                           <div className="flex flex-col gap-2">
                               <div className="flex items-center gap-2">
-                                  <div className={`w-2 h-2 rounded-full ${item.status === 'out_of_stock' ? 'bg-red-500 animate-pulse' : item.status === 'low_stock' ? 'bg-orange-500' : 'bg-emerald-500'}`}></div>
-                                  <span className="text-sm font-black text-white font-mono tracking-tight">{item.sku}</span>
+                                  <div className={`w-2.5 h-2.5 rounded-full ${item.status === 'out_of_stock' ? 'bg-red-500 animate-pulse' : item.status === 'low_stock' ? 'bg-orange-500' : 'bg-emerald-500'}`}></div>
+                                  <span className="text-base font-black text-white font-mono tracking-tight">{item.sku}</span>
+                                  <button onClick={(e) => handleCopySku(item.sku, e)} className="text-slate-600 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity" title="复制 SKU">
+                                      <Copy className="w-3.5 h-3.5" />
+                                  </button>
                               </div>
                               <StrategyBadge type={item.lifecycle || 'Stable'} />
                           </div>
 
                           {/* 3. Product Info */}
-                          <div className="flex items-start gap-3">
-                              <div className="w-10 h-10 bg-slate-800 rounded border border-white/10 flex items-center justify-center shrink-0">
-                                  <ImageIcon className="w-5 h-5 text-slate-500" />
+                          <div className="flex items-start gap-4">
+                              <div className="w-12 h-12 bg-slate-800 rounded-lg border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
+                                  {item.image ? (
+                                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                                  ) : (
+                                      <ImageIcon className="w-6 h-6 text-slate-500" />
+                                  )}
                               </div>
                               <div className="min-w-0">
-                                  <div className="text-xs font-bold text-slate-200 truncate" title={item.name}>{item.name}</div>
-                                  <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-1">
-                                      <Factory className="w-3 h-3" />
+                                  <div className="text-sm font-bold text-slate-200 truncate" title={item.name}>{item.name}</div>
+                                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
+                                      <Factory className="w-3.5 h-3.5" />
                                       <span className="truncate">{item.supplier || '未指定供应商'}</span>
                                   </div>
-                                  <div className="text-[10px] text-slate-600 font-mono mt-0.5">{item.lastUpdated?.split('T')[0]}</div>
+                                  {item.lingXingId && <div className="text-[10px] text-indigo-400 font-mono mt-0.5">LX: {item.lingXingId}</div>}
                               </div>
                           </div>
 
                           {/* 4. Logistics */}
                           <div>
                               <div className="flex items-center gap-2 mb-1">
-                                  {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5 text-blue-400"/> : <Plane className="w-3.5 h-3.5 text-sky-400"/>}
-                                  <span className="text-xs font-bold text-slate-300">{item.logistics?.method}</span>
+                                  {item.logistics?.method === 'Sea' ? <Ship className="w-4 h-4 text-blue-400"/> : <Plane className="w-4 h-4 text-sky-400"/>}
+                                  <span className="text-sm font-bold text-slate-300">{item.logistics?.method}</span>
                               </div>
-                              <div className="text-[10px] text-slate-500 font-mono">{item.logistics?.trackingNo || '-'}</div>
-                              <div className="text-[10px] text-slate-600 mt-0.5">{item.totalWeight?.toFixed(1)}kg / {item.boxes}box</div>
+                              {item.logistics?.trackingNo ? (
+                                  <a 
+                                    href={`https://t.17track.net/en#nums=${item.logistics.trackingNo}`} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-xs text-blue-400 hover:text-blue-300 hover:underline font-mono flex items-center gap-1"
+                                  >
+                                      {item.logistics.trackingNo} <ExternalLink className="w-3 h-3"/>
+                                  </a>
+                              ) : (
+                                  <span className="text-xs text-slate-600">-</span>
+                              )}
+                              <div className="text-xs text-slate-500 mt-1">{item.totalWeight?.toFixed(1)}kg / {item.boxes}box</div>
                           </div>
 
                           {/* 5. Capital */}
                           <div>
-                              <div className="text-xs font-bold text-emerald-400 font-mono">¥{item.totalInvestment.toLocaleString()}</div>
-                              <div className="text-[9px] text-slate-500 mt-1">货值: ¥{item.goodsCost.toLocaleString()}</div>
-                              <div className="text-[9px] text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
+                              <div className="text-sm font-bold text-emerald-400 font-mono">¥{item.totalInvestment.toLocaleString()}</div>
+                              <div className="text-xs text-slate-500 mt-1">货值: ¥{item.goodsCost.toLocaleString()}</div>
+                              <div className="text-xs text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
                           </div>
 
                           {/* 6. Stock */}
                           <div>
-                              <div className="text-sm font-bold text-white font-mono">{item.stock} <span className="text-[10px] text-slate-500 font-sans font-normal">件</span></div>
-                              <div className={`text-[10px] font-bold mt-1 ${item.daysRemaining < 30 ? 'text-red-400' : 'text-emerald-500'}`}>
+                              <div className="text-base font-bold text-white font-mono">{item.stock} <span className="text-xs text-slate-500 font-sans font-normal">件</span></div>
+                              <div className={`text-xs font-bold mt-1 ${item.daysRemaining < 30 ? 'text-red-400' : 'text-emerald-500'}`}>
                                   可售: {item.daysRemaining} 天
                               </div>
-                              <div className="w-full bg-slate-800 h-1 mt-1 rounded-full overflow-hidden">
+                              <div className="w-full bg-slate-800 h-1.5 mt-2 rounded-full overflow-hidden">
                                   <div className={`h-full ${item.daysRemaining < 20 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(100, (item.daysRemaining/60)*100)}%`}}></div>
                               </div>
                           </div>
 
                           {/* 7. Sales Performance */}
                           <div className="text-right">
-                              <div className="text-xs font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-[9px] text-slate-500">/30天</span></div>
-                              <div className={`text-[10px] font-bold mt-0.5 flex items-center justify-end gap-1 ${item.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {item.growth >= 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingUp className="w-3 h-3 rotate-180"/>}
+                              <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-xs text-slate-500">/30天</span></div>
+                              <div className={`text-xs font-bold mt-1 flex items-center justify-end gap-1 ${item.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                  {item.growth >= 0 ? <TrendingUp className="w-3.5 h-3.5"/> : <TrendingUp className="w-3.5 h-3.5 rotate-180"/>}
                                   {Math.abs(item.growth).toFixed(1)}%
                               </div>
-                              <div className="text-[9px] text-slate-600 mt-0.5">日销: {item.dailyBurnRate} 件</div>
+                              <div className="text-xs text-slate-500 mt-1">日销: {item.dailyBurnRate} 件</div>
                           </div>
 
                           {/* 8. Actions */}
                           <div className="flex justify-center">
                               <button 
                                 onClick={(e) => handleEditClick(item, e)}
-                                className="p-1.5 hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-400 rounded-lg transition-colors"
+                                className="p-2 hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-400 rounded-lg transition-colors"
+                                title="编辑 SKU"
                               >
                                   <Edit2 className="w-4 h-4" />
                               </button>
                               <button 
                                 onClick={(e) => handleDeleteSKU(item.id, e)}
-                                className="p-1.5 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-colors ml-1"
+                                className="p-2 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-colors ml-1"
+                                title="删除 SKU"
                               >
                                   <Trash2 className="w-4 h-4" />
                               </button>
