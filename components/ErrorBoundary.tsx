@@ -1,4 +1,3 @@
-
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 
@@ -30,8 +29,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   public render() {
     const { hasError, error } = this.state;
-    // Explicitly cast this.props to ensure type safety if inference fails
-    const { children, fallback } = this.props as ErrorBoundaryProps;
+    const { children, fallback } = this.props;
 
     if (hasError) {
       if (fallback) return fallback;

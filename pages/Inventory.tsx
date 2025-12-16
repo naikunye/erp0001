@@ -499,42 +499,45 @@ const Inventory: React.FC = () => {
 
   // --- Logic ---
   const replenishmentItems = useMemo(() => {
-      return state.products.map(p => {
-          const burnRate = p.dailyBurnRate || 1; // Daily sales
-          const dos = Math.floor(p.stock / (burnRate || 1)); // Days of Stock
-          const leadTime = p.leadTime || 30;
-          const safetyStock = p.safetyStockDays || 15;
-          const reorderPoint = leadTime + safetyStock;
-          
-          // Metrics
-          const totalInvestment = p.stock * (p.costPrice || 0); // Total capital in stock (CNY)
-          const freightCost = p.stock * (p.logistics?.unitFreightCost || 0);
-          const goodsCost = totalInvestment - freightCost;
-          
-          // Sales (Mock growth for demo)
-          const revenue30d = burnRate * 30 * p.price;
-          const growth = (Math.random() * 40) - 10; // -10% to +30%
-          const profit = revenue30d * 0.25; // 25% margin estimate
+      // Filter out deleted products!
+      return state.products
+          .filter(p => !p.deletedAt)
+          .map(p => {
+              const burnRate = p.dailyBurnRate || 1; // Daily sales
+              const dos = Math.floor(p.stock / (burnRate || 1)); // Days of Stock
+              const leadTime = p.leadTime || 30;
+              const safetyStock = p.safetyStockDays || 15;
+              const reorderPoint = leadTime + safetyStock;
+              
+              // Metrics
+              const totalInvestment = p.stock * (p.costPrice || 0); // Total capital in stock (CNY)
+              const freightCost = p.stock * (p.logistics?.unitFreightCost || 0);
+              const goodsCost = totalInvestment - freightCost;
+              
+              // Sales (Mock growth for demo)
+              const revenue30d = burnRate * 30 * p.price;
+              const growth = (Math.random() * 40) - 10; // -10% to +30%
+              const profit = revenue30d * 0.25; // 25% margin estimate
 
-          return {
-              ...p,
-              dailyBurnRate: burnRate,
-              daysRemaining: dos,
-              safetyStock: safetyStock,
-              reorderPoint,
-              totalInvestment,
-              freightCost,
-              goodsCost,
-              revenue30d,
-              growth,
-              profit,
-              totalWeight: p.stock * (p.unitWeight || 0),
-              boxes: Math.ceil(p.stock / (p.itemsPerBox || 1))
-          };
-      }).filter(p => 
-          p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-          p.sku.toLowerCase().includes(searchTerm.toLowerCase())
-      ).sort((a, b) => a.daysRemaining - b.daysRemaining); // Sort by urgency (low stock first)
+              return {
+                  ...p,
+                  dailyBurnRate: burnRate,
+                  daysRemaining: dos,
+                  safetyStock: safetyStock,
+                  reorderPoint,
+                  totalInvestment,
+                  freightCost,
+                  goodsCost,
+                  revenue30d,
+                  growth,
+                  profit,
+                  totalWeight: p.stock * (p.unitWeight || 0),
+                  boxes: Math.ceil(p.stock / (p.itemsPerBox || 1))
+              };
+          }).filter(p => 
+              p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+              p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+          ).sort((a, b) => a.daysRemaining - b.daysRemaining); // Sort by urgency (low stock first)
   }, [state.products, searchTerm]);
 
   const toggleSelect = (id: string) => {
@@ -696,24 +699,30 @@ const Inventory: React.FC = () => {
                               </div>
                           </div>
 
-                          {/* 7. Sales Performance */}
-                          <div className="col-span-1 text-right">
-                              <div className="text-sm font-bold text-white font-mono">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
-                              <div className={`text-[10px] font-bold flex items-center justify-end gap-0.5 ${item.growth > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {item.growth > 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingUp className="w-3 h-3 rotate-180"/>}
-                                  {Math.abs(item.growth).toFixed(1)}%
+                          {/* 7. Sales Performance (Hide on Hover) */}
+                          <div className="col-span-1 text-right relative">
+                              {/* Default Content */}
+                              <div className="group-hover:opacity-0 transition-opacity duration-200">
+                                  <div className="text-sm font-bold text-white font-mono">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+                                  <div className={`text-[10px] font-bold flex items-center justify-end gap-0.5 ${item.growth > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                      {item.growth > 0 ? <TrendingUp className="w-3 h-3"/> : <TrendingUp className="w-3 h-3 rotate-180"/>}
+                                      {Math.abs(item.growth).toFixed(1)}%
+                                  </div>
+                                  <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Profit: ${item.profit.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
                               </div>
-                              <div className="text-[10px] text-slate-500 mt-0.5 font-mono">Profit: ${item.profit.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
-                          </div>
 
-                          {/* Actions (Hover) */}
-                          <div className="absolute right-2 top-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button onClick={(e) => handleEditClick(item, e)} className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-lg transition-colors border border-indigo-400/30" title="编辑">
-                                  <Edit2 className="w-3.5 h-3.5" />
-                              </button>
-                              <button onClick={(e) => handleDeleteSKU(item.id, e)} className="p-1.5 bg-red-600/20 hover:bg-red-600 text-red-400 hover:text-white rounded border border-red-600/30 transition-colors" title="删除">
-                                  <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              {/* Hover Actions (Overlap in the same space) */}
+                              <div className="absolute inset-0 flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 pointer-events-none group-hover:pointer-events-auto">
+                                  <div className="flex bg-slate-900/90 backdrop-blur rounded-lg p-1 border border-white/10 shadow-xl">
+                                      <button onClick={(e) => handleEditClick(item, e)} className="p-2 hover:bg-indigo-600 hover:text-white text-slate-400 rounded transition-colors" title="编辑">
+                                          <Edit2 className="w-4 h-4" />
+                                      </button>
+                                      <div className="w-px bg-white/10 mx-1"></div>
+                                      <button onClick={(e) => handleDeleteSKU(item.id, e)} className="p-2 hover:bg-red-600 hover:text-white text-slate-400 rounded transition-colors" title="删除">
+                                          <Trash2 className="w-4 h-4" />
+                                      </button>
+                                  </div>
+                              </div>
                           </div>
 
                       </div>
