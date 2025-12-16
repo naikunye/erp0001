@@ -4,7 +4,7 @@ import { Shipment } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { 
   Truck, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, 
-  Search, Plus, MoreHorizontal, Globe, Edit2, Loader2, Bot, X 
+  Search, Plus, MoreHorizontal, Globe, Edit2, Loader2, Bot, X, Trash2, Save
 } from 'lucide-react';
 
 const Tracking: React.FC = () => {
@@ -13,6 +13,10 @@ const Tracking: React.FC = () => {
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
+
+  // Edit Modal State
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<Shipment>>({});
 
   // Filter shipments
   const filteredShipments = state.shipments.filter(s => 
@@ -57,8 +61,32 @@ const Tracking: React.FC = () => {
     }
   };
 
+  // --- CRUD Handlers ---
+
   const handleEditClick = () => {
-      showToast('编辑功能开发中', 'info');
+      if (!selectedShipment) return;
+      setEditForm({ ...selectedShipment });
+      setShowEditModal(true);
+  };
+
+  const handleSaveEdit = () => {
+      if (!selectedShipment || !editForm.id) return;
+      
+      const updatedShipment = { ...selectedShipment, ...editForm } as Shipment;
+      
+      dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedShipment });
+      setSelectedShipment(updatedShipment); // Update local view
+      setShowEditModal(false);
+      showToast('物流信息已更新', 'success');
+  };
+
+  const handleDelete = () => {
+      if (!selectedShipment) return;
+      if (confirm(`确定要删除运单 ${selectedShipment.trackingNo} 吗？`)) {
+          dispatch({ type: 'DELETE_SHIPMENT', payload: selectedShipment.id });
+          setSelectedShipment(null);
+          showToast('物流记录已删除', 'info');
+      }
   };
 
   const getStatusColor = (status: Shipment['status']) => {
@@ -170,17 +198,23 @@ const Tracking: React.FC = () => {
                        <div className="flex gap-2">
                            <button 
                                onClick={handleEditClick}
-                               className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
+                               className="px-3 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
                            >
                                <Edit2 className="w-3 h-3" /> 编辑
                            </button>
                            <button 
+                               onClick={handleDelete}
+                               className="px-3 py-2 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
+                           >
+                               <Trash2 className="w-3 h-3" /> 删除
+                           </button>
+                           <button 
                                onClick={handleAnalyze}
                                disabled={isAnalyzing}
-                               className="px-4 py-2 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
+                               className="px-3 py-2 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
                            >
                                {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
-                               AI 智能分析
+                               AI 分析
                            </button>
                        </div>
                   </div>
@@ -224,6 +258,91 @@ const Tracking: React.FC = () => {
               </div>
           )}
       </div>
+
+      {/* Edit Modal */}
+      {showEditModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowEditModal(false)}>
+              <div className="ios-glass-panel w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                  <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
+                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                          <Edit2 className="w-5 h-5 text-indigo-500" /> 编辑物流信息
+                      </h3>
+                      <button onClick={() => setShowEditModal(false)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
+                  </div>
+                  
+                  <div className="space-y-4">
+                      <div>
+                          <label className="text-xs text-slate-400 block mb-1">运单号 (Tracking No)</label>
+                          <input 
+                              type="text" 
+                              value={editForm.trackingNo || ''} 
+                              onChange={e => setEditForm({...editForm, trackingNo: e.target.value})}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white font-mono"
+                          />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="text-xs text-slate-400 block mb-1">承运商 (Carrier)</label>
+                              <select 
+                                  value={editForm.carrier || 'DHL'} 
+                                  onChange={e => setEditForm({...editForm, carrier: e.target.value as any})}
+                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
+                              >
+                                  <option value="DHL">DHL</option>
+                                  <option value="FedEx">FedEx</option>
+                                  <option value="UPS">UPS</option>
+                                  <option value="USPS">USPS</option>
+                                  <option value="Matson">Matson</option>
+                                  <option value="Cosco">Cosco</option>
+                                  <option value="Other">Other</option>
+                              </select>
+                          </div>
+                          <div>
+                              <label className="text-xs text-slate-400 block mb-1">状态 (Status)</label>
+                              <select 
+                                  value={editForm.status || 'Pending'} 
+                                  onChange={e => setEditForm({...editForm, status: e.target.value as any})}
+                                  className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
+                              >
+                                  <option value="Pending">Pending</option>
+                                  <option value="In Transit">In Transit</option>
+                                  <option value="Delivered">Delivered</option>
+                                  <option value="Exception">Exception</option>
+                              </select>
+                          </div>
+                      </div>
+                      <div>
+                          <label className="text-xs text-slate-400 block mb-1">商品名称 (Product)</label>
+                          <input 
+                              type="text" 
+                              value={editForm.productName || ''} 
+                              onChange={e => setEditForm({...editForm, productName: e.target.value})}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
+                          />
+                      </div>
+                      <div>
+                          <label className="text-xs text-slate-400 block mb-1">备注 (Notes)</label>
+                          <textarea 
+                              value={editForm.notes || ''} 
+                              onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white h-20 resize-none focus:outline-none focus:border-indigo-500"
+                              placeholder="添加备注信息..."
+                          />
+                      </div>
+                  </div>
+
+                  <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-white/10">
+                      <button onClick={() => setShowEditModal(false)} className="px-4 py-2 text-slate-400 hover:text-white text-sm transition-colors">取消</button>
+                      <button 
+                          onClick={handleSaveEdit}
+                          className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2"
+                      >
+                          <Save className="w-4 h-4" /> 保存修改
+                      </button>
+                  </div>
+              </div>
+          </div>
+      )}
     </div>
   );
 };
