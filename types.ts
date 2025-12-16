@@ -291,6 +291,7 @@ export interface Shipment {
   events: LogisticsEvent[];
   productName?: string;
   lastUpdate: string;
+  notes?: string;
 }
 
 export type EventType = 'logistics' | 'marketing' | 'finance' | 'product' | 'holiday' | 'stockout';

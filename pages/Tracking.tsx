@@ -4,7 +4,8 @@ import {
   Search, Map, Truck, Package, Clock, AlertTriangle, 
   CheckCircle2, Plus, ArrowRight, Loader2, Bot, Sparkles, Navigation,
   Trash2, RefreshCw, MoreHorizontal, FileText, Save, X, Globe,
-  AlertOctagon, Plane, Ship, AlertCircle, DollarSign, Zap, Anchor, Shield
+  AlertOctagon, Plane, Ship, AlertCircle, DollarSign, Zap, Anchor, Shield,
+  Edit2
 } from 'lucide-react';
 import { GoogleGenAI } from "@google/genai";
 import { Shipment, LogisticsEvent } from '../types';
@@ -19,7 +20,7 @@ const Tracking: React.FC = () => {
   
   // Modal States
   const [showAddModal, setShowAddModal] = useState(false);
-  const [addMode, setAddMode] = useState<'auto' | 'manual'>('auto');
+  const [addMode, setAddMode] = useState<'auto' | 'manual' | 'edit'>('auto');
   
   // Route Planner State
   const [showPlannerModal, setShowPlannerModal] = useState(false);
@@ -41,6 +42,8 @@ const Tracking: React.FC = () => {
       origin: 'China',
       destination: 'USA',
       productName: '',
+      estimatedDelivery: '',
+      notes: '',
       events: []
   });
 
@@ -89,6 +92,23 @@ const Tracking: React.FC = () => {
           }
           showToast('物流记录已删除', 'info');
       }
+  };
+
+  const handleEditClick = () => {
+      if (!selectedShipment) return;
+      setManualForm({
+          trackingNo: selectedShipment.trackingNo,
+          carrier: selectedShipment.carrier,
+          status: selectedShipment.status,
+          origin: selectedShipment.origin,
+          destination: selectedShipment.destination,
+          productName: selectedShipment.productName,
+          estimatedDelivery: selectedShipment.estimatedDelivery,
+          notes: selectedShipment.notes || '',
+          events: selectedShipment.events
+      });
+      setAddMode('edit');
+      setShowAddModal(true);
   };
 
   const handleRefreshStatus = async () => {
@@ -192,36 +212,54 @@ const Tracking: React.FC = () => {
           return;
       }
 
-      const events = manualForm.events && manualForm.events.length > 0 ? manualForm.events : [
-          {
-              date: new Date().toISOString().split('T')[0],
-              time: new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}),
-              location: manualForm.origin!,
-              description: 'Shipment record created',
-              status: 'Normal'
-          }
-      ];
+      if (addMode === 'edit' && selectedShipment) {
+           const updatedShipment: Shipment = {
+              ...selectedShipment,
+              trackingNo: manualForm.trackingNo || selectedShipment.trackingNo,
+              carrier: manualForm.carrier as any,
+              status: manualForm.status as any,
+              origin: manualForm.origin!,
+              destination: manualForm.destination!,
+              estimatedDelivery: manualForm.estimatedDelivery || selectedShipment.estimatedDelivery,
+              productName: manualForm.productName || selectedShipment.productName,
+              notes: manualForm.notes || '',
+           };
+           dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedShipment });
+           setSelectedShipment(updatedShipment);
+           showToast("运单信息已更新", "success");
+      } else {
+          const events = manualForm.events && manualForm.events.length > 0 ? manualForm.events : [
+              {
+                  date: new Date().toISOString().split('T')[0],
+                  time: new Date().toLocaleTimeString('en-US', {hour: '2-digit', minute:'2-digit'}),
+                  location: manualForm.origin!,
+                  description: 'Shipment record created',
+                  status: 'Normal'
+              }
+          ];
 
-      const newShipment: Shipment = {
-          id: `SH-${Date.now()}`,
-          trackingNo: manualForm.trackingNo,
-          carrier: manualForm.carrier as any,
-          status: manualForm.status as any,
-          origin: manualForm.origin!,
-          destination: manualForm.destination!,
-          estimatedDelivery: manualForm.estimatedDelivery || new Date().toISOString().split('T')[0],
-          productName: manualForm.productName || 'Standard Parcel',
-          lastUpdate: events[0].description,
-          events: events as LogisticsEvent[]
-      };
+          const newShipment: Shipment = {
+              id: `SH-${Date.now()}`,
+              trackingNo: manualForm.trackingNo,
+              carrier: manualForm.carrier as any,
+              status: manualForm.status as any,
+              origin: manualForm.origin!,
+              destination: manualForm.destination!,
+              estimatedDelivery: manualForm.estimatedDelivery || new Date().toISOString().split('T')[0],
+              productName: manualForm.productName || 'Standard Parcel',
+              lastUpdate: events[0].description,
+              events: events as LogisticsEvent[],
+              notes: manualForm.notes || ''
+          };
 
-      dispatch({ type: 'ADD_SHIPMENT', payload: newShipment });
-      setSelectedShipment(newShipment);
+          dispatch({ type: 'ADD_SHIPMENT', payload: newShipment });
+          setSelectedShipment(newShipment);
+          showToast("运单已添加", "success");
+      }
+
       setShowAddModal(false);
-      
-      setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', events: [] });
+      setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', notes: '', events: [] });
       setAddMode('auto');
-      showToast("运单已添加", "success");
   };
 
   const handleAnalyze = async () => {
@@ -340,7 +378,7 @@ const Tracking: React.FC = () => {
                       </button>
                       <button 
                           onClick={() => {
-                              setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', events: [] });
+                              setManualForm({ trackingNo: '', productName: '', origin: 'China', destination: 'USA', notes: '', events: [] });
                               setAddMode('auto');
                               setShowAddModal(true);
                           }}
@@ -503,20 +541,36 @@ const Tracking: React.FC = () => {
                                     <Globe className="w-3 h-3" /> 官网查询
                                 </a>
                            </div>
-                           <div className="text-xs text-slate-400 flex items-center gap-2">
-                               <span className="bg-white/5 px-2 py-0.5 rounded text-slate-300">{selectedShipment.productName}</span>
-                               <span>预计送达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery}</span></span>
+                           <div className="text-xs text-slate-400 flex flex-col gap-1">
+                               <div className="flex items-center gap-2">
+                                   <span className="bg-white/5 px-2 py-0.5 rounded text-slate-300">{selectedShipment.productName}</span>
+                                   <span>预计送达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery}</span></span>
+                               </div>
+                               {selectedShipment.notes && (
+                                   <div className="mt-2 text-xs text-slate-400 bg-white/5 p-2 rounded border border-white/5">
+                                       <span className="font-bold text-slate-500 mr-1">备注:</span>
+                                       {selectedShipment.notes}
+                                   </div>
+                               )}
                            </div>
                        </div>
                        
-                       <button 
-                           onClick={handleAnalyze}
-                           disabled={isAnalyzing}
-                           className="px-4 py-2 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
-                       >
-                           {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
-                           AI 智能分析
-                       </button>
+                       <div className="flex gap-2">
+                           <button 
+                               onClick={handleEditClick}
+                               className="px-4 py-2 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
+                           >
+                               <Edit2 className="w-3 h-3" /> 编辑
+                           </button>
+                           <button 
+                               onClick={handleAnalyze}
+                               disabled={isAnalyzing}
+                               className="px-4 py-2 bg-indigo-600/20 text-indigo-300 border border-indigo-500/30 hover:bg-indigo-600 hover:text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
+                           >
+                               {isAnalyzing ? <Loader2 className="w-3 h-3 animate-spin" /> : <Bot className="w-3 h-3" />}
+                               AI 智能分析
+                           </button>
+                       </div>
                   </div>
 
                   {/* AI Analysis Result */}
@@ -682,7 +736,7 @@ const Tracking: React.FC = () => {
               <div className="ios-glass-panel w-full max-w-lg rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
                   <div className="flex justify-between items-center mb-6">
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                          <Plus className="w-5 h-5 text-indigo-500" /> 新增物流追踪
+                          <Plus className="w-5 h-5 text-indigo-500" /> {addMode === 'edit' ? '编辑运单信息' : '新增物流追踪'}
                       </h3>
                       <button onClick={() => setShowAddModal(false)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
                   </div>
@@ -754,8 +808,36 @@ const Tracking: React.FC = () => {
                               <input type="text" value={manualForm.productName} onChange={e => setManualForm({...manualForm, productName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" placeholder="e.g. 电子配件" />
                           </div>
                           
+                          {/* NEW: Status & Date inputs for manual/edit mode */}
+                          <div className="grid grid-cols-2 gap-4">
+                               <div>
+                                    <label className="text-xs text-slate-400 block mb-1">当前状态</label>
+                                    <select value={manualForm.status} onChange={e => setManualForm({...manualForm, status: e.target.value as any})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white">
+                                        <option value="In Transit">In Transit</option>
+                                        <option value="Delivered">Delivered</option>
+                                        <option value="Exception">Exception</option>
+                                        <option value="Pending">Pending</option>
+                                    </select>
+                               </div>
+                               <div>
+                                    <label className="text-xs text-slate-400 block mb-1">预计送达</label>
+                                    <input type="date" value={manualForm.estimatedDelivery} onChange={e => setManualForm({...manualForm, estimatedDelivery: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white" />
+                               </div>
+                          </div>
+
+                          {/* Remarks / Notes field */}
+                          <div>
+                              <label className="text-xs text-slate-400 block mb-1">备注 (商品明细/特殊说明)</label>
+                              <textarea 
+                                  value={manualForm.notes} 
+                                  onChange={e => setManualForm({...manualForm, notes: e.target.value})} 
+                                  className="w-full h-20 bg-black/40 border border-white/10 rounded p-2 text-sm text-white resize-none"
+                                  placeholder="例如：包含 100件 SKU-A, 50件 SKU-B..."
+                              />
+                          </div>
+                          
                           <button onClick={handleManualSubmit} className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl mt-4">
-                              保存运单
+                              {addMode === 'edit' ? '更新运单' : '保存运单'}
                           </button>
                       </div>
                   )}
