@@ -438,7 +438,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                             </div>
 
                             <div className="border-t border-purple-500/20 pt-4 mt-2">
-                                <h5 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-1"><Zap className="w-3 h-3"/> TikTok Cost Structure</h5>
+                                <h5 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-1"><Zap className="w-3 h-3"/> TikTok 成本结构</h5>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
                                         <label className="text-[10px] font-bold text-slate-400 block mb-1">平台佣金 (%)</label>

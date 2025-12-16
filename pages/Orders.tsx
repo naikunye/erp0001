@@ -17,8 +17,8 @@ const Orders: React.FC = () => {
   // Automation Modal State
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [rules, setRules] = useState<AutomationRule[]>([
-      { id: 'R1', name: 'Auto VIP Tag', active: true, trigger: 'Order Paid', conditions: [{ field: 'Total', operator: '>', value: 500 }], action: { type: 'Add Tag', value: 'VIP' }, executions: 12 },
-      { id: 'R2', name: 'Flag High Risk', active: true, trigger: 'Order Created', conditions: [{ field: 'Country', operator: '==', value: 'Nigeria' }], action: { type: 'Add Tag', value: 'High Risk' }, executions: 3 }
+      { id: 'R1', name: '自动标记 VIP', active: true, trigger: 'Order Paid', conditions: [{ field: 'Total', operator: '>', value: 500 }], action: { type: 'Add Tag', value: 'VIP' }, executions: 12 },
+      { id: 'R2', name: '高风险预警', active: true, trigger: 'Order Created', conditions: [{ field: 'Country', operator: '==', value: 'Nigeria' }], action: { type: 'Add Tag', value: 'High Risk' }, executions: 3 }
   ]);
 
   // Shipping Modal State
@@ -64,7 +64,6 @@ const Orders: React.FC = () => {
       let totalFees = 0;
       let totalFreight = 0;
       
-      // Calculate based on line items if available, or estimate
       if (selectedOrder.lineItems && selectedOrder.lineItems.length > 0) {
           selectedOrder.lineItems.forEach(item => {
               const product = state.products.find(p => p.id === item.productId);
@@ -79,29 +78,25 @@ const Orders: React.FC = () => {
               }
           });
       } else {
-          // Estimate if no line items (Fallback)
           totalCost = selectedOrder.total * 0.3;
           totalFees = selectedOrder.total * 0.15;
           totalFreight = 5 * selectedOrder.itemsCount;
       }
 
-      // Apply adjustments
       totalFreight += freightAdjustment;
       totalFees += feeAdjustment;
 
       const netProfit = selectedOrder.total - totalCost - totalFees - totalFreight;
       const margin = selectedOrder.total > 0 ? (netProfit / selectedOrder.total) * 100 : 0;
 
-      // Waterfall Data Construction
       const waterfallData = [
-          { name: 'Revenue', amount: selectedOrder.total, fill: '#10b981' }, // Green
-          { name: 'COGS', amount: -totalCost, fill: '#ef4444' }, // Red
-          { name: 'Fees', amount: -totalFees, fill: '#f59e0b' }, // Orange
-          { name: 'Freight', amount: -totalFreight, fill: '#3b82f6' }, // Blue
+          { name: 'Revenue', amount: selectedOrder.total, fill: '#10b981' }, 
+          { name: 'COGS', amount: -totalCost, fill: '#ef4444' }, 
+          { name: 'Fees', amount: -totalFees, fill: '#f59e0b' }, 
+          { name: 'Freight', amount: -totalFreight, fill: '#3b82f6' }, 
           { name: 'Net Profit', amount: netProfit, fill: netProfit > 0 ? '#10b981' : '#ef4444', isTotal: true }
       ];
 
-      // Prepare for Recharts
       let currentStack = 0;
       const chartData = waterfallData.map((d, i) => {
           if (d.isTotal) {
@@ -159,7 +154,6 @@ const Orders: React.FC = () => {
   const handleMarkPaid = (orderId: string) => {
       dispatch({ type: 'PAY_ORDER', payload: orderId });
       showToast('订单已标记为支付，收入已记账', 'success');
-      // Update local state if selected
       if (selectedOrder && selectedOrder.id === orderId) {
           setSelectedOrder({ ...selectedOrder, paymentStatus: 'paid' });
       }
@@ -203,7 +197,7 @@ const Orders: React.FC = () => {
   };
 
   const handleOpenEdit = (order: Order) => {
-      setOrderForm(JSON.parse(JSON.stringify(order))); // Deep copy
+      setOrderForm(JSON.parse(JSON.stringify(order))); 
       setIsEditing(true);
       setShowOrderModal(true);
   };
@@ -237,7 +231,6 @@ const Orders: React.FC = () => {
 
       setIsSaving(true);
       
-      // Simulate API/Processing Delay
       setTimeout(() => {
           if (isEditing && orderForm.id) {
               dispatch({ type: 'UPDATE_ORDER', payload: orderForm as Order });
@@ -263,12 +256,9 @@ const Orders: React.FC = () => {
       const rule = rules.find(r => r.id === ruleId);
       if (!rule) return;
 
-      // Simulate Scanning
       let matchedCount = 0;
       state.orders.forEach(o => {
-          // Simple condition check mock
           if (rule.conditions[0].field === 'Total' && o.total > rule.conditions[0].value) {
-              // Apply Tag (Mock update)
               if (!o.automationTags?.includes(rule.action.value)) {
                   matchedCount++;
                   const updatedOrder = { ...o, automationTags: [...(o.automationTags || []), rule.action.value] };
@@ -277,7 +267,6 @@ const Orders: React.FC = () => {
           }
       });
 
-      // Update Rule Stats
       setRules(prev => prev.map(r => r.id === ruleId ? { ...r, executions: r.executions + matchedCount } : r));
       showToast(`规则执行完毕: ${matchedCount} 个订单被标记为 ${rule.action.value}`, 'success');
   };
@@ -442,7 +431,7 @@ const Orders: React.FC = () => {
         </div>
       )}
 
-      {/* Rules Engine Modal (No changes here, keeping brevity) */}
+      {/* Rules Engine Modal */}
       {showRulesModal && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowRulesModal(false)}>
               <div className="ios-glass-panel w-full max-w-2xl h-[70vh] rounded-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -469,7 +458,7 @@ const Orders: React.FC = () => {
                                   <div className="flex items-center gap-4">
                                       <div className="text-right">
                                           <div className="text-xl font-bold text-slate-300 font-mono">{rule.executions}</div>
-                                          <div className="text-[10px] text-slate-500">Executions</div>
+                                          <div className="text-[10px] text-slate-500">次执行</div>
                                       </div>
                                       <button 
                                         onClick={() => handleRunRule(rule.id)}
@@ -492,7 +481,7 @@ const Orders: React.FC = () => {
                             }}
                             className="w-full py-3 border-2 border-dashed border-white/10 rounded-xl text-slate-500 text-sm font-bold hover:border-indigo-500/50 hover:text-indigo-400 transition-all flex items-center justify-center gap-2"
                           >
-                              <Plus className="w-4 h-4" /> 添加新规则 (Demo)
+                              <Plus className="w-4 h-4" /> 添加新规则
                           </button>
                       </div>
                   </div>
@@ -513,7 +502,6 @@ const Orders: React.FC = () => {
                   </div>
                   
                   <div className="p-6 overflow-y-auto flex-1 bg-black/20 space-y-6">
-                      {/* ... (Existing form fields remain same) ... */}
                       <div className="grid grid-cols-2 gap-4">
                           <div>
                               <label className="text-xs text-slate-400 block mb-1">客户名称 *</label>
@@ -595,7 +583,6 @@ const Orders: React.FC = () => {
           </div>
       )}
 
-      {/* Order Detail Modal and Shipping Modal remain largely same, just ensuring style consistency via global CSS */}
       {selectedOrder && !showShipModal && !showOrderModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-black/60" onClick={handleCloseOrder}>
              <div className="ios-glass-panel w-full max-w-3xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -606,7 +593,7 @@ const Orders: React.FC = () => {
                     </div>
                     <div className="flex gap-2">
                         <button onClick={() => setActiveTab('details')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${activeTab === 'details' ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white'}`}>基础信息</button>
-                        <button onClick={() => setActiveTab('profit')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 ${activeTab === 'profit' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30' : 'text-slate-500 hover:text-white'}`}><Calculator className="w-3 h-3" /> 利润透视 (New)</button>
+                        <button onClick={() => setActiveTab('profit')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 ${activeTab === 'profit' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30' : 'text-slate-500 hover:text-white'}`}><Calculator className="w-3 h-3" /> 利润透视</button>
                     </div>
                     <div className="flex items-center gap-2">
                         <button onClick={() => { setShowOrderModal(false); handleOpenEdit(selectedOrder); }} className="p-2 text-slate-500 hover:text-white transition-colors" title="编辑"><Edit2 className="w-5 h-5" /></button>

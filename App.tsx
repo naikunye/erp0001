@@ -46,7 +46,7 @@ const MainLayout: React.FC = () => {
   };
 
   const handleLogout = () => {
-      if (confirm('确认断开神经连接？')) {
+      if (confirm('确认断开神经连接并退出系统？')) {
           setIsAuthenticated(false);
       }
   };
@@ -64,6 +64,9 @@ const MainLayout: React.FC = () => {
       case 'analytics': return '深度分析 (Deep Analytics)';
       case 'calendar': return '运营日历 (Operations Timeline)';
       case 'settings': return '系统配置 (System Config)';
+      case 'integrations': return '店铺集成 (Integrations)';
+      case 'inbound': return 'FBA 发货 (Inbound)';
+      case 'suppliers': return '供应商管理 (Suppliers)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -81,7 +84,10 @@ const MainLayout: React.FC = () => {
       case 'marketing': return <Marketing />;
       case 'analytics': return <Analytics />;
       case 'settings': return <Settings />;
-      default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中 (Module Offline)</div>;
+      case 'integrations': return <Integrations />;
+      case 'inbound': return <InboundShipments />;
+      case 'suppliers': return <Suppliers />;
+      default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };
 
@@ -97,16 +103,16 @@ const MainLayout: React.FC = () => {
                       <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center shadow-2xl mb-6 text-white border border-white/10 backdrop-blur-md">
                           <Hexagon className="w-8 h-8 fill-current text-blue-400" />
                       </div>
-                      <h1 className="text-3xl font-display font-bold text-white tracking-widest uppercase">TANXING</h1>
-                      <p className="text-xs text-white/40 font-mono mt-2 tracking-[0.3em] uppercase">Enterprise OS</p>
+                      <h1 className="text-3xl font-display font-bold text-white tracking-widest uppercase">探行 OS</h1>
+                      <p className="text-xs text-white/40 font-mono mt-2 tracking-[0.3em] uppercase">Enterprise Quantum OS</p>
                   </div>
                   <form onSubmit={handleLogin} className="space-y-6">
                       <div className="space-y-4">
-                          <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="ID" />
-                          <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="PASSWORD" />
+                          <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="账号 ID" />
+                          <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="密码 Password" />
                       </div>
                       <button type="submit" disabled={loginLoading} className="w-full py-3.5 bg-white text-black hover:bg-slate-200 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98]">
-                          {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>Login <ArrowRight className="w-4 h-4" /></>}
+                          {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>登录系统 <ArrowRight className="w-4 h-4" /></>}
                       </button>
                   </form>
               </div>

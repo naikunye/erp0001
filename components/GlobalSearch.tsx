@@ -79,9 +79,6 @@ const GlobalSearch: React.FC = () => {
           if (result.action === 'navigate' && result.targetPage) {
               setAiSuggestion(`✨ AI 导航: ${result.reason}`);
               setTimeout(() => {
-                  // This is a simplified navigation handler for the demo since context router isn't directly exposed here easily without context update
-                  // In a real app, we would use the router from context or props.
-                  // For now, visual feedback is the primary goal.
                   setIsOpen(false);
               }, 1000);
           } else {

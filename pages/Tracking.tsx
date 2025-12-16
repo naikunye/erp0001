@@ -12,7 +12,7 @@ import { useTanxing } from '../context/TanxingContext';
 
 const Tracking: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
-  const shipments = state.shipments; // Use global state
+  const shipments = state.shipments; 
 
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,7 +44,6 @@ const Tracking: React.FC = () => {
       events: []
   });
 
-  // Select first shipment on load if available
   useEffect(() => {
       if (!selectedShipment && shipments.length > 0) {
           setSelectedShipment(shipments[0]);
@@ -70,12 +69,10 @@ const Tracking: React.FC = () => {
       }
   };
 
-  // Calculate Map Progress
   const shipmentProgress = useMemo(() => {
       if (!selectedShipment) return 0;
       if (selectedShipment.status === 'Delivered') return 100;
       if (selectedShipment.status === 'Pending') return 5;
-      // Heuristic: Max 90% until delivered, step by 20% per event
       const eventCount = selectedShipment.events.length;
       return Math.min(90, Math.max(10, eventCount * 20));
   }, [selectedShipment]);
@@ -97,8 +94,6 @@ const Tracking: React.FC = () => {
   const handleRefreshStatus = async () => {
       if (!selectedShipment) return;
       setIsRefreshing(true);
-      
-      // Simulate API Call delay
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       const now = new Date();
@@ -117,7 +112,7 @@ const Tracking: React.FC = () => {
       };
 
       dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedShipment });
-      setSelectedShipment(updatedShipment); // Update local selection to reflect changes immediately
+      setSelectedShipment(updatedShipment); 
       showToast('状态已更新: Arrived at Distribution Facility', 'success');
       setIsRefreshing(false);
   };
@@ -268,7 +263,6 @@ const Tracking: React.FC = () => {
     }
   };
 
-  // --- Route Planning Handler ---
   const handleOptimizeRoute = async () => {
       if (!plannerForm.origin || !plannerForm.destination) {
           showToast("请完善起止地点", "warning");
@@ -342,7 +336,7 @@ const Tracking: React.FC = () => {
                           className="px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/30 text-indigo-300 hover:bg-indigo-500 hover:text-white rounded-lg text-xs font-bold flex items-center gap-1 transition-all"
                           title="AI 智能路由规划"
                       >
-                          <Sparkles className="w-3.5 h-3.5" /> 路由
+                          <Sparkles className="w-3.5 h-3.5" /> 智能路由
                       </button>
                       <button 
                           onClick={() => {
@@ -352,7 +346,7 @@ const Tracking: React.FC = () => {
                           }}
                           className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-900/20 flex items-center gap-1 transition-all active:scale-95"
                       >
-                          <Plus className="w-4 h-4" /> 运单
+                          <Plus className="w-4 h-4" /> 新增运单
                       </button>
                   </div>
               </div>
@@ -415,7 +409,6 @@ const Tracking: React.FC = () => {
                               <span>{shipment.events[0]?.date}</span>
                           </div>
 
-                          {/* Delete Button */}
                           <button 
                               onClick={(e) => handleDelete(shipment.id, e)}
                               className="absolute right-2 bottom-2 p-1.5 text-slate-600 hover:text-red-400 hover:bg-black/80 rounded opacity-0 group-hover:opacity-100 transition-opacity"
@@ -442,7 +435,6 @@ const Tracking: React.FC = () => {
                       <div className="absolute inset-0 opacity-20 bg-[radial-gradient(#4f46e5_1px,transparent_1px)] [background-size:16px_16px]"></div>
                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="w-3/4 h-0.5 bg-slate-800 relative rounded-full overflow-hidden">
-                              {/* Dynamic Progress Bar */}
                               <div 
                                 className="h-full bg-gradient-to-r from-emerald-500 via-indigo-500 to-blue-500 transition-all duration-1000 ease-out relative"
                                 style={{ width: `${shipmentProgress}%` }}
@@ -451,7 +443,6 @@ const Tracking: React.FC = () => {
                               </div>
                           </div>
                           
-                          {/* Icons */}
                           <div className="absolute left-[10%] top-1/2 -translate-y-1/2 -mt-4">
                               <div className="w-2 h-2 bg-emerald-500 rounded-full mb-1 mx-auto shadow-[0_0_10px_#10b981]"></div>
                           </div>
@@ -459,7 +450,6 @@ const Tracking: React.FC = () => {
                               <div className="w-2 h-2 bg-blue-500 rounded-full mb-1 mx-auto shadow-[0_0_10px_#3b82f6]"></div>
                           </div>
                           
-                          {/* Moving Vehicle Icon */}
                           <div 
                             className="absolute top-1/2 -translate-y-1/2 -mt-6 transition-all duration-1000 ease-out"
                             style={{ left: `calc(12.5% + ${shipmentProgress * 0.75}%)` }}
@@ -643,7 +633,7 @@ const Tracking: React.FC = () => {
                                           </span>
                                           <div className="text-right">
                                               <div className="text-xl font-bold text-white font-mono">{opt.estimatedCost}</div>
-                                              <div className="text-[10px] text-slate-500">Estimated Cost</div>
+                                              <div className="text-[10px] text-slate-500">预估成本</div>
                                           </div>
                                       </div>
                                       

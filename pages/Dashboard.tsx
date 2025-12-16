@@ -31,9 +31,7 @@ const Dashboard: React.FC = () => {
       // 1. Total Revenue (GMV)
       const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
       
-      // 2. Estimated Net Profit (Simplified Model: Revenue * 0.25 margin assumption for demo, 
-      //    or ideally sum(item.price - product.cost))
-      //    Let's try to be more precise based on Products data if available
+      // 2. Estimated Net Profit (Simplified Model)
       let totalCost = 0;
       activeOrders.forEach(o => {
           if (o.lineItems) {
@@ -57,7 +55,6 @@ const Dashboard: React.FC = () => {
       const logisticsWeight = state.products.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
 
       // 4. Top Product
-      // Group sales by SKU
       const productSales: Record<string, number> = {};
       activeOrders.forEach(o => {
           o.lineItems?.forEach(item => {
@@ -118,27 +115,23 @@ const Dashboard: React.FC = () => {
 
   // Forecast Chart Data (Revenue over time)
   const forecastChartData = useMemo(() => {
-      // 1. Aggregate actual revenue by date
       const revenueByDate: Record<string, number> = {};
       state.orders.forEach(o => {
           if (o.status === 'cancelled') return;
-          // Normalize date to YYYY-MM-DD
           const date = o.date; 
           revenueByDate[date] = (revenueByDate[date] || 0) + o.total;
       });
 
-      // 2. Sort dates and take last 7 distinct days (or fill gaps - simplified here)
       const sortedDates = Object.keys(revenueByDate).sort();
       const recentDates = sortedDates.slice(-7);
       
-      // 3. Map to chart format
       const history = recentDates.map(date => ({
           name: date.slice(5), // MM-DD
           actual: revenueByDate[date],
           forecast: null as number | null
       }));
 
-      // 4. Generate 5 days forecast
+      // Generate 5 days forecast
       const lastVal = history.length > 0 ? history[history.length - 1].actual : 1000;
       const nextDays = [];
       for (let i = 1; i <= 5; i++) {
@@ -150,7 +143,7 @@ const Dashboard: React.FC = () => {
           });
       }
 
-      return history.length > 0 ? [...history, ...nextDays] : [...nextDays]; // Handle empty history
+      return history.length > 0 ? [...history, ...nextDays] : [...nextDays];
   }, [state.orders]);
 
 
@@ -278,7 +271,7 @@ const Dashboard: React.FC = () => {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
-            <StatCard loading={isLoading} title="总投入 (Inventory Cost)" value={`¥${metrics.totalInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Live" trendUp={true} icon={Wallet} accentColor="blue" />
+            <StatCard loading={isLoading} title="库存总值 (Stock Value)" value={`¥${metrics.totalInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Live" trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
             <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
@@ -287,7 +280,7 @@ const Dashboard: React.FC = () => {
             <StatCard loading={isLoading} title="爆品 SKU (Top Seller)" value={metrics.topProduct} subValue="Rank #1" trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
-            <StatCard loading={isLoading} title="物流负载 (Logistics)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
+            <StatCard loading={isLoading} title="物流总重 (Weight)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
         </div>
       </div>
 
@@ -462,7 +455,7 @@ const Dashboard: React.FC = () => {
              <div className="flex justify-between items-center mb-8">
                  <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
                     <span className="w-1 h-5 bg-purple-500 rounded-full shadow-[0_0_10px_#a855f7]"></span>
-                    销售占比 (Top Sellers)
+                    热销榜单 (Top Sellers)
                  </h3>
                  <button 
                     onClick={() => setShowAllProducts(!showAllProducts)}

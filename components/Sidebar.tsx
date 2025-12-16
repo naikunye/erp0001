@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers, Link2, Container, Factory } from 'lucide-react';
 import { Page } from '../types';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -18,6 +18,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
     { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit, highlight: true },
     { id: 'inventory', label: '智能备货', subLabel: 'Inventory', icon: PackageCheck },
+    { id: 'inbound', label: 'FBA 发货', subLabel: 'Inbound', icon: Container },
     { id: 'finance', label: '财务资金', subLabel: 'Finance', icon: Wallet },
     { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
     { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },
@@ -25,6 +26,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'orders', label: '订单履约', subLabel: 'Orders', icon: ShoppingCart },
     { id: 'marketing', label: '营销投放', subLabel: 'Marketing', icon: Megaphone },
     { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
+    { id: 'suppliers', label: '供应商管理', subLabel: 'Suppliers', icon: Factory },
+    { id: 'integrations', label: '店铺集成', subLabel: 'Integrations', icon: Link2 },
     { id: 'settings', label: '系统设置', subLabel: 'Settings', icon: Settings },
   ];
 
@@ -50,7 +53,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
             <div className="ios-glass-panel h-full flex flex-col p-5 rounded-3xl relative overflow-hidden">
                 
                 {/* Brand Header */}
-                <div className="flex items-center gap-4 mb-10 px-2 relative z-10">
+                <div className="flex items-center gap-4 mb-6 px-2 relative z-10">
                     <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-500/20 text-white">
                         <Hexagon className="w-6 h-6 fill-current" />
                     </div>
@@ -67,7 +70,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                 </div>
 
                 {/* Navigation */}
-                <nav className="flex-1 space-y-2 overflow-y-auto scrollbar-none px-1 relative z-10">
+                <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-none px-1 relative z-10">
                     {menuItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = activePage === item.id;
@@ -78,7 +81,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                             <button
                                 key={item.id}
                                 onClick={() => handleNav(item.id as Page)}
-                                className={`w-full flex items-center gap-4 px-4 py-3 rounded-xl transition-all duration-300 group relative overflow-hidden ${
+                                className={`w-full flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${
                                     isActive 
                                     ? 'text-white' 
                                     : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'
@@ -105,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                 </nav>
 
                 {/* Footer */}
-                <div className="pt-6 mt-auto border-t border-white/5 relative z-10">
+                <div className="pt-4 mt-auto border-t border-white/5 relative z-10">
                     <button 
                         onClick={onLogout}
                         className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-all text-xs font-bold border border-transparent hover:border-red-500/20 active:scale-95"

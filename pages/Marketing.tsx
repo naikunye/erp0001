@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI, Type } from "@google/genai";
@@ -801,11 +800,15 @@ const Marketing: React.FC = () => {
         {/* Glass Tab Switcher */}
         <div className="flex bg-black/40 backdrop-blur-md p-1 rounded-xl border border-white/10 w-fit shadow-lg">
             <button onClick={() => setActiveTab('seeding')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'seeding' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white'}`}><Users className="w-3.5 h-3.5" /> 红人寄样</button>
-            <button onClick={() => setActiveTab('ads')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'ads' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white'}`}><Megaphone className="w-3.5 h-3.5" /> 广告投放</button>
-            <button onClick={() => setActiveTab('content')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'content' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white'}`}><PenTool className="w-3.5 h-3.5" /> 内容引擎</button>
+            <button onClick={() => setActiveTab('ads')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'ads' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white'}`}><Megaphone className="w-3.5 h-3.5" /> 广告计划</button>
+            <button onClick={() => setActiveTab('content')} className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-2 transition-all ${activeTab === 'content' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/50' : 'text-slate-400 hover:text-white'}`}><PenTool className="w-3.5 h-3.5" /> 内容策略</button>
         </div>
-        <div className="flex-1 min-h-0 overflow-hidden">
-            {activeTab === 'seeding' ? <InfluencerCRM /> : activeTab === 'ads' ? <AdCommandCenter /> : <ContentEngine />}
+
+        {/* Content Area */}
+        <div className="flex-1 min-h-0 relative">
+            {activeTab === 'seeding' && <InfluencerCRM />}
+            {activeTab === 'ads' && <AdCommandCenter />}
+            {activeTab === 'content' && <ContentEngine />}
         </div>
     </div>
   );
