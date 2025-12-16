@@ -5,7 +5,7 @@ import { Product, Order, Transaction, PurchaseOrder, Toast, Customer, Shipment, 
 import { MOCK_PRODUCTS, MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SHIPMENTS, MOCK_SUPPLIERS, MOCK_INBOUND_SHIPMENTS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS } from '../constants';
 
 // --- Theme Types ---
-export type Theme = 'ios' | 'cyber' | 'obsidian';
+export type Theme = 'ios-glass' | 'ios-depth' | 'ios-titanium' | 'light';
 
 const DB_KEY = 'TANXING_DB_V2'; // Version bump
 
@@ -92,7 +92,7 @@ type Action =
 
 // --- Initial State (Mock) ---
 const mockState: AppState = {
-    theme: 'ios',
+    theme: 'ios-glass',
     supabaseConfig: { url: '', key: '', lastSync: null },
     echotikConfig: { username: '', password: '', region: 'US' },
     products: MOCK_PRODUCTS,

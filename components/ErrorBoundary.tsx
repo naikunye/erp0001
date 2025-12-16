@@ -1,3 +1,4 @@
+
 import React, { Component, ErrorInfo, ReactNode } from "react";
 import { AlertTriangle, RefreshCw, Home } from "lucide-react";
 
@@ -12,26 +13,28 @@ interface ErrorBoundaryState {
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  constructor(props: ErrorBoundaryProps) {
-    super(props);
-    this.state = {
-      hasError: false,
-      error: null,
-    };
-  }
+  // Define state as a class property to fix TS error
+  public state: ErrorBoundaryState = {
+    hasError: false,
+    error: null,
+  };
 
-  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+  public static getDerivedStateFromError(error: Error): ErrorBoundaryState {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+  public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     console.error("Uncaught error:", error, errorInfo);
     // In a real application, you would log this to an error reporting service
   }
 
-  render() {
-    if (this.state.hasError) {
-      if (this.props.fallback) return this.props.fallback;
+  public render() {
+    const { hasError, error } = this.state;
+    // Explicitly cast this.props to ensure type safety if inference fails
+    const { children, fallback } = this.props as ErrorBoundaryProps;
+
+    if (hasError) {
+      if (fallback) return fallback;
 
       return (
         <div className="min-h-screen flex flex-col items-center justify-center bg-[#030508] text-slate-400 p-4">
@@ -48,7 +51,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
             <div className="bg-black/50 rounded-lg p-4 mb-6 text-left overflow-auto max-h-32 border border-slate-800">
                 <p className="text-[10px] text-slate-500 mb-1 uppercase font-bold">Error Details:</p>
                 <code className="text-xs text-red-400 font-mono break-all block">
-                    {this.state.error?.message || "Unknown error occurred"}
+                    {error?.message || "Unknown error occurred"}
                 </code>
             </div>
 
@@ -71,6 +74,6 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       );
     }
 
-    return this.props.children;
+    return children;
   }
 }

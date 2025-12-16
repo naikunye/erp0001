@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon, Package, ShoppingCart, Loader2, RotateCcw as ResetIcon, UploadCloud, DownloadCloud, Server, Radio, BarChart4, X } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, RotateCcw, Palette, Smartphone, Zap, Moon, Package, ShoppingCart, Loader2, RotateCcw as ResetIcon, UploadCloud, DownloadCloud, Server, Radio, BarChart4, X, Sun, Layers, Watch, Layout } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { Theme } from '../context/TanxingContext';
 
@@ -206,7 +206,7 @@ const Settings: React.FC = () => {
       {/* Tabs */}
       <div className="flex gap-2 border-b border-white/10 mb-6 overflow-x-auto">
           {[
-              { id: 'theme', icon: Palette, label: '界面主题' },
+              { id: 'theme', icon: Palette, label: 'UI 主题风格' },
               { id: 'general', icon: Globe, label: '常规配置' },
               { id: 'cloud', icon: Cloud, label: '云端同步' },
               { id: 'integrations', icon: BarChart4, label: 'EchoTik 集成' },
@@ -224,41 +224,62 @@ const Settings: React.FC = () => {
 
       {/* THEME TAB */}
       {activeTab === 'theme' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
-              {/* Option 1: iOS Dark */}
-              <div onClick={() => handleThemeChange('ios')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios' ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
-                  <div className="bg-[#000] rounded-lg p-6 h-48 flex flex-col justify-center items-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#1c1c1e_0%,#000000_100%)]"></div>
-                      <div className="w-20 h-20 rounded-full bg-blue-600 blur-[40px] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-40"></div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4">
+              
+              {/* Option 1: Vision Glass */}
+              <div onClick={() => handleThemeChange('ios-glass')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios-glass' ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
+                  <div className="bg-[#000] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#1a1a2e_0%,#000000_100%)]"></div>
+                      <div className="w-24 h-24 rounded-full bg-blue-600 blur-[50px] absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 opacity-30"></div>
                       <div className="relative z-10 text-center">
-                          <Smartphone className="w-10 h-10 text-white mx-auto mb-3" />
-                          <h3 className="text-white font-bold text-lg">Cupertino Dark</h3>
-                          <p className="text-xs text-slate-400 mt-2">iOS 风格，极致磨砂黑与高斯模糊</p>
+                          <Layout className="w-10 h-10 text-white mx-auto mb-3 opacity-90" />
+                          <h3 className="text-white font-bold text-lg">Vision Glass</h3>
+                          <p className="text-xs text-slate-400 mt-2">VisionOS 空间质感</p>
+                          <p className="text-[10px] text-slate-500 mt-1">Frosted • Vibrant</p>
                       </div>
-                      {state.theme === 'ios' && <div className="absolute top-3 right-3 text-blue-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
+                      {state.theme === 'ios-glass' && <div className="absolute top-3 right-3 text-blue-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
                   </div>
               </div>
-              {/* Option 2: Cyberpunk */}
-              <div onClick={() => handleThemeChange('cyber')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'cyber' ? 'border-cyan-400 shadow-[0_0_20px_rgba(6,182,212,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
-                  <div className="bg-[#030508] rounded-lg p-6 h-48 flex flex-col justify-center items-center relative overflow-hidden font-display">
-                      <div className="absolute inset-0 bg-[linear-gradient(rgba(0,240,255,0.1)_1px,transparent_1px),linear-gradient(90deg,rgba(0,240,255,0.1)_1px,transparent_1px)] bg-[size:20px_20px]"></div>
+
+              {/* Option 2: Deep Depth */}
+              <div onClick={() => handleThemeChange('ios-depth')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios-depth' ? 'border-indigo-500 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
+                  <div className="bg-[#000000] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
+                      <div className="absolute inset-4 bg-[#1c1c1e] rounded-xl border border-[#2c2c2e]"></div>
                       <div className="relative z-10 text-center">
-                          <Zap className="w-10 h-10 text-cyan-400 mx-auto mb-3" />
-                          <h3 className="text-cyan-400 font-bold text-lg uppercase tracking-widest text-glow-cyan">Cyber Neon</h3>
-                          <p className="text-xs text-cyan-700 mt-2">赛博朋克，高对比度霓虹光效</p>
+                          <Layers className="w-10 h-10 text-white mx-auto mb-3" />
+                          <h3 className="text-white font-bold text-lg">Deep Depth</h3>
+                          <p className="text-xs text-slate-500 mt-2">经典 iOS 深色模式</p>
+                          <p className="text-[10px] text-slate-600 mt-1">Zinc • Opaque</p>
                       </div>
-                      {state.theme === 'cyber' && <div className="absolute top-3 right-3 text-cyan-400"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
+                      {state.theme === 'ios-depth' && <div className="absolute top-3 right-3 text-indigo-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
                   </div>
               </div>
-              {/* Option 3: Obsidian */}
-              <div onClick={() => handleThemeChange('obsidian')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'obsidian' ? 'border-white shadow-[0_0_20px_rgba(255,255,255,0.2)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
-                  <div className="bg-[#050505] rounded-lg p-6 h-48 flex flex-col justify-center items-center relative overflow-hidden">
+
+              {/* Option 3: Pro Titanium */}
+              <div onClick={() => handleThemeChange('ios-titanium')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios-titanium' ? 'border-orange-500 shadow-[0_0_20px_rgba(249,115,22,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
+                  <div className="bg-[#000000] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-[#151516]"></div>
                       <div className="relative z-10 text-center">
-                          <Moon className="w-10 h-10 text-white mx-auto mb-3" />
-                          <h3 className="text-white font-bold text-lg">Obsidian</h3>
-                          <p className="text-xs text-slate-500 mt-2">黑曜石极简，无干扰沉浸式体验</p>
+                          <Watch className="w-10 h-10 text-orange-500 mx-auto mb-3" />
+                          <h3 className="text-slate-200 font-bold text-lg">Pro Titanium</h3>
+                          <p className="text-xs text-slate-500 mt-2">Ultra 专业工程风格</p>
+                          <p className="text-[10px] text-orange-500/80 mt-1 font-bold">High Contrast</p>
                       </div>
-                      {state.theme === 'obsidian' && <div className="absolute top-3 right-3 text-white"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
+                      {state.theme === 'ios-titanium' && <div className="absolute top-3 right-3 text-orange-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
+                  </div>
+              </div>
+
+              {/* Option 4: Ceramic Light */}
+              <div onClick={() => handleThemeChange('light')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'light' ? 'border-slate-300 shadow-[0_0_20px_rgba(0,0,0,0.1)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
+                  <div className="bg-[#f2f2f7] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
+                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,#ffffff_0%,#f2f2f7_100%)]"></div>
+                      <div className="relative z-10 text-center">
+                          <Sun className="w-10 h-10 text-slate-900 mx-auto mb-3" />
+                          <h3 className="text-slate-900 font-bold text-lg">Ceramic</h3>
+                          <p className="text-xs text-slate-500 mt-2">清透陶瓷白</p>
+                          <p className="text-[10px] text-slate-400 mt-1">Light • Clean</p>
+                      </div>
+                      {state.theme === 'light' && <div className="absolute top-3 right-3 text-slate-900"><CheckCircle2 className="w-5 h-5 fill-current text-white"/></div>}
                   </div>
               </div>
           </div>

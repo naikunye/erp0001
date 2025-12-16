@@ -53,36 +53,123 @@
         --sidebar-active-text: #ffffff;
       }
 
-      /* 1. iOS Dark (Cupertino) - Refined for "Pro" look */
-      body.theme-ios {
-        --glass-bg: rgba(22, 22, 24, 0.75);
-        --glass-border: rgba(255, 255, 255, 0.08);
-        --glass-shadow: 0 20px 50px -12px rgba(0, 0, 0, 0.6);
-        --accent-color: #0a84ff;
-        --sidebar-active-bg: linear-gradient(90deg, rgba(10, 132, 255, 0.15) 0%, rgba(10, 132, 255, 0.05) 100%);
+      /* 1. Vision Glass (Default) - Apple Vision Pro Style */
+      body.theme-ios-glass {
+        --glass-bg: rgba(20, 20, 25, 0.55);
+        --glass-border: rgba(255, 255, 255, 0.12);
+        --glass-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.5), inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+        --accent-color: #0a84ff; /* System Blue */
+        --sidebar-active-bg: rgba(255, 255, 255, 0.15);
         --sidebar-active-text: #ffffff;
         background-color: #050505;
+        color: #f5f5f7;
       }
-      body.theme-ios .ambient-bg {
+      body.theme-ios-glass .ambient-bg {
         background: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #000000 100%);
       }
-      body.theme-ios .orb {
-        opacity: 0.25;
-        filter: blur(120px);
+      body.theme-ios-glass .orb {
+        opacity: 0.35;
+        filter: blur(90px);
+        mix-blend-mode: screen;
+      }
+      body.theme-ios-glass .ios-glass-panel {
+        backdrop-filter: blur(50px) saturate(180%);
+        -webkit-backdrop-filter: blur(50px) saturate(180%);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+      }
+
+      /* 2. Deep Depth (Classic iOS Dark) */
+      body.theme-ios-depth {
+        --glass-bg: #1c1c1e; /* System Gray 6 Dark */
+        --glass-border: #38383a; /* Separator Color */
+        --glass-shadow: 0 10px 20px rgba(0,0,0,0.3);
+        --accent-color: #0a84ff;
+        --sidebar-active-bg: #2c2c2e; /* System Gray 5 */
+        --sidebar-active-text: #0a84ff;
+        background-color: #000000;
+        color: #ffffff;
+      }
+      body.theme-ios-depth .ambient-bg {
+        background: #000000;
+      }
+      body.theme-ios-depth .orb {
+        opacity: 0.08; /* Very subtle */
+        filter: blur(150px);
+      }
+      body.theme-ios-depth .ios-glass-panel,
+      body.theme-ios-depth .ios-glass-card {
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        box-shadow: var(--glass-shadow);
+        backdrop-filter: none; /* Performance optimization */
+      }
+      /* Ensure cards pop off the background */
+      body.theme-ios-depth .ios-glass-card {
+        background: #2c2c2e; 
+      }
+
+      /* 3. Pro Titanium (Apple Watch Ultra Style) */
+      body.theme-ios-titanium {
+        --glass-bg: #242426; /* Titanium Grey */
+        --glass-border: #48484a;
+        --glass-shadow: 0 4px 12px rgba(0,0,0,0.5);
+        --accent-color: #ff4f00; /* International Orange */
+        --sidebar-active-bg: #ff4f00;
+        --sidebar-active-text: #ffffff;
+        background-color: #000000;
+        color: #e5e5e7;
+        font-family: 'Inter', sans-serif; /* Clean, technical */
+      }
+      body.theme-ios-titanium .ambient-bg {
+        background: radial-gradient(circle at 50% 50%, #1c1c1e 0%, #000000 100%);
+      }
+      body.theme-ios-titanium .orb { display: none; }
+      body.theme-ios-titanium .ios-glass-panel {
+        background: #1c1c1e;
+        border: 1px solid #333;
+        border-radius: 4px !important; /* Rugged corners option, or stick to rounded */
+      }
+      body.theme-ios-titanium .ios-glass-card {
+        background: #2c2c2e;
+        border: 1px solid #48484a;
+      }
+      /* Specific override for Titanium accent buttons */
+      body.theme-ios-titanium .text-indigo-500, 
+      body.theme-ios-titanium .text-blue-500 { color: #ff4f00 !important; }
+      body.theme-ios-titanium .bg-indigo-600 { background-color: #ff4f00 !important; }
+      body.theme-ios-titanium .bg-indigo-600:hover { background-color: #cc3f00 !important; }
+
+      /* 4. Ceramic Light */
+      body.theme-light {
+        background-color: #f2f2f7; /* System Gray 6 Light */
+        color: #000000; 
+        --glass-bg: rgba(255, 255, 255, 0.75); 
+        --glass-border: rgba(0, 0, 0, 0.05);
+        --glass-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        --accent-color: #007aff; 
+        --sidebar-active-bg: #ffffff; 
+        --sidebar-active-text: #007aff; 
+      }
+      body.theme-light .ambient-bg {
+        background: #f2f2f7;
+      }
+      body.theme-light .orb {
+        opacity: 0.15;
+        mix-blend-mode: multiply;
+        filter: blur(80px);
       }
       
-      /* Refined Glass Classes */
+      /* --- Common Glass Classes --- */
       .ios-glass-panel {
         background: var(--glass-bg);
-        backdrop-filter: blur(40px) saturate(160%);
-        -webkit-backdrop-filter: blur(40px) saturate(160%);
         border: 1px solid var(--glass-border);
         box-shadow: var(--glass-shadow);
         transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
       }
 
       .ios-glass-card {
-        background: rgba(255, 255, 255, 0.02);
+        background: rgba(255, 255, 255, 0.03); /* Default fallback */
         border: 1px solid rgba(255, 255, 255, 0.05);
         border-radius: 16px;
         transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
@@ -90,62 +177,34 @@
         overflow: hidden;
       }
       
-      /* Subtle inner highlight for cards */
-      .ios-glass-card::before {
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0; height: 1px;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.1), transparent);
-        opacity: 0.5;
-      }
-
-      .ios-glass-card:hover {
-        background: rgba(255, 255, 255, 0.04);
-        border-color: rgba(255, 255, 255, 0.1);
-        transform: translateY(-2px);
-        box-shadow: 0 10px 30px -10px rgba(0,0,0,0.5);
-      }
-
-      /* 2. Cyberpunk Neon */
-      body.theme-cyber {
-        --glass-bg: rgba(3, 5, 10, 0.9);
-        --glass-border: rgba(0, 240, 255, 0.2);
-        --glass-shadow: 0 0 15px rgba(0, 240, 255, 0.1);
-        --accent-color: #00f0ff;
-        --sidebar-active-bg: rgba(0, 240, 255, 0.1);
-        --sidebar-active-text: #00f0ff;
-        font-family: 'Rajdhani', sans-serif;
-      }
-      body.theme-cyber .ambient-bg {
-        background: 
-          linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-          #020204;
-        background-size: 40px 40px;
-      }
-      body.theme-cyber .orb { display: none; }
-      body.theme-cyber .ios-glass-panel, body.theme-cyber .ios-glass-card {
-        backdrop-filter: blur(8px);
-        border: 1px solid var(--glass-border);
-        box-shadow: 0 0 10px rgba(0, 240, 255, 0.05), inset 0 0 20px rgba(0, 0, 0, 0.5);
-        border-radius: 4px; /* Sharper corners for cyber */
+      /* --- Light Mode Specific Overrides --- */
+      body.theme-light .text-white { color: #000000 !important; } 
+      body.theme-light .text-slate-200 { color: #1c1c1e !important; }
+      body.theme-light .text-slate-300 { color: #3a3a3c !important; } 
+      body.theme-light .text-slate-400 { color: #8e8e93 !important; } 
+      body.theme-light .text-slate-500 { color: #aeaeb2 !important; }
+      
+      body.theme-light .ios-glass-panel {
+          background: rgba(255, 255, 255, 0.8); 
+          backdrop-filter: blur(30px) saturate(120%);
       }
       
-      /* 3. Obsidian */
-      body.theme-obsidian {
-        --glass-bg: rgba(5, 5, 5, 0.85);
-        --glass-border: rgba(255, 255, 255, 0.04);
-        --glass-shadow: 0 20px 40px rgba(0,0,0,0.9);
-        --accent-color: #ffffff;
-        --sidebar-active-bg: #1a1a1a;
-        --sidebar-active-text: #e5e5e5;
+      body.theme-light .ios-glass-card,
+      body.theme-light .bg-black\/20,
+      body.theme-light .bg-black\/40,
+      body.theme-light .bg-slate-900 {
+          background-color: #ffffff !important; 
+          border: 1px solid rgba(0,0,0,0.05) !important;
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
+          color: #1c1c1e !important;
       }
-      body.theme-obsidian .ambient-bg { background: #000000; }
-      body.theme-obsidian .orb { opacity: 0.05; filter: blur(200px); background: #ffffff; }
-      body.theme-obsidian .ios-glass-panel {
-        backdrop-filter: blur(80px);
-        background: rgba(10,10,10,0.8);
-        border: 1px solid rgba(255,255,255,0.03);
+      
+      body.theme-light input, 
+      body.theme-light select, 
+      body.theme-light textarea {
+          background-color: rgba(0,0,0,0.05) !important; 
+          border: none !important;
+          color: #000 !important;
       }
 
       /* --- Utilities --- */
@@ -165,17 +224,6 @@
         transition: background 0.5s ease;
       }
       
-      .orb {
-        position: absolute;
-        border-radius: 50%;
-        animation: blob 30s infinite cubic-bezier(0.4, 0, 0.2, 1);
-        mix-blend-mode: screen;
-        transition: all 0.5s ease;
-      }
-      .orb-1 { top: -10%; left: -10%; width: 60vw; height: 60vw; background: #007AFF; animation-delay: 0s; }
-      .orb-2 { bottom: -20%; right: -5%; width: 50vw; height: 50vw; background: #5856D6; animation-delay: -8s; }
-      .orb-3 { top: 30%; left: 30%; width: 40vw; height: 40vw; background: #AF52DE; opacity: 0.3; animation-delay: -15s; }
-
       .noise-texture {
         position: fixed;
         inset: 0;
@@ -184,53 +232,7 @@
         pointer-events: none;
         background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.65' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
       }
-
-      /* Scrollbar Styling */
-      ::-webkit-scrollbar { width: 4px; height: 4px; }
-      ::-webkit-scrollbar-track { background: transparent; }
-      ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-      ::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.25); }
-      
-      /* Text Glow Utility */
-      .text-glow { text-shadow: 0 0 20px rgba(255,255,255,0.3); }
-      .text-glow-cyan { text-shadow: 0 0 15px rgba(6,182,212,0.5); }
-      .text-glow-purple { text-shadow: 0 0 15px rgba(168,85,247,0.5); }
-      .text-glow-green { text-shadow: 0 0 15px rgba(16,185,129,0.5); }
-
-      /* HUD Card - Special class for high-tech elements */
-      .hud-card {
-        background: rgba(0, 0, 0, 0.4);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        box-shadow: 0 0 20px rgba(0, 0, 0, 0.2);
-        backdrop-filter: blur(10px);
-      }
-      .holo-card {
-        position: relative;
-        overflow: hidden;
-      }
-      .holo-card::after {
-        content: '';
-        position: absolute;
-        top: 0; left: -100%; width: 50%; height: 100%;
-        background: linear-gradient(90deg, transparent, rgba(255,255,255,0.05), transparent);
-        transform: skewX(-25deg);
-        animation: shimmer 6s infinite;
-        pointer-events: none;
-      }
-
-      /* --- RECHARTS FOCUS FIX --- */
-      /* Eliminate the white outline box on clicked chart elements */
-      .recharts-surface:focus,
-      .recharts-layer:focus,
-      .recharts-sector:focus,
-      .recharts-pie-sector:focus,
-      .recharts-rectangle:focus,
-      .recharts-wrapper:focus {
-        outline: none !important;
-      }
-      path:focus {
-        outline: none !important;
-      }
+      body.theme-light .noise-texture { opacity: 0.02; mix-blend-mode: multiply; }
     </style>
   <script type="importmap">
 {
@@ -247,7 +249,7 @@
 }
 </script>
 </head>
-  <body class="theme-ios"> 
+  <body class="theme-ios-glass"> 
     <div class="ambient-bg">
       <div class="orb orb-1"></div>
       <div class="orb orb-2"></div>
