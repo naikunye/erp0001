@@ -143,7 +143,7 @@ export interface Shipment {
   id: string;
   trackingNo: string;
   carrier: string;
-  status: 'Pending' | 'In Transit' | 'Delivered' | 'Exception';
+  status: '待处理' | '运输中' | '已送达' | '异常';
   origin?: string;
   destination?: string;
   estimatedDelivery?: string;

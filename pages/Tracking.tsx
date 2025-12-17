@@ -79,7 +79,7 @@ const Tracking: React.FC = () => {
       setEditForm({
           trackingNo: '',
           carrier: 'DHL',
-          status: 'Pending',
+          status: '待处理',
           productName: '',
           notes: '',
           shipDate: new Date().toISOString().split('T')[0],
@@ -112,7 +112,7 @@ const Tracking: React.FC = () => {
               id: `SH-${Date.now()}`,
               trackingNo: editForm.trackingNo,
               carrier: (editForm.carrier as any) || 'Other',
-              status: (editForm.status as any) || 'Pending',
+              status: (editForm.status as any) || '待处理',
               productName: editForm.productName || 'Unspecified Product',
               origin: 'Unknown',
               destination: 'Unknown',
@@ -139,9 +139,10 @@ const Tracking: React.FC = () => {
 
   const getStatusColor = (status: Shipment['status']) => {
       switch (status) {
-          case 'Delivered': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-          case 'In Transit': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-          case 'Exception': return 'text-red-400 bg-red-500/10 border-red-500/20';
+          case '已送达': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+          case '运输中': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+          case '异常': return 'text-red-400 bg-red-500/10 border-red-500/20';
+          case '待处理':
           default: return 'text-slate-400 bg-slate-700/50 border-slate-600';
       }
   };
@@ -372,14 +373,14 @@ const Tracking: React.FC = () => {
                           <div>
                               <label className="text-xs text-slate-400 block mb-1">状态 (Status)</label>
                               <select 
-                                  value={editForm.status || 'Pending'} 
+                                  value={editForm.status || '待处理'} 
                                   onChange={e => setEditForm({...editForm, status: e.target.value as any})}
                                   className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
                               >
-                                  <option value="Pending">Pending</option>
-                                  <option value="In Transit">In Transit</option>
-                                  <option value="Delivered">Delivered</option>
-                                  <option value="Exception">Exception</option>
+                                  <option value="待处理">待处理 (Pending)</option>
+                                  <option value="运输中">运输中 (In Transit)</option>
+                                  <option value="已送达">已送达 (Delivered)</option>
+                                  <option value="异常">异常 (Exception)</option>
                               </select>
                           </div>
                       </div>
