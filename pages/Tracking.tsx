@@ -1,10 +1,11 @@
+
 import React, { useState } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { Shipment } from '../types';
 import { GoogleGenAI } from "@google/genai";
 import { 
   Truck, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, 
-  Search, Plus, MoreHorizontal, Globe, Edit2, Loader2, Bot, X, Trash2, Save
+  Search, Plus, MoreHorizontal, Globe, Edit2, Loader2, Bot, X, Trash2, Save, ExternalLink
 } from 'lucide-react';
 
 const Tracking: React.FC = () => {
@@ -23,6 +24,23 @@ const Tracking: React.FC = () => {
     s.trackingNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.productName?.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const getTrackingUrl = (carrier: string, trackingNo: string) => {
+      const c = carrier.toLowerCase();
+      if (c.includes('ups')) {
+          return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
+      }
+      if (c.includes('dhl')) {
+          return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
+      }
+      if (c.includes('fedex')) {
+          return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
+      }
+      if (c.includes('usps')) {
+          return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+      }
+      return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+  };
 
   const handleAnalyze = async () => {
     if (!selectedShipment) return;
@@ -199,11 +217,18 @@ const Tracking: React.FC = () => {
                   <div className="p-6 border-b border-white/10 bg-white/5 flex justify-between items-start shrink-0">
                        <div>
                            <div className="flex items-center gap-3 mb-1">
-                                <h1 className="text-2xl font-bold text-white font-mono tracking-tight">
-                                    {selectedShipment.trackingNo}
-                                </h1>
                                 <a 
-                                    href={`https://www.google.com/search?q=${selectedShipment.carrier}+tracking+${selectedShipment.trackingNo}`} 
+                                    href={getTrackingUrl(selectedShipment.carrier, selectedShipment.trackingNo)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="text-2xl font-bold text-white font-mono tracking-tight hover:text-indigo-400 transition-colors hover:underline decoration-dotted underline-offset-4 flex items-center gap-2 group"
+                                    title="点击跳转官网查询"
+                                >
+                                    {selectedShipment.trackingNo}
+                                    <ExternalLink className="w-4 h-4 opacity-50 group-hover:opacity-100" />
+                                </a>
+                                <a 
+                                    href={getTrackingUrl(selectedShipment.carrier, selectedShipment.trackingNo)}
                                     target="_blank" 
                                     rel="noreferrer"
                                     className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-indigo-300 hover:text-white hover:bg-white/10 flex items-center gap-1 transition-colors"
