@@ -42,52 +42,24 @@ const Dashboard: React.FC = () => {
           return acc + (p.stock * (p.costPrice || 0));
       }, 0);
       
-      // 2. Real Net Profit (Based on Inventory Economics)
+      // 2. Real Net Profit (REAL LOGIC: Revenue - Actual Expenses from Transactions)
       const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
-      let totalCost = 0;
       
-      const EXCHANGE_RATE = 7.2; // Assumed CNY to USD rate
+      // Calculate actual expenses from Transactions (Cash Basis)
+      let totalActualExpenses = 0;
+      const EXCHANGE_RATE = 7.2; // Assumed CNY to USD rate for normalization
 
-      activeOrders.forEach(o => {
-          if (o.lineItems && o.lineItems.length > 0) {
-              o.lineItems.forEach(item => {
-                  const product = state.products.find(p => p.id === item.productId);
-                  if (product) {
-                      // --- Deep Cost Calculation ---
-                      
-                      // 1. COGS (CNY -> USD)
-                      const cogsUSD = (product.costPrice || 0) / EXCHANGE_RATE;
-                      
-                      // 2. Freight (Rate * Weight) (CNY -> USD)
-                      // Assuming unitFreightCost is "Rate per KG" in CNY as per Inventory input label
-                      const freightRate = product.logistics?.unitFreightCost || 0;
-                      const weight = product.unitWeight || 0;
-                      const freightUSD = (freightRate * weight) / EXCHANGE_RATE;
-
-                      // 3. Economics (USD)
-                      const eco = product.economics || {};
-                      const platformFee = item.price * ((eco.platformFeePercent || 0) / 100);
-                      const creatorFee = item.price * ((eco.creatorFeePercent || 0) / 100);
-                      const fixedOps = eco.fixedCost || 0;
-                      const lastMile = eco.lastLegShipping || 0;
-                      const adSpend = eco.adCost || 0; // CPA
-
-                      const unitTotalCost = cogsUSD + freightUSD + platformFee + creatorFee + fixedOps + lastMile + adSpend;
-                      
-                      totalCost += unitTotalCost * item.quantity;
-                  } else {
-                      // Fallback if product deleted or not found: 60% cost estimation
-                      totalCost += item.price * 0.6 * item.quantity;
-                  }
-              });
-          } else {
-              // Fallback for orders without line items
-              totalCost += o.total * 0.6; 
+      state.transactions.forEach(t => {
+          if (t.type === 'expense' && t.status === 'completed') {
+              // Convert to USD
+              const amountUSD = t.currency === 'CNY' ? t.amount / EXCHANGE_RATE : t.amount;
+              totalActualExpenses += amountUSD;
           }
       });
-      
-      const netProfit = totalRevenue - totalCost;
-      const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
+
+      const netProfit = totalRevenue - totalActualExpenses;
+      // ROI = Net Profit / Total Invested (Expenses)
+      const roi = totalActualExpenses > 0 ? (netProfit / totalActualExpenses) * 100 : 0;
 
       // 3. Logistics Weight (Inventory total weight)
       const logisticsWeight = activeProducts.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
@@ -98,7 +70,7 @@ const Dashboard: React.FC = () => {
           roi: roi.toFixed(1),
           logisticsWeight: logisticsWeight.toFixed(1),
       };
-  }, [activeOrders, activeProducts, state.products]);
+  }, [activeOrders, activeProducts, state.products, state.transactions]);
 
   // Top Products Chart Data (Profit based)
   const profitData = useMemo(() => {
@@ -188,7 +160,7 @@ const Dashboard: React.FC = () => {
             
             Real-time Metrics (Verified):
             - Stock Assets: ¥${metrics.stockValue.toLocaleString()}
-            - Real Net Profit: $${metrics.netProfit.toFixed(2)} (Calculated via Unit Economics)
+            - Real Net Profit: $${metrics.netProfit.toFixed(2)} (Calculated via Actual Expenses vs Revenue)
             - ROI: ${metrics.roi}%
             
             Task: Provide a strategic executive summary (in Chinese).

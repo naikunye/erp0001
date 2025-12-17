@@ -19,6 +19,31 @@ const Tracking: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Shipment>>({});
 
+  // --- Helper to translate status to Chinese ---
+  const translateStatus = (status: string) => {
+      if (!status) return '待处理';
+      // Normalize input
+      const s = status.toLowerCase();
+      
+      if (s.includes('pending') || s === '待处理') return '待处理';
+      if (s.includes('transit') || s === '运输中') return '运输中';
+      if (s.includes('deliver') || s === '已送达') return '已送达';
+      if (s.includes('exception') || s === '异常') return '异常';
+      
+      return status; // Return as is if no match (or already correct)
+  };
+
+  const getStatusColor = (status: string) => {
+      const s = translateStatus(status);
+      switch (s) {
+          case '已送达': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
+          case '运输中': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
+          case '异常': return 'text-red-400 bg-red-500/10 border-red-500/20';
+          case '待处理':
+          default: return 'text-slate-400 bg-slate-700/50 border-slate-600';
+      }
+  };
+
   // Filter shipments
   const filteredShipments = state.shipments.filter(s => 
     s.trackingNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -137,31 +162,6 @@ const Tracking: React.FC = () => {
       }
   };
 
-  // --- Helper to translate status to Chinese ---
-  const translateStatus = (status: string) => {
-      if (!status) return '待处理';
-      // Normalize input
-      const s = status.toLowerCase();
-      
-      if (s.includes('pending') || s === '待处理') return '待处理';
-      if (s.includes('transit') || s === '运输中') return '运输中';
-      if (s.includes('deliver') || s === '已送达') return '已送达';
-      if (s.includes('exception') || s === '异常') return '异常';
-      
-      return status; // Return as is if no match (or already correct)
-  };
-
-  const getStatusColor = (status: string) => {
-      const s = translateStatus(status);
-      switch (s) {
-          case '已送达': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
-          case '运输中': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-          case '异常': return 'text-red-400 bg-red-500/10 border-red-500/20';
-          case '待处理':
-          default: return 'text-slate-400 bg-slate-700/50 border-slate-600';
-      }
-  };
-
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative">
       {/* Header */}
@@ -248,14 +248,7 @@ const Tracking: React.FC = () => {
                                     {selectedShipment.trackingNo}
                                     <ExternalLink className="w-4 h-4 opacity-50 group-hover:opacity-100" />
                                 </a>
-                                <a 
-                                    href={getTrackingUrl(selectedShipment.carrier, selectedShipment.trackingNo)}
-                                    target="_blank" 
-                                    rel="noreferrer"
-                                    className="px-2 py-0.5 bg-white/5 rounded text-[10px] text-indigo-300 hover:text-white hover:bg-white/10 flex items-center gap-1 transition-colors"
-                                >
-                                    <Globe className="w-3 h-3" /> 官网查询
-                                </a>
+                                <span className={`text-[10px] px-2 py-0.5 rounded border ${getStatusColor(selectedShipment.status)}`}>{translateStatus(selectedShipment.status)}</span>
                            </div>
                            <div className="text-xs text-slate-400 flex flex-col gap-1">
                                <div className="flex items-center gap-3">
