@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight, Package, AlertTriangle } from 'lucide-react';
+import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, ArrowDownRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight, Package, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ComposedChart, Line, Area } from 'recharts';
 import StatCard from '../components/StatCard';
 import { useTanxing } from '../context/TanxingContext';
@@ -11,7 +11,6 @@ const Dashboard: React.FC = () => {
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
-  const [showAllProducts, setShowAllProducts] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   // Simulate initial data loading
@@ -109,11 +108,13 @@ const Dashboard: React.FC = () => {
                   itemProfit = itemRevenue * 0.3; // Fallback
               }
 
-              const key = product ? product.name : item.sku;
+              // Use SKU as key to ensure mapping to real inventory
               const sku = product ? product.sku : item.sku;
+              const name = product ? product.name : item.sku; // Fallback name
               
-              if (!profitMap[key]) {
-                  profitMap[key] = { 
+              // We use SKU as the unique key for aggregation to match Inventory exactly
+              if (!profitMap[sku]) {
+                  profitMap[sku] = { 
                       profit: 0, 
                       revenue: 0, 
                       stock: product ? product.stock : 0,
@@ -121,15 +122,16 @@ const Dashboard: React.FC = () => {
                       sku: sku
                   };
               }
+              // We store name separately or just use SKU as name if simple
+              (profitMap[sku] as any).name = name; 
               
-              profitMap[key].profit += itemProfit;
-              profitMap[key].revenue += itemRevenue;
+              profitMap[sku].profit += itemProfit;
+              profitMap[sku].revenue += itemRevenue;
           });
       });
 
-      return Object.entries(profitMap)
-          .map(([name, data]) => ({ name, value: data.profit, ...data }))
-          .sort((a, b) => b.value - a.value)
+      return Object.values(profitMap)
+          .sort((a, b) => b.profit - a.profit)
           .slice(0, 10);
   }, [activeOrders, state.products]);
 
@@ -170,7 +172,6 @@ const Dashboard: React.FC = () => {
             - Stock Assets: ¥${metrics.stockValue.toLocaleString()}
             - Est. Net Profit: $${metrics.netProfit.toFixed(2)}
             - ROI: ${metrics.roi}%
-            - Best Selling SKU: ${metrics.topProduct}
             
             Task: Provide a strategic executive summary (in Chinese).
             1. Analyze the health of the profit margin.
@@ -195,11 +196,13 @@ const Dashboard: React.FC = () => {
   // HUD Style Custom Tooltip
   const CustomHUDTooltip = ({ active, payload, label }: any) => {
       if (active && payload && payload.length) {
+          // If using the bar chart, payload is profitData item
           const data = payload[0].payload;
+          const displayLabel = (data as any).name || label;
           
           return (
               <div className="bg-black/90 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md z-50 min-w-[150px]">
-                  <p className="text-xs text-slate-400 font-bold font-mono mb-2 border-b border-white/10 pb-2 uppercase tracking-wider">{label || data.name}</p>
+                  <p className="text-xs text-slate-400 font-bold font-mono mb-2 border-b border-white/10 pb-2 uppercase tracking-wider">{displayLabel}</p>
                   {payload.map((entry: any, index: number) => (
                       <div key={index} className="flex items-center justify-between gap-4 text-xs font-mono mb-1">
                           <div className="flex items-center gap-2">
@@ -263,21 +266,12 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
             <StatCard loading={isLoading} title="库存资金占用 (Stock Asset)" value={`¥${metrics.stockValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Linked to Inv." trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
             <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
-        </div>
-        
-        {/* CLICKABLE Top Volume SKU Card */}
-        <div 
-            className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-3 cursor-pointer transition-transform hover:scale-[1.02]"
-            onClick={() => handleNavigateToInventory(metrics.topProduct)}
-            title="点击跳转至智能备货查看详情"
-        >
-            <StatCard loading={isLoading} title="爆品 SKU (Top Volume)" value={metrics.topProduct} subValue={`${metrics.topProductVol} Sold`} trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
         </div>
         
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
@@ -316,18 +310,19 @@ const Dashboard: React.FC = () => {
                             </defs>
                             <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.03)" />
                             <XAxis type="number" hide />
-                            <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: '"JetBrains Mono", monospace'}} axisLine={false} tickLine={false} />
+                            <YAxis dataKey="sku" type="category" width={90} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: '"JetBrains Mono", monospace'}} axisLine={false} tickLine={false} />
                             <Tooltip content={<CustomHUDTooltip />} cursor={{fill: 'rgba(255,255,255,0.02)'}} />
                             <Bar 
-                                dataKey="value" 
+                                dataKey="profit" 
+                                name="Profit"
                                 barSize={16} 
                                 radius={[0, 4, 4, 0]}
                             >
-                                {profitData.map((entry, index) => (
+                                {profitData.map((entry: any, index) => (
                                     <Cell 
                                         key={`cell-${index}`} 
                                         fill={index < 3 ? 'url(#barGradient)' : '#334155'} 
-                                        fillOpacity={activeHighlight && activeHighlight !== entry.name ? 0.3 : 1}
+                                        fillOpacity={activeHighlight && activeHighlight !== entry.sku ? 0.3 : 1}
                                         style={{
                                             filter: index < 3 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.3))' : '',
                                             outline: 'none'
@@ -399,61 +394,6 @@ const Dashboard: React.FC = () => {
             </div>
         </div>
 
-      </div>
-      
-      {/* Bottom Section - Top Sellers List */}
-      <div className="grid grid-cols-1 gap-6">
-          <div className="ios-glass-card p-8 flex flex-col hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-4">
-             <div className="flex justify-between items-center mb-8">
-                 <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
-                    <span className="w-1 h-5 bg-purple-500 rounded-full shadow-[0_0_10px_#a855f7]"></span>
-                    热销榜单 (Top Sellers & Stock)
-                 </h3>
-                 <button 
-                    onClick={() => setShowAllProducts(!showAllProducts)}
-                    className="text-xs text-cyan-400 hover:text-white border border-cyan-500/30 bg-cyan-500/10 px-4 py-2 rounded-lg transition-all uppercase tracking-widest font-bold shadow-lg shadow-cyan-500/10 hover:shadow-cyan-500/20 active:scale-95"
-                 >
-                    {showAllProducts ? '收起' : '查看全部'}
-                 </button>
-             </div>
-             
-             {/* List Container - Uses CSS Grid for responsive columns if needed */}
-             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                 {profitData.slice(0, showAllProducts ? 20 : 8).map((item, i) => (
-                     <div 
-                        key={i} 
-                        className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-white/10 transition-all group cursor-pointer relative overflow-hidden"
-                        onClick={() => handleNavigateToInventory(item.sku)}
-                        title="点击跳转至智能备货"
-                     >
-                         <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                         <div className="flex items-center gap-5 relative z-10 flex-1 min-w-0">
-                             <div className="text-lg font-display font-bold text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0">0{i+1}</div>
-                             <div className="flex-1 min-w-0">
-                                 <div className="flex justify-between items-start mb-1">
-                                     <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors truncate mr-2" title={item.name}>{item.name}</p>
-                                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 rounded font-mono shrink-0">+${item.value.toLocaleString()}</span>
-                                 </div>
-                                 <div className="flex items-center gap-4 mt-2">
-                                     <div className="flex items-center gap-2 text-[10px] text-slate-500">
-                                         <Package className="w-3 h-3" />
-                                         <span>Stock: {item.stock}</span>
-                                     </div>
-                                     <div className="flex items-center gap-1 text-[10px]">
-                                         {item.daysRemaining < 15 ? <AlertTriangle className="w-3 h-3 text-red-500"/> : <ArrowUpRight className="w-3 h-3 text-emerald-500"/>}
-                                         <span className={item.daysRemaining < 15 ? 'text-red-400' : 'text-slate-400'}>{item.daysRemaining} Days</span>
-                                     </div>
-                                 </div>
-                             </div>
-                         </div>
-                     </div>
-                 ))}
-             </div>
-             
-             {profitData.length === 0 && (
-                 <div className="text-center text-slate-500 py-10">暂无数据</div>
-             )}
-          </div>
       </div>
     </div>
   );
