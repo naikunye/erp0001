@@ -47,6 +47,7 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
 const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
+    const [skuInput, setSkuInput] = useState('');
     const [form, setForm] = useState<Partial<Product>>({
         name: '',
         sku: '',
@@ -96,8 +97,58 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         }
     };
 
+    // --- SKU Tag Input Logic ---
+    const commitSku = (val: string) => {
+        const cleanVal = val.trim().toUpperCase();
+        if (!cleanVal) return;
+        const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+        if (!current.includes(cleanVal)) {
+            setForm(prev => ({ ...prev, sku: [...current, cleanVal].join(',') }));
+        }
+    };
+
+    const handleSkuKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitSku(skuInput);
+            setSkuInput('');
+        } else if (e.key === 'Backspace' && !skuInput) {
+            const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+            if (current.length > 0) {
+                current.pop();
+                setForm(prev => ({ ...prev, sku: current.join(',') }));
+            }
+        }
+    };
+
+    const handleSkuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val.includes(',')) {
+            const parts = val.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+            const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const combined = Array.from(new Set([...current, ...parts])).join(',');
+            setForm(prev => ({ ...prev, sku: combined }));
+            setSkuInput('');
+        } else {
+            setSkuInput(val);
+        }
+    };
+
+    const removeSkuTag = (tag: string) => {
+        const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+        setForm(prev => ({ ...prev, sku: current.filter(t => t !== tag).join(',') }));
+    };
+
     const handleSubmit = () => {
-        if (!form.name || !form.sku) {
+        // Ensure pending input is committed
+        if (skuInput.trim()) {
+            commitSku(skuInput);
+        }
+        
+        // Wait a tick for state update if necessary, or check derived value
+        const finalSku = skuInput.trim() ? (form.sku ? `${form.sku},${skuInput.trim().toUpperCase()}` : skuInput.trim().toUpperCase()) : form.sku;
+
+        if (!form.name || !finalSku) {
             showToast('请填写产品名称和 SKU', 'warning');
             return;
         }
@@ -107,6 +158,7 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         setTimeout(() => {
             const newProduct: Product = {
                 ...form as Product,
+                sku: finalSku as string, // Use computed final sku
                 id: `PROD-${Date.now()}`,
                 lastUpdated: new Date().toISOString(),
                 inventoryBreakdown: [],
@@ -169,8 +221,24 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                             <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
                         </div>
                         <div className="col-span-2">
-                            <label className="text-xs text-slate-400 block mb-1">SKU (支持逗号分隔多个)</label>
-                            <input type="text" value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none font-mono uppercase" placeholder="SKU-A, SKU-B" />
+                            <label className="text-xs text-slate-400 block mb-1">SKU (多标签 - 回车添加)</label>
+                            <div className="w-full bg-black/40 border border-white/10 rounded-lg p-2 flex flex-wrap gap-2 focus-within:border-indigo-500 transition-colors">
+                                {form.sku?.split(',').map(s => s.trim()).filter(Boolean).map((tag, index) => (
+                                    <span key={index} className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-xs flex items-center gap-1 font-mono">
+                                        {tag}
+                                        <button onClick={() => removeSkuTag(tag)} className="hover:text-white"><X className="w-3 h-3" /></button>
+                                    </span>
+                                ))}
+                                <input 
+                                    type="text" 
+                                    value={skuInput} 
+                                    onChange={handleSkuChange} 
+                                    onKeyDown={handleSkuKeyDown}
+                                    onBlur={() => { commitSku(skuInput); setSkuInput(''); }}
+                                    className="bg-transparent outline-none flex-1 min-w-[80px] text-sm text-white font-mono uppercase placeholder-slate-600" 
+                                    placeholder={form.sku ? "" : "输入SKU..."}
+                                />
+                            </div>
                         </div>
                         <div>
                             <label className="text-xs text-slate-400 block mb-1">类目 Category</label>
@@ -234,6 +302,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         return Math.ceil(stock / items);
     });
     const [stockTotal, setStockTotal] = useState(product.stock || 0);
+    const [skuInput, setSkuInput] = useState('');
 
     const [formData, setFormData] = useState({
         ...product,
@@ -246,11 +315,20 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
     });
 
     const handleSave = () => {
+        // Ensure pending input is committed
+        if (skuInput.trim()) {
+            commitSku(skuInput);
+        }
+        
+        // Wait a tick or use updated value logic
+        const finalSku = skuInput.trim() ? (formData.sku ? `${formData.sku},${skuInput.trim().toUpperCase()}` : skuInput.trim().toUpperCase()) : formData.sku;
+
         setIsSaving(true);
         // Important: Update the stock with the manual total
         const updatedProduct = {
             ...formData,
-            stock: stockTotal
+            sku: finalSku,
+            stock: stockTotal // This ensures the calculated total stock (box * items) is saved
         };
 
         // Simulate processing delay
@@ -299,18 +377,22 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         const count = parseInt(e.target.value) || 0;
         setBoxCount(count);
         // Auto-update stock total when box count changes (One-way binding)
-        // This fixes the issue of "entered value but didn't save"
         const items = formData.itemsPerBox || 1;
-        setStockTotal(count * items);
+        const newTotal = count * items;
+        setStockTotal(newTotal);
+        // Sync to formData to be safe, although stockTotal is used on save
+        setFormData(prev => ({ ...prev, stock: newTotal }));
     };
 
     const handleItemsPerBoxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const items = parseInt(e.target.value) || 0;
         setFormData({ ...formData, itemsPerBox: items });
         // Recalculate stock based on current box count
-        // We assume if you change items/box, you want to update total stock based on box count
         if (boxCount > 0) {
-            setStockTotal(boxCount * items);
+            const newTotal = boxCount * items;
+            setStockTotal(newTotal);
+            // Sync to formData to be safe
+            setFormData(prev => ({ ...prev, stock: newTotal, itemsPerBox: items }));
         }
     };
 
@@ -319,6 +401,49 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         setStockTotal(total);
         // Decoupled: We do NOT auto-update boxCount here.
         // This allows for manual override (e.g., loose items) without fighting the box calculation.
+        setFormData(prev => ({ ...prev, stock: total }));
+    };
+
+    // --- SKU Tag Input Logic (Edit Mode) ---
+    const commitSku = (val: string) => {
+        const cleanVal = val.trim().toUpperCase();
+        if (!cleanVal) return;
+        const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+        if (!current.includes(cleanVal)) {
+            setFormData(prev => ({ ...prev, sku: [...current, cleanVal].join(',') }));
+        }
+    };
+
+    const handleSkuKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitSku(skuInput);
+            setSkuInput('');
+        } else if (e.key === 'Backspace' && !skuInput) {
+            const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+            if (current.length > 0) {
+                current.pop();
+                setFormData(prev => ({ ...prev, sku: current.join(',') }));
+            }
+        }
+    };
+
+    const handleSkuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const val = e.target.value;
+        if (val.includes(',')) {
+            const parts = val.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
+            const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+            const combined = Array.from(new Set([...current, ...parts])).join(',');
+            setFormData(prev => ({ ...prev, sku: combined }));
+            setSkuInput('');
+        } else {
+            setSkuInput(val);
+        }
+    };
+
+    const removeSkuTag = (tag: string) => {
+        const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
+        setFormData(prev => ({ ...prev, sku: current.filter(t => t !== tag).join(',') }));
     };
 
     const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (formData.itemsPerBox || 1); 
@@ -397,7 +522,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                             
                             <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-4">
                                 <div>
-                                    <label className={labelClass}>日期</label>
+                                    <label className={labelClass}>备货日期 (Restock Date)</label>
                                     <div className="relative">
                                         <input type="text" defaultValue={new Date().toISOString().split('T')[0]} className={inputClass} />
                                         <Calendar className="w-4 h-4 absolute right-3 top-2.5 text-slate-500" />
@@ -418,13 +543,21 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 </div>
                                 <div>
                                     <label className={labelClass}>SKU (多标签)</label>
-                                    <div className="flex items-center gap-2 w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm focus-within:border-indigo-500 shadow-sm">
+                                    <div className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 flex flex-wrap gap-2 focus-within:border-indigo-500 shadow-sm transition-all min-h-[38px]">
+                                         {formData.sku?.split(',').map(s => s.trim()).filter(Boolean).map((tag, index) => (
+                                            <span key={index} className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-xs flex items-center gap-1 font-mono">
+                                                {tag}
+                                                <button onClick={() => removeSkuTag(tag)} className="hover:text-white"><X className="w-3 h-3" /></button>
+                                            </span>
+                                        ))}
                                         <input 
                                             type="text" 
-                                            value={formData.sku} 
-                                            onChange={e => setFormData({...formData, sku: e.target.value})}
-                                            className="bg-transparent outline-none flex-1 min-w-0 h-full py-0.5 text-white placeholder-slate-500 font-mono" 
-                                            placeholder="SKU-A, SKU-B..." 
+                                            value={skuInput} 
+                                            onChange={handleSkuChange}
+                                            onKeyDown={handleSkuKeyDown}
+                                            onBlur={() => { commitSku(skuInput); setSkuInput(''); }}
+                                            className="bg-transparent outline-none flex-1 min-w-[60px] h-full py-0.5 text-white placeholder-slate-600 font-mono text-sm uppercase" 
+                                            placeholder={formData.sku ? "" : "添加 SKU..."} 
                                         />
                                     </div>
                                 </div>
