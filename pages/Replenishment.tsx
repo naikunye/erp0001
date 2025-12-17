@@ -437,6 +437,7 @@ const Replenishment: React.FC = () => {
                 revenue30d: dailyBurnRate * 30 * p.price,
                 growth: 0, 
                 profit: 0,
+                totalPotentialProfit: 0,
                 totalWeight: stock * (p.unitWeight || 0),
                 boxes: Math.ceil(stock / (p.itemsPerBox || 1))
             };

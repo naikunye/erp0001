@@ -864,6 +864,9 @@ const Inventory: React.FC = () => {
             const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
             const unitProfit = priceUSD - totalUnitCost;
             
+            // Total Potential Profit (Projected based on current stock)
+            const totalPotentialProfit = unitProfit * stock;
+            
             // Total Freight for Display (Estimate for current stock incl. consumables)
             const totalFreightDisplayCNY = effectiveTotalFreightCNY + (unitConsumablesCNY * stock);
 
@@ -879,6 +882,7 @@ const Inventory: React.FC = () => {
                 revenue30d: pStats.revenue30d, // REAL REVENUE (USD)
                 growth: growth,                 // REAL GROWTH
                 profit: unitProfit, // UNIT PROFIT (USD)
+                totalPotentialProfit: totalPotentialProfit, // TOTAL STOCK PROFIT (USD)
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0, // MARGIN %
                 totalWeight: stock * unitRealWeight, // Real weight total
                 boxes: Math.ceil(stock / (p.itemsPerBox || 1))
@@ -922,6 +926,7 @@ const Inventory: React.FC = () => {
             revenue30d: 0,
             growth: 0,
             profit: 0,
+            totalPotentialProfit: 0,
             margin: 0,
             totalWeight: 0,
             boxes: 0,
@@ -1084,17 +1089,29 @@ const Inventory: React.FC = () => {
                                 {/* Sales & Profit (UPDATED) */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono space-y-2">
-                                        <div>
-                                            <div className="text-xs text-slate-500">30天营收</div>
-                                            <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</div>
+                                        {/* Revenue */}
+                                        <div className="flex justify-between items-baseline">
+                                             <span className="text-[10px] text-slate-500">30天营收</span>
+                                             <span className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</span>
                                         </div>
-                                        <div className="bg-white/5 p-1.5 rounded border border-white/5">
-                                            <div className="flex items-center gap-1 mb-0.5">
-                                                <Wallet className="w-3 h-3 text-indigo-400" />
-                                                <span className="text-[10px] text-slate-400">单品净利</span>
+                                        
+                                        {/* Profit Block */}
+                                        <div className="bg-white/5 p-2 rounded border border-white/5 space-y-1.5">
+                                            {/* Unit Profit */}
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] text-slate-400 flex items-center gap-1"><Wallet className="w-3 h-3 text-indigo-400" /> 单品</span>
+                                                <span className={`text-xs font-bold ${item.profit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    ${item.profit.toFixed(2)}
+                                                </span>
                                             </div>
-                                            <div className={`text-xs font-bold ${item.profit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                ${item.profit.toFixed(2)} <span className="opacity-70 text-[9px]">({item.margin?.toFixed(0)}%)</span>
+                                            {/* Divider */}
+                                            <div className="h-px bg-white/5 w-full"></div>
+                                            {/* Total Profit */}
+                                            <div className="flex justify-between items-center">
+                                                <span className="text-[10px] text-slate-400">库存总利</span>
+                                                <span className={`text-xs font-bold ${item.totalPotentialProfit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                    ${item.totalPotentialProfit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                                                </span>
                                             </div>
                                         </div>
                                     </div>
