@@ -31,9 +31,6 @@ const MainLayout: React.FC = () => {
   const [loginForm, setLoginForm] = useState({ email: 'admin@tanxing.com', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
   
-  // No local activePage state anymore
-  // const [activePage, setActivePage] = useState<Page>('dashboard');
-
   useEffect(() => {
       setAuthChecking(false);
       Logger.info("Application mounted");
