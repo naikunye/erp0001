@@ -181,15 +181,25 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     // Unit Weight Logic
     const unitRealWeight = formData.unitWeight || 0;
     const unitVolWeight = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0)) / 6000;
-    const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
-    const activeChargeableWeight = formData.logistics?.unitBillingWeight || autoChargeableWeight;
     
-    // Logistics Costs (Auto)
+    // 1. Auto Calculated (Theoretical)
+    const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+    
+    // 2. Derived from Manual Total Billing Weight (Batch Level)
+    const manualTotalBillingWeight = formData.logistics?.billingWeight;
+    const derivedUnitWeightFromTotal = manualTotalBillingWeight && formData.stock > 0 
+        ? manualTotalBillingWeight / formData.stock 
+        : autoChargeableWeight;
+
+    // 3. Final Active Unit Weight (Specific Override > Derived from Total > Auto)
+    const activeChargeableWeight = formData.logistics?.unitBillingWeight ?? derivedUnitWeightFromTotal;
+    
+    // Logistics Costs (Auto based on Rate)
     const unitFreightRateBased = (formData.logistics?.unitFreightCost || 0) * activeChargeableWeight;
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
     const autoTotalFreightCNY = (unitFreightRateBased * formData.stock) + batchFeesCNY;
 
-    // Logistics Costs (Final Decision)
+    // Logistics Costs (Final Decision for Total)
     const manualTotalFreightCNY = formData.logistics?.totalFreightCost;
     const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
     
@@ -511,7 +521,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div>
                                        <div className="flex justify-between mb-1">
                                             <label className="text-[10px] text-slate-500 font-bold">单品计费重 (KG)</label>
-                                            <span className="text-[9px] text-slate-500">Auto: {autoChargeableWeight.toFixed(2)}</span>
+                                            <span className="text-[9px] text-slate-500">Auto: {derivedUnitWeightFromTotal.toFixed(2)}</span>
                                        </div>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
@@ -524,7 +534,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                     const val = parseFloat(e.target.value);
                                                     handleNestedChange('logistics', 'unitBillingWeight', isNaN(val) ? undefined : val);
                                                 }}
-                                                placeholder={autoChargeableWeight.toFixed(2)}
+                                                placeholder={derivedUnitWeightFromTotal.toFixed(2)}
                                                 className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold placeholder-slate-600" 
                                            />
                                        </div>
@@ -537,31 +547,43 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                {/* LIVE TOTAL FREIGHT DISPLAY */}
                                <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
-                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
+                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Estimated Total Freight)</span>
                                        <span className="text-sm font-bold text-blue-100 font-mono">
                                            ¥ {effectiveTotalFreightCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                        </span>
                                    </div>
                                    
                                    {/* MANUAL TOTAL OVERRIDE INPUT */}
-                                   <div className="flex items-center gap-2 mt-1 pt-1 border-t border-blue-500/20">
-                                       <label className="text-[9px] text-blue-300 whitespace-nowrap">头程总运费 (手动):</label>
-                                       <input 
-                                            type="number" 
-                                            value={formData.logistics?.totalFreightCost ?? ''}
-                                            onChange={e => {
-                                                const val = parseFloat(e.target.value);
-                                                handleNestedChange('logistics', 'totalFreightCost', isNaN(val) ? undefined : val);
-                                            }}
-                                            placeholder={`Auto: ${autoTotalFreightCNY.toFixed(0)}`}
-                                            className="w-24 bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
-                                       />
-                                       <span className="text-[9px] text-blue-300/50 ml-auto">
-                                           {manualTotalFreightCNY ? "已启用手动总价" : "使用自动计算"}
-                                       </span>
+                                   <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-blue-500/20">
+                                       <div>
+                                           <label className="text-[9px] text-blue-300 block mb-0.5">头程总运费 (手动 ¥)</label>
+                                           <input 
+                                                type="number" 
+                                                value={formData.logistics?.totalFreightCost ?? ''}
+                                                onChange={e => {
+                                                    const val = parseFloat(e.target.value);
+                                                    handleNestedChange('logistics', 'totalFreightCost', isNaN(val) ? undefined : val);
+                                                }}
+                                                placeholder={`Auto: ${autoTotalFreightCNY.toFixed(0)}`}
+                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
+                                           />
+                                       </div>
+                                       <div>
+                                           <label className="text-[9px] text-blue-300 block mb-0.5">整批计费重 (Total Weight)</label>
+                                           <input 
+                                                type="number" 
+                                                value={formData.logistics?.billingWeight ?? ''}
+                                                onChange={e => {
+                                                    const val = parseFloat(e.target.value);
+                                                    handleNestedChange('logistics', 'billingWeight', isNaN(val) ? undefined : val);
+                                                }}
+                                                placeholder="KG"
+                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
+                                           />
+                                       </div>
                                    </div>
                                    
-                                   <div className="text-[9px] text-blue-300/50 text-right">
+                                   <div className="text-[9px] text-blue-300/50 text-right mt-1">
                                        折合单品头程: ¥{effectiveUnitFreightCNY.toFixed(2)}
                                    </div>
                                </div>
