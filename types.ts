@@ -39,6 +39,7 @@ export interface Product {
     trackingNo: string; 
     unitFreightCost: number; 
     totalFreightCost?: number; // Added for manual total override
+    billingWeight?: number; // Added for manual billing weight override
     targetWarehouse: string 
   };
   economics?: { platformFeePercent: number; creatorFeePercent: number; fixedCost: number; lastLegShipping: number; adCost: number; refundRatePercent?: number };

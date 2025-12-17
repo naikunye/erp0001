@@ -362,7 +362,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         // Ensure nested objects exist
         dimensions: product.dimensions || { l: 32, w: 24, h: 18 },
         economics: product.economics || { platformFeePercent: 2, creatorFeePercent: 10, fixedCost: 0.3, lastLegShipping: 5.44, adCost: 10, refundRatePercent: 3 },
-        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62, totalFreightCost: 0 },
+        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62, totalFreightCost: 0, billingWeight: 0 },
         lingXingId: product.lingXingId || '',
         notes: product.notes || ''
     });
@@ -821,29 +821,22 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     </div>
                                 </div>
                                 <div>
-                                    <label className={labelClass}>头程总运费 (Total Freight)</label>
+                                    <label className={labelClass}>计费总重 (Manual)</label>
                                     <div className="relative">
-                                        <span className="absolute left-3 top-2 text-slate-500 text-xs">¥</span>
+                                        <Scale className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
                                         <input 
                                             type="number" 
-                                            value={formData.logistics?.totalFreightCost} 
+                                            value={formData.logistics?.billingWeight || ''} 
                                             onChange={e => setFormData({
                                                 ...formData, 
                                                 logistics: {
                                                     ...formData.logistics!, 
-                                                    totalFreightCost: parseFloat(e.target.value)
+                                                    billingWeight: parseFloat(e.target.value)
                                                 }
-                                            })} 
-                                            className={`${inputClass} pl-6`} 
-                                            placeholder="手动输入总运费"
+                                            })}
+                                            placeholder={((stockTotal || 0) * (formData.unitWeight || 0)).toFixed(2)} // Placeholder hint as theoretical weight
+                                            className={`${inputClass} pl-9`} 
                                         />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>计费总重 (Manual)</label>
-                                    <div className="relative">
-                                        <Scale className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-                                        <input type="number" placeholder="0" className={`${inputClass} pl-9`} />
                                     </div>
                                     <div className="text-[10px] text-slate-500 text-right mt-1">理论实重: {((stockTotal || 0) * (formData.unitWeight || 0)).toFixed(2)} kg</div>
                                 </div>
@@ -972,12 +965,15 @@ const Inventory: React.FC = () => {
               // Metrics
               const totalInvestment = p.stock * (p.costPrice || 0); // Total capital in stock (CNY)
               
-              // Freight Cost Calculation: Use total override if available, else standard calc
+              const totalWeight = p.stock * (p.unitWeight || 0);
               let freightCost = 0;
-              if (p.logistics?.totalFreightCost !== undefined && p.logistics?.totalFreightCost > 0) {
-                  freightCost = p.logistics.totalFreightCost;
+              
+              // Freight Cost Calculation: Use Manual Billing Weight if available
+              if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+                  freightCost = p.logistics.billingWeight * (p.logistics.unitFreightCost || 0);
               } else {
-                  freightCost = p.stock * (p.logistics?.unitFreightCost || 0);
+                  // Fallback to stock * unitWeight * unitFreightCost (assuming unitFreightCost is per KG)
+                  freightCost = totalWeight * (p.logistics?.unitFreightCost || 0);
               }
 
               const goodsCost = totalInvestment - freightCost;
@@ -1002,7 +998,7 @@ const Inventory: React.FC = () => {
                   revenue30d,
                   growth,
                   profit,
-                  totalWeight: p.stock * (p.unitWeight || 0),
+                  totalWeight: totalWeight,
                   boxes: boxes
               };
           }).filter(p => 
@@ -1038,7 +1034,7 @@ const Inventory: React.FC = () => {
   }
 
   const handleExportCSV = () => {
-      const headers = ['SKU', 'Name', 'Stock', 'Box Count', 'Days Remaining', 'Burn Rate', 'Total Cost', 'Tracking', 'Total Freight'];
+      const headers = ['SKU', 'Name', 'Stock', 'Box Count', 'Days Remaining', 'Burn Rate', 'Total Cost', 'Tracking', 'Billing Weight'];
       const rows = replenishmentItems.map(item => [
           item.sku, 
           `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
@@ -1048,7 +1044,7 @@ const Inventory: React.FC = () => {
           item.dailyBurnRate,
           item.totalInvestment,
           item.logistics?.trackingNo,
-          item.logistics?.totalFreightCost || 0
+          item.logistics?.billingWeight || 0
       ].join(','));
       
       const csvContent = "data:text/csv;charset=utf-8," 
@@ -1204,7 +1200,7 @@ const Inventory: React.FC = () => {
                               <div className="text-xs text-slate-500 mt-1">货值: ¥{item.goodsCost.toLocaleString()}</div>
                               <div className="text-xs text-slate-500">
                                   运费: ¥{item.freightCost.toLocaleString()} 
-                                  {item.logistics?.totalFreightCost ? <span className="text-[9px] text-indigo-400 ml-1">(Manual)</span> : null}
+                                  {item.logistics?.billingWeight ? <span className="text-[9px] text-indigo-400 ml-1">(Manual)</span> : null}
                               </div>
                           </div>
 
