@@ -179,15 +179,28 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     // Unit Weight Logic
     const unitRealWeight = formData.unitWeight || 0;
     const unitVolWeight = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0)) / 6000;
-    const unitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+    const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
     
-    // Fees
-    const unitFreightCostCNY = (formData.logistics?.unitFreightCost || 0) * unitChargeableWeight;
-    const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0); // Per Unit
+    // User Manual Override Logic for Unit Billing Weight
+    const activeChargeableWeight = formData.logistics?.unitBillingWeight || autoChargeableWeight;
+    
+    // 1. Auto Calculated Costs based on Rate
+    const unitFreightRateBased = (formData.logistics?.unitFreightCost || 0) * activeChargeableWeight;
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0); // Total Batch
+    const autoTotalFreightCNY = (unitFreightRateBased * formData.stock) + batchFeesCNY;
+
+    // 2. Final Logic: Does Manual Total exist?
+    const manualTotalFreightCNY = formData.logistics?.totalFreightCost;
     
-    // Total Estimated Freight
-    const estimatedTotalFreightCNY = (unitFreightCostCNY * formData.stock) + (unitConsumablesCNY * formData.stock) + batchFeesCNY;
+    // The "Effective" Total Freight used for decision making
+    const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
+    
+    // The "Effective" Unit Freight (Derived)
+    const effectiveUnitFreightCNY = formData.stock > 0 ? (effectiveTotalFreightCNY / formData.stock) : 0;
+
+    // Consumables are usually added ON TOP of freight bill (Internal cost)
+    const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
+    const effectiveTotalCostWithConsumables = effectiveTotalFreightCNY + (unitConsumablesCNY * formData.stock);
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
@@ -393,7 +406,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            <div className="flex justify-between items-center text-[10px] text-slate-500 bg-white/5 p-2 rounded mb-4 font-mono">
                                <span>单品实重: {unitRealWeight} kg</span>
                                <span>单品材积: {unitVolWeight.toFixed(2)} kg (÷6000)</span>
-                               <span className="text-amber-400 font-bold border border-amber-500/30 px-1 rounded">计费重: {unitChargeableWeight.toFixed(2)} kg</span>
+                               <span className="text-amber-400 font-bold border border-amber-500/30 px-1 rounded">理论计费重: {autoChargeableWeight.toFixed(2)} kg</span>
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-4">
@@ -479,33 +492,59 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                    <div>
                                        <div className="flex justify-between mb-1">
-                                            <label className="text-[10px] text-slate-500 font-bold">单品运费 (自动计算)</label>
-                                            <span className="text-[9px] text-slate-500">Rate x Chargeable Weight</span>
+                                            <label className="text-[10px] text-slate-500 font-bold">单品计费重 (KG)</label>
+                                            <span className="text-[9px] text-slate-500">Auto: {autoChargeableWeight.toFixed(2)}</span>
                                        </div>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
-                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">¥</span>
+                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">⚖️</span>
                                            </div>
                                            <input 
                                                 type="number" 
-                                                value={unitFreightCostCNY.toFixed(2)} 
-                                                readOnly
-                                                className="w-full bg-black/20 border border-white/10 rounded-r px-3 py-2 text-sm text-slate-400 font-mono outline-none font-bold cursor-not-allowed" 
+                                                value={formData.logistics?.unitBillingWeight ?? ''} 
+                                                onChange={e => {
+                                                    const val = parseFloat(e.target.value);
+                                                    handleNestedChange('logistics', 'unitBillingWeight', isNaN(val) ? undefined : val);
+                                                }}
+                                                placeholder={autoChargeableWeight.toFixed(2)}
+                                                className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold placeholder-slate-600" 
                                            />
+                                       </div>
+                                       <div className="text-[9px] text-right text-indigo-400 mt-1 font-mono">
+                                           单品运费: ¥{unitFreightRateBased.toFixed(2)}
                                        </div>
                                    </div>
                                </div>
                                
                                {/* LIVE TOTAL FREIGHT DISPLAY */}
-                               <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-1">
+                               <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
                                        <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Estimated Total Freight)</span>
                                        <span className="text-sm font-bold text-blue-100 font-mono">
-                                           ¥ {estimatedTotalFreightCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                           ¥ {effectiveTotalCostWithConsumables.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                        </span>
                                    </div>
+                                   
+                                   {/* MANUAL TOTAL OVERRIDE INPUT */}
+                                   <div className="flex items-center gap-2 mt-1 pt-1 border-t border-blue-500/20">
+                                       <label className="text-[9px] text-blue-300 whitespace-nowrap">头程总运费 (手动):</label>
+                                       <input 
+                                            type="number" 
+                                            value={formData.logistics?.totalFreightCost ?? ''}
+                                            onChange={e => {
+                                                const val = parseFloat(e.target.value);
+                                                handleNestedChange('logistics', 'totalFreightCost', isNaN(val) ? undefined : val);
+                                            }}
+                                            placeholder={`Auto: ${autoTotalFreightCNY.toFixed(0)}`}
+                                            className="w-24 bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
+                                       />
+                                       <span className="text-[9px] text-blue-300/50 ml-auto">
+                                           {manualTotalFreightCNY ? "已启用手动总价" : "使用自动计算"}
+                                       </span>
+                                   </div>
+                                   
                                    <div className="text-[9px] text-blue-300/50 text-right">
-                                       (单品运费 + 耗材) * 库存 + 整批杂费
+                                       折合单品头程: ¥{effectiveUnitFreightCNY.toFixed(2)}
                                    </div>
                                </div>
 
@@ -699,23 +738,26 @@ const Inventory: React.FC = () => {
             const dims = p.dimensions || {l:0, w:0, h:0};
             // Volumetric Weight (KG) = L*W*H / 6000 (Air standard)
             const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
-            const chargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+            const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+            const chargeableWeight = p.logistics?.unitBillingWeight || autoChargeableWeight;
             
-            // Unit Freight Cost (CNY)
-            const unitFreightCNY = (p.logistics?.unitFreightCost || 0) * chargeableWeight;
+            // Standard Unit Freight (Rate Based)
+            const unitFreightRateBasedCNY = (p.logistics?.unitFreightCost || 0) * chargeableWeight;
 
-            // 3. Other Logistics Fees (Allocated)
-            // Consumables: Per Unit
-            const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
-            
-            // Batch Fees (Customs/Port): Allocate by stock quantity (assuming current stock is a batch proxy, or negligible)
-            // To be safer, we can ignore batch fixed fees for *unit* profit if stock is low to avoid skewing, 
-            // or assume a standard batch size. Let's allocate based on current stock but clamp minimum divisor.
+            // 3. Logistics Costs Aggregation (Manual vs Auto)
             const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
-            const allocatedBatchFeeCNY = p.stock > 0 ? batchFeesCNY / p.stock : 0; 
+            const autoTotalFreightCNY = (unitFreightRateBasedCNY * p.stock) + batchFeesCNY;
+            
+            // PRIORITY: Use Manual Total Freight if available
+            const manualTotalFreightCNY = p.logistics?.totalFreightCost;
+            const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
+            
+            // Effective Unit Freight (Derived)
+            const effectiveUnitFreightCNY = p.stock > 0 ? effectiveTotalFreightCNY / p.stock : 0;
 
-            // Total Unit Logistics Cost (CNY)
-            const totalUnitLogisticsCNY = unitFreightCNY + unitConsumablesCNY + allocatedBatchFeeCNY;
+            // Consumables are added ON TOP
+            const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
+            const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
 
             // 4. Profit Calculation (USD)
             const priceUSD = p.price || 0;
@@ -735,8 +777,8 @@ const Inventory: React.FC = () => {
             const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
             const unitProfit = priceUSD - totalUnitCost;
             
-            // Total Freight for Display (Estimate for current stock)
-            const totalFreightEstimateCNY = totalUnitLogisticsCNY * stock;
+            // Total Freight for Display (Estimate for current stock incl. consumables)
+            const totalFreightDisplayCNY = effectiveTotalFreightCNY + (unitConsumablesCNY * stock);
 
             return {
                 ...p,
@@ -745,7 +787,7 @@ const Inventory: React.FC = () => {
                 safetyStock,
                 reorderPoint,
                 totalInvestment: stock * (p.costPrice || 0), // Kept in CNY for investment view
-                freightCost: totalFreightEstimateCNY, // Update total freight display (CNY)
+                freightCost: totalFreightDisplayCNY, // Update total freight display (CNY)
                 goodsCost: stock * (p.costPrice || 0), // Kept in CNY
                 revenue30d: pStats.revenue30d, // REAL REVENUE (USD)
                 growth: growth,                 // REAL GROWTH

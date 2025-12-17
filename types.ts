@@ -39,7 +39,8 @@ export interface Product {
     trackingNo: string; 
     unitFreightCost: number; 
     totalFreightCost?: number; // Added for manual total override
-    billingWeight?: number; // Added for manual billing weight override
+    billingWeight?: number; // Added for manual billing weight override (Total)
+    unitBillingWeight?: number; // NEW: Added for manual unit billing weight override
     consumablesFee?: number; // 耗材/贴标费
     customsFee?: number; // 报关费
     portFee?: number; // 港口/操作费
