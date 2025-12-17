@@ -235,6 +235,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
+    
+    // Total Stock Profit Calculation
+    const estimatedTotalStockProfitUSD = estimatedProfitUSD * formData.stock;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
@@ -713,6 +716,13 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        {estimatedMargin.toFixed(1)}%
                                    </div>
                                </div>
+                               {/* ADDED: Total Stock Profit */}
+                               <div>
+                                   <div className="text-[10px] text-slate-500 uppercase font-bold">Total Stock Profit</div>
+                                   <div className={`text-2xl font-mono font-bold ${estimatedTotalStockProfitUSD > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                       ${estimatedTotalStockProfitUSD.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                   </div>
+                               </div>
                            </div>
                        </div>
 
@@ -953,6 +963,9 @@ const Inventory: React.FC = () => {
                         <span>SKU 总数: <span className="text-white font-mono font-bold">{filteredItems.length}</span></span>
                         <span className="w-px h-3 bg-white/10"></span>
                         <span>资金占用: <span className="text-emerald-400 font-mono font-bold">¥{filteredItems.reduce((a,b)=>a+b.totalInvestment, 0).toLocaleString()}</span></span>
+                        {/* ADDED: Total Profit Aggregation */}
+                        <span className="w-px h-3 bg-white/10"></span>
+                        <span>预估总利: <span className="text-blue-400 font-mono font-bold">${filteredItems.reduce((a,b)=>a+b.totalPotentialProfit, 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span></span>
                     </div>
                 </div>
                 <div className="flex gap-3">
