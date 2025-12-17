@@ -11,7 +11,7 @@ import {
   Plane, Ship, Info, Factory, Image as ImageIcon, History, FileText, Loader2, Bot,
   AlertCircle, TrendingUp, Target, BarChart3, Zap, Megaphone, BrainCircuit,
   Plus, Trash2, MoreHorizontal, CheckSquare, Square, Edit2, Calendar,
-  Clock, ShieldCheck, Truck, Scale, Ruler, Users, Layers, Activity, Copy, Upload, ExternalLink, Link
+  Clock, ShieldCheck, Truck, Scale, Ruler, Users, Layers, Activity, Copy, Upload, ExternalLink, Link, StickyNote
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
@@ -841,6 +841,25 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     <div className="text-[10px] text-slate-500 text-right mt-1">理论实重: {((stockTotal || 0) * (formData.unitWeight || 0)).toFixed(2)} kg</div>
                                 </div>
                                 <div>
+                                    <label className={labelClass}>头程总运费 (Total Freight)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-2 text-slate-500 text-xs">¥</span>
+                                        <input 
+                                            type="number" 
+                                            value={formData.logistics?.totalFreightCost} 
+                                            onChange={e => setFormData({
+                                                ...formData, 
+                                                logistics: {
+                                                    ...formData.logistics!, 
+                                                    totalFreightCost: parseFloat(e.target.value)
+                                                }
+                                            })} 
+                                            className={`${inputClass} pl-6`} 
+                                            placeholder="手动输入总运费"
+                                        />
+                                    </div>
+                                </div>
+                                <div>
                                     <label className={labelClass}>耗材/贴标费 (¥)</label>
                                     <input type="number" defaultValue={30} className={inputClass} />
                                 </div>
@@ -971,6 +990,8 @@ const Inventory: React.FC = () => {
               // Freight Cost Calculation: Use Manual Billing Weight if available
               if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
                   freightCost = p.logistics.billingWeight * (p.logistics.unitFreightCost || 0);
+              } else if (p.logistics?.totalFreightCost !== undefined && p.logistics?.totalFreightCost > 0) {
+                  freightCost = p.logistics.totalFreightCost;
               } else {
                   // Fallback to stock * unitWeight * unitFreightCost (assuming unitFreightCost is per KG)
                   freightCost = totalWeight * (p.logistics?.unitFreightCost || 0);
@@ -1112,14 +1133,15 @@ const Inventory: React.FC = () => {
           {/* List Section (ERP Style) */}
           <div className="flex-1 overflow-y-auto bg-black/20 scrollbar-thin scrollbar-thumb-white/10">
               
-              {/* Table Header with Custom Grid - Updated for slightly larger font */}
-              <div className="sticky top-0 z-20 grid grid-cols-[40px_1.5fr_3fr_1.5fr_1.5fr_1fr_1.2fr_80px] gap-3 px-4 py-3 bg-[#0f1218] border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider shadow-lg">
+              {/* Table Header with Custom Grid - Updated layout for notes */}
+              <div className="sticky top-0 z-20 grid grid-cols-[40px_1.4fr_2.4fr_1.2fr_1.2fr_0.9fr_1.5fr_1.1fr_80px] gap-3 px-4 py-3 bg-[#0f1218] border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider shadow-lg">
                   <div className="flex items-center justify-center"><Square className="w-4 h-4" /></div>
                   <div>SKU / 阶段</div>
                   <div>产品信息 / 供应商</div>
                   <div>物流状态 (Tracking)</div>
                   <div>资金投入</div>
                   <div>库存数量</div>
+                  <div>备注信息</div>
                   <div className="text-right">销售表现</div>
                   <div className="text-center">操作</div>
               </div>
@@ -1127,7 +1149,7 @@ const Inventory: React.FC = () => {
               {/* Rows */}
               <div className="divide-y divide-white/5">
                   {replenishmentItems.map(item => (
-                      <div key={item.id} className="grid grid-cols-[40px_1.5fr_3fr_1.5fr_1.5fr_1fr_1.2fr_80px] gap-3 px-4 py-4 hover:bg-white/[0.02] transition-colors group items-center relative">
+                      <div key={item.id} className="grid grid-cols-[40px_1.4fr_2.4fr_1.2fr_1.2fr_0.9fr_1.5fr_1.1fr_80px] gap-3 px-4 py-4 hover:bg-white/[0.02] transition-colors group items-center relative">
                           
                           {/* 1. Selection */}
                           <div className="flex items-center justify-center">
@@ -1168,7 +1190,11 @@ const Inventory: React.FC = () => {
                                       <Factory className="w-3.5 h-3.5" />
                                       <span className="truncate">{item.supplier || '未指定供应商'}</span>
                                   </div>
-                                  {item.lingXingId && <div className="text-[10px] text-indigo-400 font-mono mt-0.5">LX: {item.lingXingId}</div>}
+                                  {item.lingXingId && (
+                                      <div className="text-xs font-bold text-indigo-300 font-mono mt-1 bg-indigo-900/30 px-1.5 py-0.5 rounded w-fit border border-indigo-500/30">
+                                          LX: {item.lingXingId}
+                                      </div>
+                                  )}
                               </div>
                           </div>
 
@@ -1215,7 +1241,21 @@ const Inventory: React.FC = () => {
                               </div>
                           </div>
 
-                          {/* 7. Sales Performance */}
+                          {/* 7. Notes (New Column) */}
+                          <div className="text-xs text-slate-400 break-words pr-2 relative group/note">
+                              <div className="line-clamp-2 hover:line-clamp-none transition-all cursor-default relative">
+                                  {item.notes ? (
+                                      <div className="flex items-start gap-1">
+                                          <StickyNote className="w-3 h-3 text-slate-600 mt-0.5 shrink-0" />
+                                          <span>{item.notes}</span>
+                                      </div>
+                                  ) : (
+                                      <span className="text-slate-700 italic text-[10px]">-</span>
+                                  )}
+                              </div>
+                          </div>
+
+                          {/* 8. Sales Performance */}
                           <div className="text-right">
                               <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-xs text-slate-500">/30天</span></div>
                               <div className={`text-xs font-bold mt-1 flex items-center justify-end gap-1 ${item.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -1225,7 +1265,7 @@ const Inventory: React.FC = () => {
                               <div className="text-xs text-slate-500 mt-1">日销: {item.dailyBurnRate} 件</div>
                           </div>
 
-                          {/* 8. Actions */}
+                          {/* 9. Actions */}
                           <div className="flex justify-center">
                               <button 
                                 onClick={(e) => handleEditClick(item, e)}
