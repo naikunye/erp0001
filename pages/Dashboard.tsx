@@ -7,7 +7,7 @@ import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI } from "@google/genai";
 
 const Dashboard: React.FC = () => {
-  const { state } = useTanxing();
+  const { state, dispatch } = useTanxing();
   const [isGenerating, setIsGenerating] = useState(false);
   const [report, setReport] = useState<string | null>(null);
   const [activeHighlight, setActiveHighlight] = useState<string | null>(null);
@@ -22,6 +22,13 @@ const Dashboard: React.FC = () => {
       return () => clearTimeout(timer);
   }, []);
 
+  // --- Handlers for Interactivity ---
+  const handleNavigateToInventory = (sku: string) => {
+      if (!sku) return;
+      // Navigate to Inventory and pass the SKU as a search filter
+      dispatch({ type: 'NAVIGATE', payload: { page: 'inventory', params: { searchQuery: sku } } });
+  };
+
   // --- 1. Real Data Calculations ---
 
   // Filter out deleted items to match Inventory/Order pages
@@ -32,7 +39,6 @@ const Dashboard: React.FC = () => {
   const metrics = useMemo(() => {
       
       // 1. Inventory Stock Value (Linked to Replenishment Center)
-      // Strictly matches Inventory Page: Sum of (Stock * CostPrice) for active products
       const stockValue = activeProducts.reduce((acc, p) => {
           return acc + (p.stock * (p.costPrice || 0));
       }, 0);
@@ -87,7 +93,7 @@ const Dashboard: React.FC = () => {
   // Top Products Chart Data (Profit based)
   // Also enrich with Stock info for the list view
   const profitData = useMemo(() => {
-      const profitMap: Record<string, { profit: number, revenue: number, stock: number, daysRemaining: number }> = {};
+      const profitMap: Record<string, { profit: number, revenue: number, stock: number, daysRemaining: number, sku: string }> = {};
       
       // Calculate Profit per SKU based on orders
       activeOrders.forEach(o => {
@@ -104,13 +110,15 @@ const Dashboard: React.FC = () => {
               }
 
               const key = product ? product.name : item.sku;
+              const sku = product ? product.sku : item.sku;
               
               if (!profitMap[key]) {
                   profitMap[key] = { 
                       profit: 0, 
                       revenue: 0, 
                       stock: product ? product.stock : 0,
-                      daysRemaining: product && product.dailyBurnRate ? Math.floor(product.stock / product.dailyBurnRate) : 999 
+                      daysRemaining: product && product.dailyBurnRate ? Math.floor(product.stock / product.dailyBurnRate) : 999,
+                      sku: sku
                   };
               }
               
@@ -145,63 +153,6 @@ const Dashboard: React.FC = () => {
           { name: '空运 (Air)', value: parseFloat(airCost.toFixed(2)) },
       ];
   }, [activeProducts]);
-
-  // Forecast Chart Data (Revenue over time)
-  // LINKED TO INVENTORY: Future projection is based on active products' Daily Burn Rate
-  const forecastChartData = useMemo(() => {
-      // 1. Historical Data (Real Orders)
-      const revenueByDate: Record<string, number> = {};
-      
-      // Initialize last 7 days with 0
-      const today = new Date();
-      for(let i=6; i>=0; i--) {
-          const d = new Date(today);
-          d.setDate(today.getDate() - i);
-          const dateStr = d.toISOString().split('T')[0];
-          revenueByDate[dateStr] = 0;
-      }
-
-      activeOrders.forEach(o => {
-          const date = o.date; 
-          if (revenueByDate[date] !== undefined) {
-              revenueByDate[date] += o.total;
-          }
-      });
-
-      const history = Object.keys(revenueByDate).sort().map(date => ({
-          name: date.slice(5), // MM-DD
-          fullDate: date,
-          actual: revenueByDate[date],
-          forecast: null as number | null
-      }));
-
-      // 2. Future Projection (Based on Inventory Settings)
-      // Calculate Total Daily Potential Revenue = Sum(BurnRate * Price)
-      const dailyPotentialRevenue = activeProducts.reduce((acc, p) => {
-          return acc + ((p.dailyBurnRate || 0) * p.price);
-      }, 0);
-
-      // If no burn rate set, use average of last 3 days actuals
-      const last3DaysAvg = history.slice(-3).reduce((acc, h) => acc + (h.actual || 0), 0) / 3;
-      const baseline = dailyPotentialRevenue > 0 ? dailyPotentialRevenue : (last3DaysAvg || 1000);
-
-      const nextDays = [];
-      for (let i = 1; i <= 7; i++) {
-          const d = new Date(today);
-          d.setDate(today.getDate() + i);
-          // Add slight randomization to simulate reality vs perfect projection
-          const noise = 1 + (Math.random() * 0.1 - 0.05); 
-          
-          nextDays.push({
-              name: d.toISOString().split('T')[0].slice(5),
-              actual: null,
-              forecast: parseFloat((baseline * noise).toFixed(2))
-          });
-      }
-
-      return [...history, ...nextDays];
-  }, [activeOrders, activeProducts]);
-
 
   // --- 2. AI Implementation ---
 
@@ -319,75 +270,79 @@ const Dashboard: React.FC = () => {
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
             <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
         </div>
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-3">
+        
+        {/* CLICKABLE Top Volume SKU Card */}
+        <div 
+            className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-3 cursor-pointer transition-transform hover:scale-[1.02]"
+            onClick={() => handleNavigateToInventory(metrics.topProduct)}
+            title="点击跳转至智能备货查看详情"
+        >
             <StatCard loading={isLoading} title="爆品 SKU (Top Volume)" value={metrics.topProduct} subValue={`${metrics.topProductVol} Sold`} trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
         </div>
+        
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
             <StatCard loading={isLoading} title="物流总重 (Weight)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
         </div>
       </div>
 
-      {/* Charts Section */}
+      {/* Main Charts Section - Redesigned Layout */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
-        {/* Forecast Chart */}
-        <div className="lg:col-span-2 ios-glass-card p-8 hud-card scanline-overlay animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-1">
-            <div className="flex items-center justify-between mb-8">
-                <div>
-                    <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
-                        <span className="w-1 h-5 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]"></span>
-                        营收趋势 (Revenue Trend)
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">
-                        基于 Inventory 设置的 Daily Burn Rate 进行推演
-                    </p>
-                </div>
-                <div className="flex gap-6">
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_5px_currentColor]"></span> 实际 (Actual)
+        {/* Real Profit Leaders (Moved Up, Expanded) */}
+        <div className="lg:col-span-2 ios-glass-card p-8 hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-3">
+             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-8 flex items-center gap-3">
+                <span className="w-1 h-5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
+                真实利润排行 (Real Profit Leaders)
+             </h3>
+             <div className="h-[350px]">
+                {profitData.length > 0 ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                        <BarChart 
+                            data={profitData} 
+                            layout="vertical" 
+                            margin={{ top: 0, right: 30, left: 30, bottom: 0 }}
+                            onClick={(data) => {
+                                if (data && data.activePayload && data.activePayload.length > 0) {
+                                    handleNavigateToInventory(data.activePayload[0].payload.sku);
+                                }
+                            }}
+                            className="cursor-pointer"
+                        >
+                            <defs>
+                                <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
+                                    <stop offset="0%" stopColor="#10b981" />
+                                    <stop offset="100%" stopColor="#34d399" />
+                                </linearGradient>
+                            </defs>
+                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.03)" />
+                            <XAxis type="number" hide />
+                            <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: '"JetBrains Mono", monospace'}} axisLine={false} tickLine={false} />
+                            <Tooltip content={<CustomHUDTooltip />} cursor={{fill: 'rgba(255,255,255,0.02)'}} />
+                            <Bar 
+                                dataKey="value" 
+                                barSize={16} 
+                                radius={[0, 4, 4, 0]}
+                            >
+                                {profitData.map((entry, index) => (
+                                    <Cell 
+                                        key={`cell-${index}`} 
+                                        fill={index < 3 ? 'url(#barGradient)' : '#334155'} 
+                                        fillOpacity={activeHighlight && activeHighlight !== entry.name ? 0.3 : 1}
+                                        style={{
+                                            filter: index < 3 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.3))' : '',
+                                            outline: 'none'
+                                        }} 
+                                    />
+                                ))}
+                            </Bar>
+                        </BarChart>
+                    </ResponsiveContainer>
+                ) : (
+                    <div className="h-full flex items-center justify-center text-slate-500">
+                        暂无销售利润数据
                     </div>
-                    <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_currentColor]"></span> 预测 (Projected)
-                    </div>
-                </div>
-            </div>
-
-            <div className="h-[350px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                  <ComposedChart data={forecastChartData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                      <defs>
-                          <linearGradient id="colorActual" x1="0" y1="0" x2="0" y2="1">
-                              <stop offset="5%" stopColor="#06b6d4" stopOpacity={0.4}/>
-                              <stop offset="95%" stopColor="#06b6d4" stopOpacity={0}/>
-                          </linearGradient>
-                      </defs>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.03)" vertical={false} />
-                      <XAxis dataKey="name" stroke="#64748b" tick={{fontSize: 12, fontFamily: '"JetBrains Mono", monospace', fill: '#94a3b8', fontWeight: 500}} tickLine={false} axisLine={false} dy={15} />
-                      <YAxis stroke="#64748b" tick={{fontSize: 12, fontFamily: '"JetBrains Mono", monospace', fill: '#94a3b8', fontWeight: 500}} tickLine={false} axisLine={false} />
-                      <Tooltip content={<CustomHUDTooltip />} />
-                      <Area 
-                          type="monotone" 
-                          dataKey="actual" 
-                          stroke="#06b6d4" 
-                          strokeWidth={3} 
-                          fillOpacity={1} 
-                          fill="url(#colorActual)" 
-                          style={{filter: 'drop-shadow(0 0 4px rgba(6,182,212,0.3))', outline: 'none'}}
-                          name="Actual"
-                      />
-                      <Line 
-                          type="monotone" 
-                          dataKey="forecast" 
-                          stroke="#a855f7" 
-                          strokeWidth={3} 
-                          strokeDasharray="4 4" 
-                          dot={false}
-                          style={{filter: 'drop-shadow(0 0 4px rgba(168,85,247,0.3))', outline: 'none'}}
-                          name="Forecast"
-                      />
-                  </ComposedChart>
-              </ResponsiveContainer>
-            </div>
+                )}
+             </div>
         </div>
 
         {/* Cost Structure (Donut) */}
@@ -446,56 +401,8 @@ const Dashboard: React.FC = () => {
 
       </div>
       
-      {/* Bottom Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="ios-glass-card p-8 hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-3">
-             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-8 flex items-center gap-3">
-                <span className="w-1 h-5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
-                真实利润排行 (Real Profit Leaders)
-             </h3>
-             <div className="h-72">
-                {profitData.length > 0 ? (
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={profitData} layout="vertical" margin={{ top: 0, right: 30, left: 30, bottom: 0 }}>
-                            <defs>
-                                <linearGradient id="barGradient" x1="0" y1="0" x2="1" y2="0">
-                                    <stop offset="0%" stopColor="#10b981" />
-                                    <stop offset="100%" stopColor="#34d399" />
-                                </linearGradient>
-                            </defs>
-                            <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="rgba(255,255,255,0.03)" />
-                            <XAxis type="number" hide />
-                            <YAxis dataKey="name" type="category" width={110} tick={{fill: '#94a3b8', fontSize: 11, fontWeight: 600, fontFamily: '"JetBrains Mono", monospace'}} axisLine={false} tickLine={false} />
-                            <Tooltip content={<CustomHUDTooltip />} cursor={{fill: 'rgba(255,255,255,0.02)'}} />
-                            <Bar 
-                                dataKey="value" 
-                                barSize={12} 
-                                radius={[0, 4, 4, 0]}
-                                onClick={(data) => setActiveHighlight(activeHighlight === data.name ? null : data.name)}
-                                cursor="pointer"
-                            >
-                                {profitData.map((entry, index) => (
-                                    <Cell 
-                                        key={`cell-${index}`} 
-                                        fill={index < 3 ? 'url(#barGradient)' : '#334155'} 
-                                        fillOpacity={activeHighlight && activeHighlight !== entry.name ? 0.3 : 1}
-                                        style={{
-                                            filter: index < 3 ? 'drop-shadow(0 0 4px rgba(16,185,129,0.3))' : '',
-                                            outline: 'none'
-                                        }} 
-                                    />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                ) : (
-                    <div className="h-full flex items-center justify-center text-slate-500">
-                        暂无销售利润数据
-                    </div>
-                )}
-             </div>
-          </div>
-
+      {/* Bottom Section - Top Sellers List */}
+      <div className="grid grid-cols-1 gap-6">
           <div className="ios-glass-card p-8 flex flex-col hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-4">
              <div className="flex justify-between items-center mb-8">
                  <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
@@ -509,36 +416,43 @@ const Dashboard: React.FC = () => {
                     {showAllProducts ? '收起' : '查看全部'}
                  </button>
              </div>
-             <div className="space-y-3 flex-1 overflow-y-auto pr-2">
-                 {profitData.slice(0, showAllProducts ? 20 : 4).map((item, i) => (
-                     <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-white/10 transition-all group cursor-pointer relative overflow-hidden">
+             
+             {/* List Container - Uses CSS Grid for responsive columns if needed */}
+             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                 {profitData.slice(0, showAllProducts ? 20 : 8).map((item, i) => (
+                     <div 
+                        key={i} 
+                        className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-white/10 transition-all group cursor-pointer relative overflow-hidden"
+                        onClick={() => handleNavigateToInventory(item.sku)}
+                        title="点击跳转至智能备货"
+                     >
                          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                         <div className="flex items-center gap-5 relative z-10 flex-1">
-                             <div className="text-lg font-display font-bold text-slate-600 group-hover:text-cyan-400 transition-colors">0{i+1}</div>
-                             <div className="flex-1">
-                                 <div className="flex justify-between">
-                                     <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
-                                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 rounded font-mono">+${item.value.toLocaleString()}</span>
+                         <div className="flex items-center gap-5 relative z-10 flex-1 min-w-0">
+                             <div className="text-lg font-display font-bold text-slate-600 group-hover:text-cyan-400 transition-colors shrink-0">0{i+1}</div>
+                             <div className="flex-1 min-w-0">
+                                 <div className="flex justify-between items-start mb-1">
+                                     <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors truncate mr-2" title={item.name}>{item.name}</p>
+                                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 rounded font-mono shrink-0">+${item.value.toLocaleString()}</span>
                                  </div>
                                  <div className="flex items-center gap-4 mt-2">
-                                     {/* Simple Stock Indicator */}
                                      <div className="flex items-center gap-2 text-[10px] text-slate-500">
                                          <Package className="w-3 h-3" />
                                          <span>Stock: {item.stock}</span>
                                      </div>
                                      <div className="flex items-center gap-1 text-[10px]">
                                          {item.daysRemaining < 15 ? <AlertTriangle className="w-3 h-3 text-red-500"/> : <ArrowUpRight className="w-3 h-3 text-emerald-500"/>}
-                                         <span className={item.daysRemaining < 15 ? 'text-red-400' : 'text-slate-400'}>{item.daysRemaining} Days Left</span>
+                                         <span className={item.daysRemaining < 15 ? 'text-red-400' : 'text-slate-400'}>{item.daysRemaining} Days</span>
                                      </div>
                                  </div>
                              </div>
                          </div>
                      </div>
                  ))}
-                 {profitData.length === 0 && (
-                     <div className="text-center text-slate-500 py-10">暂无数据</div>
-                 )}
              </div>
+             
+             {profitData.length === 0 && (
+                 <div className="text-center text-slate-500 py-10">暂无数据</div>
+             )}
           </div>
       </div>
     </div>

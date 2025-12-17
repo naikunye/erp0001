@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { TanxingProvider } from './context/TanxingContext';
+import { TanxingProvider, useTanxing } from './context/TanxingContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
@@ -25,11 +25,14 @@ import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
 import Logger from './utils/logger';
 
 const MainLayout: React.FC = () => {
+  const { state, dispatch } = useTanxing(); // Use Context
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [authChecking, setAuthChecking] = useState(true);
   const [loginForm, setLoginForm] = useState({ email: 'admin@tanxing.com', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
-  const [activePage, setActivePage] = useState<Page>('dashboard');
+  
+  // No local activePage state anymore
+  // const [activePage, setActivePage] = useState<Page>('dashboard');
 
   useEffect(() => {
       setAuthChecking(false);
@@ -49,6 +52,10 @@ const MainLayout: React.FC = () => {
       if (confirm('确认断开神经连接并退出系统？')) {
           setIsAuthenticated(false);
       }
+  };
+
+  const handleNavigate = (page: Page) => {
+      dispatch({ type: 'NAVIGATE', payload: { page } });
   };
 
   const getPageTitle = (page: Page) => {
@@ -72,7 +79,7 @@ const MainLayout: React.FC = () => {
   };
 
   const renderContent = () => {
-    switch (activePage) {
+    switch (state.activePage) {
       case 'dashboard': return <Dashboard />;
       case 'finance': return <Finance />;
       case 'tracking': return <Tracking />;
@@ -125,15 +132,15 @@ const MainLayout: React.FC = () => {
       <ToastContainer />
       <GlobalSearch />
       
-      {/* Sidebar */}
-      <Sidebar activePage={activePage} onNavigate={setActivePage} onLogout={handleLogout} />
+      {/* Sidebar - using global state for active page */}
+      <Sidebar activePage={state.activePage} onNavigate={handleNavigate} onLogout={handleLogout} />
       
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative h-full min-w-0 ios-glass-panel rounded-3xl shadow-2xl overflow-hidden">
         
         {/* Header sits on top */}
         <div className="relative z-20">
-            <Header title={getPageTitle(activePage)} />
+            <Header title={getPageTitle(state.activePage)} />
         </div>
         
         {/* Scrollable Content */}

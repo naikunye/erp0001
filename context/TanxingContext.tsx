@@ -1,7 +1,7 @@
 
 import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
-import { Product, Order, Transaction, PurchaseOrder, Toast, Customer, Shipment, CalendarEvent, Supplier, InboundShipment, AdCampaign, Influencer } from '../types';
+import { Product, Order, Transaction, PurchaseOrder, Toast, Customer, Shipment, CalendarEvent, Supplier, InboundShipment, AdCampaign, Influencer, Page } from '../types';
 import { MOCK_PRODUCTS, MOCK_ORDERS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SHIPMENTS, MOCK_SUPPLIERS, MOCK_INBOUND_SHIPMENTS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS } from '../constants';
 
 // --- Theme Types ---
@@ -12,6 +12,8 @@ const DB_KEY = 'TANXING_DB_V2'; // Version bump
 // --- State Interface ---
 interface AppState {
     theme: Theme;
+    activePage: Page; // Added global active page
+    navParams: { searchQuery?: string }; // Added navigation parameters
     // Integrations Config
     supabaseConfig: {
         url: string;
@@ -37,6 +39,8 @@ interface AppState {
 // --- Action Types ---
 type Action =
     | { type: 'SET_THEME'; payload: Theme }
+    | { type: 'NAVIGATE'; payload: { page: Page; params?: { searchQuery?: string } } } // New Navigation Action
+    | { type: 'CLEAR_NAV_PARAMS' } // Clear params after consumption
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
@@ -87,6 +91,8 @@ type Action =
 // --- Initial State (Mock) ---
 const mockState: AppState = {
     theme: 'ios-glass',
+    activePage: 'dashboard',
+    navParams: {},
     supabaseConfig: { url: '', key: '', lastSync: null },
     products: MOCK_PRODUCTS,
     orders: MOCK_ORDERS.map(o => ({
@@ -120,7 +126,9 @@ const init = (initial: AppState): AppState => {
             return { 
                 ...initial, 
                 ...parsed,
-                theme: theme, 
+                theme: theme,
+                activePage: 'dashboard', // Always start at dashboard on refresh
+                navParams: {},
                 // Ensure configs exist even if loading old state
                 supabaseConfig: parsed.supabaseConfig || { url: '', key: '', lastSync: null },
                 toasts: [], 
@@ -138,6 +146,10 @@ const appReducer = (state: AppState, action: Action): AppState => {
     switch (action.type) {
         case 'SET_THEME':
             return { ...state, theme: action.payload };
+        case 'NAVIGATE':
+            return { ...state, activePage: action.payload.page, navParams: action.payload.params || {} };
+        case 'CLEAR_NAV_PARAMS':
+            return { ...state, navParams: {} };
         case 'SET_SUPABASE_CONFIG':
             return { ...state, supabaseConfig: { ...state.supabaseConfig, ...action.payload } };
         case 'SET_LAST_SYNC':
