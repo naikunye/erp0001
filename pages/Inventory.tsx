@@ -178,39 +178,45 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
     const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
 
-    // Unit Weight Logic
+    // Unit Weight Logic (Theoretical)
     const unitRealWeight = formData.unitWeight || 0;
     const unitVolWeight = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0)) / 6000;
-    
-    // 1. Auto Calculated (Theoretical)
-    const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
-    
-    // 2. Derived from Manual Total Billing Weight (Batch Level)
-    const manualTotalBillingWeight = formData.logistics?.billingWeight;
-    const derivedUnitWeightFromTotal = manualTotalBillingWeight && formData.stock > 0 
-        ? manualTotalBillingWeight / formData.stock 
-        : autoChargeableWeight;
+    const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
 
-    // 3. Final Active Unit Weight (Specific Override > Derived from Total > Auto)
-    const activeChargeableWeight = formData.logistics?.unitBillingWeight ?? derivedUnitWeightFromTotal;
+    // --- LOGISTICS CALCULATION CORE ---
     
-    // Logistics Costs (Auto based on Rate)
-    const unitFreightRateBased = (formData.logistics?.unitFreightCost || 0) * activeChargeableWeight;
+    // 1. Determine "Active Total Billing Weight"
+    // Priority: Manual Total Billing Weight > (Manual Unit Weight * Stock) > (Auto Unit Weight * Stock)
+    let activeTotalBillingWeight = 0;
+    
+    if (formData.logistics?.billingWeight && formData.logistics.billingWeight > 0) {
+        activeTotalBillingWeight = formData.logistics.billingWeight; // Manual Total
+    } else if (formData.logistics?.unitBillingWeight && formData.logistics.unitBillingWeight > 0) {
+        activeTotalBillingWeight = formData.logistics.unitBillingWeight * formData.stock; // Manual Unit
+    } else {
+        activeTotalBillingWeight = autoUnitChargeableWeight * formData.stock; // Auto
+    }
+
+    // 2. Calculate Base Freight (Weight * Rate)
+    const rate = formData.logistics?.unitFreightCost || 0;
+    const baseFreightCost = activeTotalBillingWeight * rate;
+
+    // 3. Add Batch Fees
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
-    const autoTotalFreightCNY = (unitFreightRateBased * formData.stock) + batchFeesCNY;
+    
+    // 4. Auto Total Result
+    const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
 
-    // Logistics Costs (Final Decision for Total)
+    // 5. Final Effective Total (Manual Override checks)
     const manualTotalFreightCNY = formData.logistics?.totalFreightCost;
     const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
-    
-    // Effective Unit Freight (For Profit Calculation)
-    const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
-    // If stock > 0, we amortize total freight over stock. 
-    // If stock = 0, we fallback to theoretical rate-based unit cost to show projected profit.
+
+    // 6. Back-calculate Effective Unit Freight for profit analysis
     const effectiveUnitFreightCNY = formData.stock > 0 
-        ? (effectiveTotalFreightCNY / formData.stock) 
-        : unitFreightRateBased; 
+        ? effectiveTotalFreightCNY / formData.stock 
+        : 0;
     
+    const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
     const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
     
     // --- Profit Analysis (Real-time) ---
@@ -434,7 +440,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            <div className="flex justify-between items-center text-[10px] text-slate-500 bg-white/5 p-2 rounded mb-4 font-mono">
                                <span>单品实重: {unitRealWeight} kg</span>
                                <span>单品材积: {unitVolWeight.toFixed(2)} kg (÷6000)</span>
-                               <span className="text-amber-400 font-bold border border-amber-500/30 px-1 rounded">理论计费重: {autoChargeableWeight.toFixed(2)} kg</span>
+                               <span className="text-amber-400 font-bold border border-amber-500/30 px-1 rounded">理论计费重: {autoUnitChargeableWeight.toFixed(2)} kg</span>
                            </div>
 
                            <div className="grid grid-cols-2 gap-4 mb-4">
@@ -521,7 +527,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div>
                                        <div className="flex justify-between mb-1">
                                             <label className="text-[10px] text-slate-500 font-bold">单品计费重 (KG)</label>
-                                            <span className="text-[9px] text-slate-500">Auto: {derivedUnitWeightFromTotal.toFixed(2)}</span>
+                                            <span className="text-[9px] text-slate-500">Auto: {autoUnitChargeableWeight.toFixed(2)}</span>
                                        </div>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
@@ -534,12 +540,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                     const val = parseFloat(e.target.value);
                                                     handleNestedChange('logistics', 'unitBillingWeight', isNaN(val) ? undefined : val);
                                                 }}
-                                                placeholder={derivedUnitWeightFromTotal.toFixed(2)}
+                                                placeholder={autoUnitChargeableWeight.toFixed(2)}
                                                 className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold placeholder-slate-600" 
                                            />
-                                       </div>
-                                       <div className="text-[9px] text-right text-indigo-400 mt-1 font-mono">
-                                           单品运费: ¥{unitFreightRateBased.toFixed(2)}
                                        </div>
                                    </div>
                                </div>
@@ -547,14 +550,27 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                {/* LIVE TOTAL FREIGHT DISPLAY */}
                                <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
-                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Estimated Total Freight)</span>
+                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
                                        <span className="text-sm font-bold text-blue-100 font-mono">
                                            ¥ {effectiveTotalFreightCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                        </span>
                                    </div>
                                    
-                                   {/* MANUAL TOTAL OVERRIDE INPUT */}
+                                   {/* MANUAL TOTAL OVERRIDE & TOTAL WEIGHT INPUT */}
                                    <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-blue-500/20">
+                                       <div>
+                                           <label className="text-[9px] text-blue-300 block mb-0.5">整批计费重 (Total KG)</label>
+                                           <input 
+                                                type="number" 
+                                                value={formData.logistics?.billingWeight ?? ''}
+                                                onChange={e => {
+                                                    const val = parseFloat(e.target.value);
+                                                    handleNestedChange('logistics', 'billingWeight', isNaN(val) ? undefined : val);
+                                                }}
+                                                placeholder={`Auto: ${activeTotalBillingWeight.toFixed(1)}`}
+                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
+                                           />
+                                       </div>
                                        <div>
                                            <label className="text-[9px] text-blue-300 block mb-0.5">头程总运费 (手动 ¥)</label>
                                            <input 
@@ -568,23 +584,11 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                 className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
                                            />
                                        </div>
-                                       <div>
-                                           <label className="text-[9px] text-blue-300 block mb-0.5">整批计费重 (Total Weight)</label>
-                                           <input 
-                                                type="number" 
-                                                value={formData.logistics?.billingWeight ?? ''}
-                                                onChange={e => {
-                                                    const val = parseFloat(e.target.value);
-                                                    handleNestedChange('logistics', 'billingWeight', isNaN(val) ? undefined : val);
-                                                }}
-                                                placeholder="KG"
-                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
-                                           />
-                                       </div>
                                    </div>
                                    
-                                   <div className="text-[9px] text-blue-300/50 text-right mt-1">
-                                       折合单品头程: ¥{effectiveUnitFreightCNY.toFixed(2)}
+                                   <div className="flex justify-between items-end text-[9px] text-blue-300/50 mt-1">
+                                       <span>{activeTotalBillingWeight.toFixed(1)}kg * ¥{rate} + Fees</span>
+                                       <span>折合单品头程: ¥{effectiveUnitFreightCNY.toFixed(2)}</span>
                                    </div>
                                </div>
 
@@ -810,15 +814,23 @@ const Inventory: React.FC = () => {
             const dims = p.dimensions || {l:0, w:0, h:0};
             // Volumetric Weight (KG) = L*W*H / 6000 (Air standard)
             const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
-            const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
-            const chargeableWeight = p.logistics?.unitBillingWeight || autoChargeableWeight;
+            const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
             
-            // Standard Unit Freight (Rate Based)
-            const unitFreightRateBasedCNY = (p.logistics?.unitFreightCost || 0) * chargeableWeight;
+            // 3. Determine Effective Total Billing Weight for Freight Calculation
+            let activeTotalBillingWeight = 0;
+            if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+                activeTotalBillingWeight = p.logistics.billingWeight;
+            } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
+                activeTotalBillingWeight = p.logistics.unitBillingWeight * p.stock;
+            } else {
+                activeTotalBillingWeight = autoUnitChargeableWeight * p.stock;
+            }
 
-            // 3. Logistics Costs Aggregation (Manual vs Auto)
+            // 4. Logistics Costs (Calculated)
+            const rate = p.logistics?.unitFreightCost || 0;
+            const baseFreightCost = activeTotalBillingWeight * rate;
             const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
-            const autoTotalFreightCNY = (unitFreightRateBasedCNY * p.stock) + batchFeesCNY;
+            const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
             
             // PRIORITY: Use Manual Total Freight if available
             const manualTotalFreightCNY = p.logistics?.totalFreightCost;
@@ -828,7 +840,7 @@ const Inventory: React.FC = () => {
             // Fallback: If stock is 0, assume rate based cost to show realistic projected profit instead of 0 freight.
             const effectiveUnitFreightCNY = p.stock > 0 
                 ? effectiveTotalFreightCNY / p.stock 
-                : unitFreightRateBasedCNY;
+                : (rate * autoUnitChargeableWeight);
 
             // Consumables are added ON TOP
             const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
