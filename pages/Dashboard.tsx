@@ -24,27 +24,34 @@ const Dashboard: React.FC = () => {
 
   // --- 1. Real Data Calculations ---
 
-  // Financial Metrics
+  // Financial & Inventory Metrics
   const metrics = useMemo(() => {
       const activeOrders = state.orders.filter(o => o.status !== 'cancelled');
       
-      // 1. Total Revenue (GMV)
-      const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
+      // 1. Inventory Stock Value (Linked to Replenishment Center)
+      // Calculates total value of current stock in warehouse (CNY)
+      const stockValue = state.products.reduce((acc, p) => {
+          return acc + (p.stock * (p.costPrice || 0));
+      }, 0);
       
-      // 2. Estimated Net Profit (Simplified Model)
+      // 2. Estimated Net Profit (Based on Sales)
+      const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
       let totalCost = 0;
+      
       activeOrders.forEach(o => {
-          if (o.lineItems) {
+          if (o.lineItems && o.lineItems.length > 0) {
               o.lineItems.forEach(item => {
                   const product = state.products.find(p => p.id === item.productId);
                   if (product) {
                       // Cost in CNY converted to USD approx / 7.2 + logistics
-                      const unitCost = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0); 
-                      totalCost += unitCost * item.quantity;
+                      // This represents the cost of the sold item (COGS)
+                      const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0); 
+                      totalCost += unitCostUSD * item.quantity;
                   }
               });
           } else {
-              totalCost += o.total * 0.6; // Fallback 60% cost
+              // Fallback if no line items
+              totalCost += o.total * 0.6; 
           }
       });
       
@@ -64,7 +71,7 @@ const Dashboard: React.FC = () => {
       const topProductSku = Object.keys(productSales).sort((a, b) => productSales[b] - productSales[a])[0];
       
       return {
-          totalInvestment: totalCost * 7.2, // Show in CNY roughly
+          stockValue: stockValue, // Actual inventory value in CNY
           netProfit: netProfit,
           roi: roi.toFixed(1),
           logisticsWeight: logisticsWeight.toFixed(1),
@@ -78,7 +85,7 @@ const Dashboard: React.FC = () => {
       state.orders.forEach(o => {
           if (o.status === 'cancelled') return;
           o.lineItems?.forEach(item => {
-              // Estimate profit: Price * 0.3 (30% margin)
+              // Estimate profit: Price * 0.3 (30% margin approx for demo)
               const profit = item.price * item.quantity * 0.3;
               const product = state.products.find(p => p.id === item.productId);
               const name = product ? product.name.substring(0, 10) + '...' : item.sku;
@@ -160,16 +167,16 @@ const Dashboard: React.FC = () => {
             Role: Chief Operating Officer (COO) for an E-commerce brand.
             
             Current Live Metrics:
-            - Total Revenue (GMV): $${metrics.totalInvestment} (Calculated Base)
+            - Inventory Stock Value: ¥${metrics.stockValue} (Real-time data linked to Warehouse)
             - Net Profit Estimate: $${metrics.netProfit.toFixed(2)}
             - ROI: ${metrics.roi}%
             - Top Selling Product SKU: ${metrics.topProduct}
-            - Inventory Logistics Load: ${metrics.logisticsWeight} kg
+            - Logistics Weight: ${metrics.logisticsWeight} kg
             
             Task: Provide a strategic executive summary (in Chinese).
-            1. Analyze the ROI. Is it healthy (>20% is good)?
-            2. Comment on the logistics load.
-            3. Suggest one actionable step to improve the top product's performance.
+            1. Comment on the inventory level relative to profitability.
+            2. Suggest one actionable step for the top product.
+            3. Analyze if logistics weight implies a need for optimizing shipping methods.
             
             Format: HTML string using <b> for highlights. Keep it professional, futuristic, and under 80 words.
           `;
@@ -243,7 +250,7 @@ const Dashboard: React.FC = () => {
                     </h2>
                     {!report && (
                         <p className="text-sm text-slate-400 font-mono mt-1 font-medium">
-                            基于 {state.orders.length} 条真实订单数据生成战术简报...
+                            正在同步 {state.products.length} 个 SKU 与 {state.orders.length} 条订单数据进行分析...
                         </p>
                     )}
                 </div>
@@ -271,7 +278,7 @@ const Dashboard: React.FC = () => {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
-            <StatCard loading={isLoading} title="库存总值 (Stock Value)" value={`¥${metrics.totalInvestment.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Live" trendUp={true} icon={Wallet} accentColor="blue" />
+            <StatCard loading={isLoading} title="库存资金占用 (Stock Asset)" value={`¥${metrics.stockValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Linked" trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
             <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
@@ -381,9 +388,9 @@ const Dashboard: React.FC = () => {
                     </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">总值(Est)</p>
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">物流成本(Est)</p>
                     <p className="text-3xl font-display font-bold text-white tracking-tight text-glow-cyan mt-1">
-                        ¥{(metrics.totalInvestment / 1000).toFixed(1)}k
+                        ¥{(costData.reduce((a,b) => a+b.value, 0) / 1000).toFixed(1)}k
                     </p>
                 </div>
             </div>
