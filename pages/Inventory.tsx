@@ -452,23 +452,18 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div className="text-amber-500 pb-2 font-bold">x</div>
                                    <div className="flex-1">
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货箱数 (Box)</label>
-                                       <input type="number" placeholder="自动计算" value={totalBoxes} readOnly className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold opacity-70" />
+                                       <input 
+                                            type="number" 
+                                            placeholder="自动计算" 
+                                            value={totalBoxes} 
+                                            onChange={(e) => {
+                                                const boxes = parseInt(e.target.value) || 0;
+                                                const newStock = boxes * (formData.itemsPerBox || 1);
+                                                handleChange('stock', newStock);
+                                            }}
+                                            className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" 
+                                       />
                                    </div>
-                               </div>
-                           </div>
-                           
-                           <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg p-3">
-                               <div className="flex justify-between items-center mb-1">
-                                   <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">当前库存总数 (Total Stock)</span>
-                                   <span className="text-[9px] text-amber-600 cursor-pointer hover:underline">手动修改库存 &gt;</span>
-                               </div>
-                               <div className="flex items-center gap-2">
-                                   <input 
-                                        type="number"
-                                        value={formData.stock}
-                                        onChange={e => handleChange('stock', parseInt(e.target.value))}
-                                        className="text-3xl font-black text-amber-100 font-mono tracking-tighter bg-transparent border-none outline-none w-full"
-                                   />
                                </div>
                            </div>
 
