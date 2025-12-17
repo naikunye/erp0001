@@ -11,7 +11,8 @@ import {
   AlertCircle, TrendingUp, TrendingDown, Target, BarChart3, Zap, 
   Link2, Calendar, User, Scale, Ruler, Truck,
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
-  Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet
+  Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet,
+  PieChart
 } from 'lucide-react';
 
 // --- Components ---
@@ -173,6 +174,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     };
 
     // --- Dynamic Calculations for Modal ---
+    const exchangeRate = 7.2;
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
     const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
 
@@ -180,27 +182,43 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const unitRealWeight = formData.unitWeight || 0;
     const unitVolWeight = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0)) / 6000;
     const autoChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
-    
-    // User Manual Override Logic for Unit Billing Weight
     const activeChargeableWeight = formData.logistics?.unitBillingWeight || autoChargeableWeight;
     
-    // 1. Auto Calculated Costs based on Rate
+    // Logistics Costs (Auto)
     const unitFreightRateBased = (formData.logistics?.unitFreightCost || 0) * activeChargeableWeight;
-    const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0); // Total Batch
+    const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
     const autoTotalFreightCNY = (unitFreightRateBased * formData.stock) + batchFeesCNY;
 
-    // 2. Final Logic: Does Manual Total exist?
+    // Logistics Costs (Final Decision)
     const manualTotalFreightCNY = formData.logistics?.totalFreightCost;
-    
-    // The "Effective" Total Freight used for decision making
     const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
     
-    // The "Effective" Unit Freight (Derived)
-    const effectiveUnitFreightCNY = formData.stock > 0 ? (effectiveTotalFreightCNY / formData.stock) : 0;
-
-    // Consumables are usually added ON TOP of freight bill (Internal cost)
+    // Effective Unit Freight (For Profit Calculation)
     const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
-    const effectiveTotalCostWithConsumables = effectiveTotalFreightCNY + (unitConsumablesCNY * formData.stock);
+    // If stock > 0, we amortize total freight over stock. 
+    // If stock = 0, we fallback to theoretical rate-based unit cost to show projected profit.
+    const effectiveUnitFreightCNY = formData.stock > 0 
+        ? (effectiveTotalFreightCNY / formData.stock) 
+        : unitFreightRateBased; 
+    
+    const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
+    
+    // --- Profit Analysis (Real-time) ---
+    const priceUSD = formData.price || 0;
+    const cogsUSD = (formData.costPrice || 0) / exchangeRate;
+    const freightUSD = totalUnitLogisticsCNY / exchangeRate;
+    
+    // Platform Fees
+    const platformFeeUSD = priceUSD * ((formData.economics?.platformFeePercent || 0) / 100);
+    const creatorFeeUSD = priceUSD * ((formData.economics?.creatorFeePercent || 0) / 100);
+    const fixedFeeUSD = formData.economics?.fixedCost || 0;
+    const lastLegUSD = formData.economics?.lastLegShipping || 0;
+    const adSpendUSD = formData.economics?.adCost || 0;
+    const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
+    
+    const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
+    const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
+    const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
@@ -519,9 +537,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                {/* LIVE TOTAL FREIGHT DISPLAY */}
                                <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
-                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Estimated Total Freight)</span>
+                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
                                        <span className="text-sm font-bold text-blue-100 font-mono">
-                                           ¥ {effectiveTotalCostWithConsumables.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                           ¥ {effectiveTotalFreightCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                        </span>
                                    </div>
                                    
@@ -590,13 +608,13 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        </div>
 
                        {/* Section 5: Sales (Right Bottom) */}
-                       <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5">
+                       <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5 flex flex-col">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
                                TikTok 销售与竞品 (Market Intel)
                            </div>
                            
-                           <div className="space-y-4">
+                           <div className="space-y-4 flex-1">
                                <div>
                                    <label className="text-[10px] text-slate-500 block mb-1 font-bold">我方销售价格 ($)</label>
                                    <input type="number" value={formData.price} onChange={e => handleChange('price', parseFloat(e.target.value))} className="w-full bg-black/40 border border-purple-500/30 rounded px-4 py-3 text-lg font-bold text-white font-mono focus:border-purple-500 outline-none" />
@@ -640,6 +658,38 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                            <label className="text-[9px] text-slate-500 font-bold block mb-1">预估广告费 ($)</label>
                                            <input type="number" value={formData.economics?.adCost} onChange={e => handleNestedChange('economics', 'adCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="10" />
                                        </div>
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
+
+                       {/* NEW: Live Profit Analysis (Bottom Right) */}
+                       <div className="col-span-12 bg-gradient-to-br from-emerald-950/40 to-black border border-emerald-500/20 rounded-xl p-5 flex items-center justify-between shadow-lg">
+                           <div className="flex items-center gap-4">
+                               <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
+                                   <PieChart className="w-6 h-6 text-emerald-400" />
+                               </div>
+                               <div>
+                                   <h4 className="text-sm font-bold text-white mb-1">单品利润实时测算 (Unit Profit Analysis)</h4>
+                                   <div className="text-[10px] text-slate-400 flex gap-4">
+                                       <span>单品成本(Total Cost): <span className="text-white">${totalUnitCostUSD.toFixed(2)}</span></span>
+                                       <span>汇率: 7.2</span>
+                                       <span>运费: ¥{totalUnitLogisticsCNY.toFixed(2)}</span>
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           <div className="flex gap-8 text-right">
+                               <div>
+                                   <div className="text-[10px] text-slate-500 uppercase font-bold">Estimated Profit</div>
+                                   <div className={`text-2xl font-mono font-bold ${estimatedProfitUSD > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                       ${estimatedProfitUSD.toFixed(2)}
+                                   </div>
+                               </div>
+                               <div>
+                                   <div className="text-[10px] text-slate-500 uppercase font-bold">Net Margin</div>
+                                   <div className={`text-2xl font-mono font-bold ${estimatedMargin > 15 ? 'text-emerald-400' : estimatedMargin > 0 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                       {estimatedMargin.toFixed(1)}%
                                    </div>
                                </div>
                            </div>
@@ -753,7 +803,10 @@ const Inventory: React.FC = () => {
             const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
             
             // Effective Unit Freight (Derived)
-            const effectiveUnitFreightCNY = p.stock > 0 ? effectiveTotalFreightCNY / p.stock : 0;
+            // Fallback: If stock is 0, assume rate based cost to show realistic projected profit instead of 0 freight.
+            const effectiveUnitFreightCNY = p.stock > 0 
+                ? effectiveTotalFreightCNY / p.stock 
+                : unitFreightRateBasedCNY;
 
             // Consumables are added ON TOP
             const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
