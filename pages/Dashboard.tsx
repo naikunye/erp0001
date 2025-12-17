@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight } from 'lucide-react';
+import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight, Package, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ComposedChart, Line, Area } from 'recharts';
 import StatCard from '../components/StatCard';
 import { useTanxing } from '../context/TanxingContext';
@@ -18,7 +18,7 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
       const timer = setTimeout(() => {
           setIsLoading(false);
-      }, 800);
+      }, 500); // Faster load
       return () => clearTimeout(timer);
   }, []);
 
@@ -44,18 +44,15 @@ const Dashboard: React.FC = () => {
       activeOrders.forEach(o => {
           if (o.lineItems && o.lineItems.length > 0) {
               o.lineItems.forEach(item => {
-                  const product = state.products.find(p => p.id === item.productId); // Use full list to find product even if deleted later
+                  const product = state.products.find(p => p.id === item.productId);
                   if (product) {
                       // Cost in CNY converted to USD approx / 7.2 + logistics
-                      // This represents the cost of the sold item (COGS)
-                      // unitFreightCost is usually in USD or small amount, assuming USD here for simplicity or converted
                       const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0); 
                       totalCost += unitCostUSD * item.quantity;
                   }
               });
           } else {
-              // Fallback if no line items (Legacy orders)
-              // Assume 40% profit margin if no cost data available
+              // Fallback
               totalCost += o.total * 0.6; 
           }
       });
@@ -66,49 +63,66 @@ const Dashboard: React.FC = () => {
       // 3. Logistics Weight (Inventory total weight)
       const logisticsWeight = activeProducts.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
 
-      // 4. Top Product by Sales Volume
-      const productSales: Record<string, number> = {};
+      // 4. Top Product by Sales Volume (Quantity)
+      const productVolume: Record<string, number> = {};
       activeOrders.forEach(o => {
           o.lineItems?.forEach(item => {
-              productSales[item.sku] = (productSales[item.sku] || 0) + item.quantity;
+              productVolume[item.sku] = (productVolume[item.sku] || 0) + item.quantity;
           });
       });
-      const topProductSku = Object.keys(productSales).sort((a, b) => productSales[b] - productSales[a])[0];
+      // Sort by volume descending
+      const topProductSku = Object.keys(productVolume).sort((a, b) => productVolume[b] - productVolume[a])[0];
+      const topProductVol = topProductSku ? productVolume[topProductSku] : 0;
       
       return {
           stockValue: stockValue, // Actual inventory value in CNY
           netProfit: netProfit,
           roi: roi.toFixed(1),
           logisticsWeight: logisticsWeight.toFixed(1),
-          topProduct: topProductSku || 'N/A'
+          topProduct: topProductSku || 'N/A',
+          topProductVol: topProductVol
       };
   }, [activeOrders, activeProducts, state.products]);
 
   // Top Products Chart Data (Profit based)
+  // Also enrich with Stock info for the list view
   const profitData = useMemo(() => {
-      const profitMap: Record<string, number> = {};
+      const profitMap: Record<string, { profit: number, revenue: number, stock: number, daysRemaining: number }> = {};
       
+      // Calculate Profit per SKU based on orders
       activeOrders.forEach(o => {
           o.lineItems?.forEach(item => {
               const product = state.products.find(p => p.id === item.productId);
               let itemProfit = 0;
+              let itemRevenue = item.price * item.quantity;
               
               if (product) {
                   const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0);
                   itemProfit = (item.price - unitCostUSD) * item.quantity;
               } else {
-                  itemProfit = item.price * item.quantity * 0.3; // Fallback
+                  itemProfit = itemRevenue * 0.3; // Fallback
               }
 
-              const name = product ? product.name.substring(0, 10) + (product.name.length>10?'...':'') : item.sku;
-              profitMap[name] = (profitMap[name] || 0) + itemProfit;
+              const key = product ? product.name : item.sku;
+              
+              if (!profitMap[key]) {
+                  profitMap[key] = { 
+                      profit: 0, 
+                      revenue: 0, 
+                      stock: product ? product.stock : 0,
+                      daysRemaining: product && product.dailyBurnRate ? Math.floor(product.stock / product.dailyBurnRate) : 999 
+                  };
+              }
+              
+              profitMap[key].profit += itemProfit;
+              profitMap[key].revenue += itemRevenue;
           });
       });
 
       return Object.entries(profitMap)
-          .map(([name, value]) => ({ name, value }))
+          .map(([name, data]) => ({ name, value: data.profit, ...data }))
           .sort((a, b) => b.value - a.value)
-          .slice(0, 8);
+          .slice(0, 10);
   }, [activeOrders, state.products]);
 
   // Logistics Cost Structure Data (Sea vs Air based on Active Products)
@@ -133,38 +147,60 @@ const Dashboard: React.FC = () => {
   }, [activeProducts]);
 
   // Forecast Chart Data (Revenue over time)
+  // LINKED TO INVENTORY: Future projection is based on active products' Daily Burn Rate
   const forecastChartData = useMemo(() => {
+      // 1. Historical Data (Real Orders)
       const revenueByDate: Record<string, number> = {};
+      
+      // Initialize last 7 days with 0
+      const today = new Date();
+      for(let i=6; i>=0; i--) {
+          const d = new Date(today);
+          d.setDate(today.getDate() - i);
+          const dateStr = d.toISOString().split('T')[0];
+          revenueByDate[dateStr] = 0;
+      }
+
       activeOrders.forEach(o => {
           const date = o.date; 
-          revenueByDate[date] = (revenueByDate[date] || 0) + o.total;
+          if (revenueByDate[date] !== undefined) {
+              revenueByDate[date] += o.total;
+          }
       });
 
-      const sortedDates = Object.keys(revenueByDate).sort();
-      const recentDates = sortedDates.slice(-7);
-      
-      const history = recentDates.map(date => ({
+      const history = Object.keys(revenueByDate).sort().map(date => ({
           name: date.slice(5), // MM-DD
+          fullDate: date,
           actual: revenueByDate[date],
           forecast: null as number | null
       }));
 
-      // Generate 5 days forecast based on simple moving average of last 3 days
-      const last3 = history.slice(-3).map(h => h.actual);
-      let avg = last3.length > 0 ? last3.reduce((a,b) => a+b, 0) / last3.length : 1000;
-      
+      // 2. Future Projection (Based on Inventory Settings)
+      // Calculate Total Daily Potential Revenue = Sum(BurnRate * Price)
+      const dailyPotentialRevenue = activeProducts.reduce((acc, p) => {
+          return acc + ((p.dailyBurnRate || 0) * p.price);
+      }, 0);
+
+      // If no burn rate set, use average of last 3 days actuals
+      const last3DaysAvg = history.slice(-3).reduce((acc, h) => acc + (h.actual || 0), 0) / 3;
+      const baseline = dailyPotentialRevenue > 0 ? dailyPotentialRevenue : (last3DaysAvg || 1000);
+
       const nextDays = [];
-      for (let i = 1; i <= 5; i++) {
-          avg = avg * 1.02; // Assumed 2% daily growth trend
+      for (let i = 1; i <= 7; i++) {
+          const d = new Date(today);
+          d.setDate(today.getDate() + i);
+          // Add slight randomization to simulate reality vs perfect projection
+          const noise = 1 + (Math.random() * 0.1 - 0.05); 
+          
           nextDays.push({
-              name: `+${i}d`,
+              name: d.toISOString().split('T')[0].slice(5),
               actual: null,
-              forecast: parseFloat(avg.toFixed(2))
+              forecast: parseFloat((baseline * noise).toFixed(2))
           });
       }
 
-      return history.length > 0 ? [...history, ...nextDays] : [...nextDays];
-  }, [activeOrders]);
+      return [...history, ...nextDays];
+  }, [activeOrders, activeProducts]);
 
 
   // --- 2. AI Implementation ---
@@ -179,18 +215,17 @@ const Dashboard: React.FC = () => {
           const prompt = `
             Role: Chief Operating Officer (COO) for an E-commerce brand.
             
-            Current Live Metrics:
-            - Inventory Asset Value: ¥${metrics.stockValue.toLocaleString()}
+            Real-time Metrics:
+            - Stock Assets: ¥${metrics.stockValue.toLocaleString()}
             - Est. Net Profit: $${metrics.netProfit.toFixed(2)}
             - ROI: ${metrics.roi}%
-            - Top Seller: ${metrics.topProduct}
-            - Total Logistics Weight: ${metrics.logisticsWeight} kg
+            - Best Selling SKU: ${metrics.topProduct}
             
             Task: Provide a strategic executive summary (in Chinese).
-            1. Comment on the inventory efficiency (Stock Value vs Profit).
-            2. Suggest one actionable step for the top product.
+            1. Analyze the health of the profit margin.
+            2. Give a specific suggestion for inventory management based on the stock value.
             
-            Format: HTML string using <b> for highlights. Keep it under 60 words.
+            Format: HTML string using <b> for highlights. Keep it professional and under 60 words.
           `;
 
           const response = await ai.models.generateContent({
@@ -206,7 +241,7 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  // HUD Style Custom Tooltip (Cleaned up, no random variance)
+  // HUD Style Custom Tooltip
   const CustomHUDTooltip = ({ active, payload, label }: any) => {
       if (active && payload && payload.length) {
           const data = payload[0].payload;
@@ -285,7 +320,7 @@ const Dashboard: React.FC = () => {
             <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-3">
-            <StatCard loading={isLoading} title="爆品 SKU (Top Volume)" value={metrics.topProduct} subValue="Rank #1" trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
+            <StatCard loading={isLoading} title="爆品 SKU (Top Volume)" value={metrics.topProduct} subValue={`${metrics.topProductVol} Sold`} trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
             <StatCard loading={isLoading} title="物流总重 (Weight)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
@@ -303,14 +338,16 @@ const Dashboard: React.FC = () => {
                         <span className="w-1 h-5 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]"></span>
                         营收趋势 (Revenue Trend)
                     </h3>
-                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">基于 {forecastChartData.filter(d=>d.actual).length} 天真实数据的趋势</p>
+                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">
+                        基于 Inventory 设置的 Daily Burn Rate 进行推演
+                    </p>
                 </div>
                 <div className="flex gap-6">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
                         <span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_5px_currentColor]"></span> 实际 (Actual)
                     </div>
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_currentColor]"></span> 预测 (Forecast)
+                        <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_currentColor]"></span> 预测 (Projected)
                     </div>
                 </div>
             </div>
@@ -463,7 +500,7 @@ const Dashboard: React.FC = () => {
              <div className="flex justify-between items-center mb-8">
                  <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
                     <span className="w-1 h-5 bg-purple-500 rounded-full shadow-[0_0_10px_#a855f7]"></span>
-                    热销榜单 (Top Sellers)
+                    热销榜单 (Top Sellers & Stock)
                  </h3>
                  <button 
                     onClick={() => setShowAllProducts(!showAllProducts)}
@@ -476,19 +513,25 @@ const Dashboard: React.FC = () => {
                  {profitData.slice(0, showAllProducts ? 20 : 4).map((item, i) => (
                      <div key={i} className="flex items-center justify-between p-4 rounded-xl bg-white/5 border border-white/5 hover:border-cyan-500/30 hover:bg-white/10 transition-all group cursor-pointer relative overflow-hidden">
                          <div className="absolute inset-0 bg-gradient-to-r from-cyan-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
-                         <div className="flex items-center gap-5 relative z-10">
+                         <div className="flex items-center gap-5 relative z-10 flex-1">
                              <div className="text-lg font-display font-bold text-slate-600 group-hover:text-cyan-400 transition-colors">0{i+1}</div>
-                             <div>
-                                 <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
-                                 <div className="w-32 h-1 bg-slate-800 rounded-full mt-2 overflow-hidden">
-                                     <div className="h-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{width: `${Math.min(100, (item.value / (profitData[0]?.value || 1)) * 100)}%`}}></div>
+                             <div className="flex-1">
+                                 <div className="flex justify-between">
+                                     <p className="text-sm font-bold text-slate-200 group-hover:text-white transition-colors">{item.name}</p>
+                                     <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-1.5 rounded font-mono">+${item.value.toLocaleString()}</span>
+                                 </div>
+                                 <div className="flex items-center gap-4 mt-2">
+                                     {/* Simple Stock Indicator */}
+                                     <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                         <Package className="w-3 h-3" />
+                                         <span>Stock: {item.stock}</span>
+                                     </div>
+                                     <div className="flex items-center gap-1 text-[10px]">
+                                         {item.daysRemaining < 15 ? <AlertTriangle className="w-3 h-3 text-red-500"/> : <ArrowUpRight className="w-3 h-3 text-emerald-500"/>}
+                                         <span className={item.daysRemaining < 15 ? 'text-red-400' : 'text-slate-400'}>{item.daysRemaining} Days Left</span>
+                                     </div>
                                  </div>
                              </div>
-                         </div>
-                         <div className="text-right relative z-10">
-                             <p className="text-lg font-display font-bold text-white group-hover:text-cyan-400 group-hover:text-glow-cyan transition-colors">
-                                 ${item.value.toLocaleString(undefined, {maximumFractionDigits: 0})}
-                             </p>
                          </div>
                      </div>
                  ))}
