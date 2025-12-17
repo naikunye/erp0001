@@ -31,12 +31,21 @@ export interface Product {
   safetyStockDays?: number;
   dimensions?: { l: number; w: number; h: number };
   itemsPerBox?: number;
+  boxCount?: number; // Added for manual persistence
   unitWeight?: number;
-  logistics?: { method: 'Air' | 'Sea'; carrier: string; trackingNo: string; unitFreightCost: number; targetWarehouse: string };
+  logistics?: { 
+    method: 'Air' | 'Sea'; 
+    carrier: string; 
+    trackingNo: string; 
+    unitFreightCost: number; 
+    totalFreightCost?: number; // Added for manual total override
+    targetWarehouse: string 
+  };
   economics?: { platformFeePercent: number; creatorFeePercent: number; fixedCost: number; lastLegShipping: number; adCost: number; refundRatePercent?: number };
   deletedAt?: string;
   // New fields
-  image?: string;
+  image?: string; // Kept for backward compatibility (primary image)
+  images?: string[]; // New: Multiple images
   lingXingId?: string;
   notes?: string;
 }

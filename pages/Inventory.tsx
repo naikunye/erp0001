@@ -48,6 +48,7 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
     const [skuInput, setSkuInput] = useState('');
+    const [imageUrlInput, setImageUrlInput] = useState('');
     const [form, setForm] = useState<Partial<Product>>({
         name: '',
         sku: '',
@@ -61,18 +62,50 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
         leadTime: 15,
         itemsPerBox: 20,
         lingXingId: '',
-        notes: ''
+        notes: '',
+        images: [] // Initialize empty array
     });
+
+    const addImage = (url: string) => {
+        setForm(prev => ({ 
+            ...prev, 
+            images: [...(prev.images || []), url],
+            image: !prev.image ? url : prev.image // Set primary if empty
+        }));
+    };
 
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                setForm(prev => ({ ...prev, image: reader.result as string }));
+                addImage(reader.result as string);
             };
             reader.readAsDataURL(file);
         }
+        // Reset input
+        e.target.value = ''; 
+    };
+
+    const handleUrlAdd = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && imageUrlInput) {
+            e.preventDefault();
+            addImage(imageUrlInput);
+            setImageUrlInput('');
+        }
+    };
+
+    const removeImage = (index: number) => {
+        setForm(prev => {
+            const newImages = [...(prev.images || [])];
+            newImages.splice(index, 1);
+            return {
+                ...prev,
+                images: newImages,
+                // Update primary image if the first one was removed
+                image: newImages.length > 0 ? newImages[0] : ''
+            };
+        });
     };
 
     // Global paste handler for the modal to catch images
@@ -86,8 +119,9 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                     if (file) {
                         const reader = new FileReader();
                         reader.onload = (event) => {
-                            setForm(prev => ({ ...prev, image: event.target?.result as string }));
-                            showToast('图片已从剪贴板粘贴', 'success');
+                            const result = event.target?.result as string;
+                            addImage(result);
+                            showToast('图片已从剪贴板添加', 'success');
                         };
                         reader.readAsDataURL(file);
                     }
@@ -162,7 +196,9 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 id: `PROD-${Date.now()}`,
                 lastUpdated: new Date().toISOString(),
                 inventoryBreakdown: [],
-                dailyBurnRate: 0 // Initial
+                dailyBurnRate: 0, // Initial
+                // Ensure primary image is set if images array exists
+                image: form.images && form.images.length > 0 ? form.images[0] : (form.image || '')
             };
             dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
             showToast('新 SKU 已添加至清单', 'success');
@@ -187,30 +223,41 @@ const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
                 </div>
                 
                 <div className="grid grid-cols-3 gap-6 mb-6">
-                    {/* Image Upload Column */}
+                    {/* Multi-Image Upload Column */}
                     <div className="col-span-1 flex flex-col gap-3">
-                        <div className="aspect-square bg-black/40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-500 relative overflow-hidden group hover:border-indigo-500/50 transition-colors">
-                            {form.image ? (
-                                <img src={form.image} alt="Preview" className="w-full h-full object-cover" />
-                            ) : (
-                                <>
-                                    <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                    <span className="text-xs font-medium text-center px-2">点击上传<br/>或 Ctrl+V 粘贴</span>
-                                </>
-                            )}
-                            <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                            <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                <Upload className="w-6 h-6 text-white" />
+                        <div className="text-xs text-slate-400 font-bold">产品图片 ({form.images?.length || 0})</div>
+                        
+                        <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10">
+                            {/* Render existing images */}
+                            {form.images?.map((img, idx) => (
+                                <div key={idx} className="aspect-square bg-black/40 border border-white/10 rounded-lg relative group overflow-hidden">
+                                    <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                                    <button 
+                                        onClick={() => removeImage(idx)} 
+                                        className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                </div>
+                            ))}
+
+                            {/* Add Button */}
+                            <div className="aspect-square bg-black/40 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center text-slate-500 relative hover:border-indigo-500/50 hover:text-indigo-400 transition-all cursor-pointer">
+                                <Plus className="w-6 h-6" />
+                                <span className="text-[10px] mt-1">添加图片</span>
+                                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
                             </div>
                         </div>
-                        <div className="relative group">
+
+                        <div className="relative group mt-2">
                             <Link className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500 pointer-events-none" />
                             <input 
                                 type="text" 
-                                placeholder="粘贴图片链接 (URL)..." 
+                                placeholder="输入图片 URL + 回车" 
                                 className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-2 py-2 text-xs text-white focus:border-indigo-500 outline-none placeholder-slate-600 transition-colors hover:bg-black/60"
-                                value={form.image?.startsWith('data:') ? '' : form.image || ''}
-                                onChange={(e) => setForm({...form, image: e.target.value})}
+                                value={imageUrlInput}
+                                onChange={(e) => setImageUrlInput(e.target.value)}
+                                onKeyDown={handleUrlAdd}
                             />
                         </div>
                     </div>
@@ -294,25 +341,93 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
     
-    // Initial values logic: Calculate box count from existing stock
-    // This fixes the issue where box count appeared as 0 initially
+    // Initial values logic:
+    // If product.boxCount is set, use it. Otherwise calculate default but don't bind logic tightly.
     const [boxCount, setBoxCount] = useState<number>(() => {
+        if (product.boxCount !== undefined) return product.boxCount;
         const items = product.itemsPerBox || 1;
         const stock = product.stock || 0;
         return Math.ceil(stock / items);
     });
+    
+    // Separate state for Stock Total
     const [stockTotal, setStockTotal] = useState(product.stock || 0);
     const [skuInput, setSkuInput] = useState('');
+    const [imageUrlInput, setImageUrlInput] = useState('');
 
     const [formData, setFormData] = useState({
         ...product,
+        // Ensure images array exists, fallback to single image if array is empty but string exists
+        images: product.images && product.images.length > 0 ? product.images : (product.image ? [product.image] : []),
         // Ensure nested objects exist
         dimensions: product.dimensions || { l: 32, w: 24, h: 18 },
         economics: product.economics || { platformFeePercent: 2, creatorFeePercent: 10, fixedCost: 0.3, lastLegShipping: 5.44, adCost: 10, refundRatePercent: 3 },
-        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62 },
+        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62, totalFreightCost: 0 },
         lingXingId: product.lingXingId || '',
         notes: product.notes || ''
     });
+
+    // Image Handlers
+    const addImage = (url: string) => {
+        setFormData(prev => ({ 
+            ...prev, 
+            images: [...(prev.images || []), url],
+            image: !prev.image ? url : prev.image // Sync main image if needed
+        }));
+    };
+
+    const removeImage = (index: number) => {
+        setFormData(prev => {
+            const newImages = [...(prev.images || [])];
+            newImages.splice(index, 1);
+            return {
+                ...prev,
+                images: newImages,
+                image: newImages.length > 0 ? newImages[0] : ''
+            };
+        });
+    };
+
+    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            const reader = new FileReader();
+            reader.onloadend = () => {
+                addImage(reader.result as string);
+            };
+            reader.readAsDataURL(file);
+        }
+        e.target.value = '';
+    };
+
+    const handleUrlAdd = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' && imageUrlInput) {
+            e.preventDefault();
+            addImage(imageUrlInput);
+            setImageUrlInput('');
+        }
+    };
+
+    const handlePaste = (e: React.ClipboardEvent) => {
+        const items = e.clipboardData?.items;
+        if (items) {
+            for (const item of items) {
+                if (item.type.indexOf('image') !== -1) {
+                    e.preventDefault();
+                    const file = item.getAsFile();
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                            addImage(event.target?.result as string);
+                            showToast('图片已从剪贴板粘贴', 'success');
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                    return;
+                }
+            }
+        }
+    };
 
     const handleSave = () => {
         // Ensure pending input is committed
@@ -328,7 +443,9 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         const updatedProduct = {
             ...formData,
             sku: finalSku,
-            stock: stockTotal // This ensures the calculated total stock (box * items) is saved
+            stock: stockTotal, // Save the manually input stock total
+            boxCount: boxCount, // Save the manually input box count (persist this!)
+            image: formData.images && formData.images.length > 0 ? formData.images[0] : '' // Ensure primary image is sync
         };
 
         // Simulate processing delay
@@ -340,72 +457,30 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         }, 600);
     };
 
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                setFormData(prev => ({ ...prev, image: reader.result as string }));
-            };
-            reader.readAsDataURL(file);
-        }
-    };
+    // --- Decoupled Handlers ---
+    // Change to COMPLETELY MANUAL INPUT as requested.
+    // Changing one does NOT affect the others.
 
-    const handlePaste = (e: React.ClipboardEvent) => {
-        const items = e.clipboardData?.items;
-        if (items) {
-            for (const item of items) {
-                if (item.type.indexOf('image') !== -1) {
-                    e.preventDefault();
-                    const file = item.getAsFile();
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            setFormData(prev => ({ ...prev, image: event.target?.result as string }));
-                            showToast('图片已从剪贴板粘贴', 'success');
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                    return;
-                }
-            }
-        }
-    };
-
-    // Live Calculation Handlers
     const handleBoxCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         const count = val === '' ? 0 : parseInt(val);
         setBoxCount(count);
-        
-        const items = formData.itemsPerBox || 1;
-        const newTotal = count * items;
-        
-        setStockTotal(newTotal);
-        // Sync formData immediately
-        setFormData(prev => ({ ...prev, stock: newTotal }));
+        // No side effects
     };
 
     const handleItemsPerBoxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         const items = parseInt(val) || 0;
-        
-        const newTotal = boxCount * items;
-        setStockTotal(newTotal);
-        
-        setFormData(prev => ({ 
-            ...prev, 
-            itemsPerBox: items,
-            stock: newTotal
-        }));
+        setFormData(prev => ({ ...prev, itemsPerBox: items }));
+        // No side effects
     };
 
     const handleStockTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const val = e.target.value;
         const total = val === '' ? 0 : parseInt(val);
-        
         setStockTotal(total);
         setFormData(prev => ({ ...prev, stock: total }));
+        // No side effects
     };
 
     // --- SKU Tag Input Logic (Edit Mode) ---
@@ -496,30 +571,36 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                         <h4 className={sectionTitleClass}><span className={badgeClass}>1</span> 产品与供应链</h4>
                         
                         <div className="flex gap-6">
-                            {/* Image Placeholder & URL Input */}
-                            <div className="flex flex-col gap-3 w-40 shrink-0">
-                                <div className="w-40 h-40 bg-black/40 border-2 border-dashed border-white/10 rounded-xl flex flex-col items-center justify-center text-slate-500 cursor-pointer hover:border-indigo-500/50 hover:text-indigo-400 transition-all relative overflow-hidden group">
-                                    {formData.image ? (
-                                        <img src={formData.image} alt="Product" className="w-full h-full object-cover" />
-                                    ) : (
-                                        <>
-                                            <ImageIcon className="w-8 h-8 mb-2 opacity-50" />
-                                            <span className="text-xs font-medium text-center px-1">点击上传<br/>或粘贴</span>
-                                        </>
-                                    )}
-                                    <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                    <div className="absolute inset-0 bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                                        <Upload className="w-6 h-6 text-white" />
+                            {/* Multi-Image Gallery */}
+                            <div className="flex flex-col gap-3 w-48 shrink-0">
+                                <div className="text-xs text-slate-400 font-bold mb-1">画廊 ({formData.images?.length || 0})</div>
+                                <div className="grid grid-cols-2 gap-2">
+                                    {formData.images?.map((img, idx) => (
+                                        <div key={idx} className="aspect-square bg-black/40 border border-white/10 rounded-lg relative group overflow-hidden">
+                                            <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
+                                            <button 
+                                                onClick={() => removeImage(idx)} 
+                                                className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {/* Add Button */}
+                                    <div className="aspect-square bg-black/40 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center text-slate-500 relative hover:border-indigo-500/50 hover:text-indigo-400 transition-all cursor-pointer">
+                                        <Plus className="w-6 h-6" />
+                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
                                     </div>
                                 </div>
-                                <div className="relative group">
+                                <div className="relative group mt-1">
                                     <Link className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500 pointer-events-none" />
                                     <input 
                                         type="text" 
-                                        placeholder="或粘贴 URL..." 
+                                        placeholder="URL..." 
                                         className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 pl-8 text-xs text-white outline-none focus:border-indigo-500 placeholder-slate-600 transition-colors hover:bg-black/60"
-                                        value={formData.image?.startsWith('data:') ? '' : formData.image || ''}
-                                        onChange={(e) => setFormData({...formData, image: e.target.value})}
+                                        value={imageUrlInput}
+                                        onChange={(e) => setImageUrlInput(e.target.value)}
+                                        onKeyDown={handleUrlAdd}
                                     />
                                 </div>
                             </div>
@@ -672,7 +753,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                 />
                                 <div className="absolute right-3 top-3 text-[10px] text-amber-500/50 flex flex-col items-end">
                                     <span>手动修改库存</span>
-                                    <span>不影响箱数</span>
+                                    <span>独立输入 (Decoupled)</span>
                                 </div>
                             </div>
                             
@@ -737,6 +818,25 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                             <button className="px-2 bg-blue-500/20 text-blue-400 text-xs font-bold border-r border-white/10">CNY</button>
                                             <button className="px-2 bg-black/40 text-slate-400 text-xs hover:bg-white/5">USD</button>
                                         </div>
+                                    </div>
+                                </div>
+                                <div>
+                                    <label className={labelClass}>头程总运费 (Total Freight)</label>
+                                    <div className="relative">
+                                        <span className="absolute left-3 top-2 text-slate-500 text-xs">¥</span>
+                                        <input 
+                                            type="number" 
+                                            value={formData.logistics?.totalFreightCost} 
+                                            onChange={e => setFormData({
+                                                ...formData, 
+                                                logistics: {
+                                                    ...formData.logistics!, 
+                                                    totalFreightCost: parseFloat(e.target.value)
+                                                }
+                                            })} 
+                                            className={`${inputClass} pl-6`} 
+                                            placeholder="手动输入总运费"
+                                        />
                                     </div>
                                 </div>
                                 <div>
@@ -871,13 +971,24 @@ const Inventory: React.FC = () => {
               
               // Metrics
               const totalInvestment = p.stock * (p.costPrice || 0); // Total capital in stock (CNY)
-              const freightCost = p.stock * (p.logistics?.unitFreightCost || 0);
+              
+              // Freight Cost Calculation: Use total override if available, else standard calc
+              let freightCost = 0;
+              if (p.logistics?.totalFreightCost !== undefined && p.logistics?.totalFreightCost > 0) {
+                  freightCost = p.logistics.totalFreightCost;
+              } else {
+                  freightCost = p.stock * (p.logistics?.unitFreightCost || 0);
+              }
+
               const goodsCost = totalInvestment - freightCost;
               
               // Sales (Mock growth for demo)
               const revenue30d = burnRate * 30 * p.price;
               const growth = (Math.random() * 40) - 10; // -10% to +30%
               const profit = revenue30d * 0.25; // 25% margin estimate
+
+              // Use persisted box count if available, else derive
+              const boxes = p.boxCount !== undefined ? p.boxCount : Math.ceil(p.stock / (p.itemsPerBox || 1));
 
               return {
                   ...p,
@@ -892,7 +1003,7 @@ const Inventory: React.FC = () => {
                   growth,
                   profit,
                   totalWeight: p.stock * (p.unitWeight || 0),
-                  boxes: Math.ceil(p.stock / (p.itemsPerBox || 1))
+                  boxes: boxes
               };
           }).filter(p => 
               p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
@@ -927,15 +1038,17 @@ const Inventory: React.FC = () => {
   }
 
   const handleExportCSV = () => {
-      const headers = ['SKU', 'Name', 'Stock', 'Days Remaining', 'Burn Rate', 'Total Cost', 'Tracking'];
+      const headers = ['SKU', 'Name', 'Stock', 'Box Count', 'Days Remaining', 'Burn Rate', 'Total Cost', 'Tracking', 'Total Freight'];
       const rows = replenishmentItems.map(item => [
           item.sku, 
           `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
           item.stock,
+          item.boxes, // Export box count
           item.daysRemaining,
           item.dailyBurnRate,
           item.totalInvestment,
-          item.logistics?.trackingNo
+          item.logistics?.trackingNo,
+          item.logistics?.totalFreightCost || 0
       ].join(','));
       
       const csvContent = "data:text/csv;charset=utf-8," 
@@ -1041,11 +1154,16 @@ const Inventory: React.FC = () => {
 
                           {/* 3. Product Info */}
                           <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 bg-slate-800 rounded-lg border border-white/10 flex items-center justify-center shrink-0 overflow-hidden">
-                                  {item.image ? (
+                              <div className="w-12 h-12 bg-slate-800 rounded-lg border border-white/10 flex items-center justify-center shrink-0 overflow-hidden relative">
+                                  {item.images && item.images.length > 0 ? (
+                                      <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
+                                  ) : item.image ? (
                                       <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                                   ) : (
                                       <ImageIcon className="w-6 h-6 text-slate-500" />
+                                  )}
+                                  {item.images && item.images.length > 1 && (
+                                      <div className="absolute bottom-0 right-0 bg-black/60 text-[8px] px-1 text-white rounded-tl">+{item.images.length - 1}</div>
                                   )}
                               </div>
                               <div className="min-w-0">
@@ -1084,7 +1202,10 @@ const Inventory: React.FC = () => {
                           <div>
                               <div className="text-sm font-bold text-emerald-400 font-mono">¥{item.totalInvestment.toLocaleString()}</div>
                               <div className="text-xs text-slate-500 mt-1">货值: ¥{item.goodsCost.toLocaleString()}</div>
-                              <div className="text-xs text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
+                              <div className="text-xs text-slate-500">
+                                  运费: ¥{item.freightCost.toLocaleString()} 
+                                  {item.logistics?.totalFreightCost ? <span className="text-[9px] text-indigo-400 ml-1">(Manual)</span> : null}
+                              </div>
                           </div>
 
                           {/* 6. Stock */}
