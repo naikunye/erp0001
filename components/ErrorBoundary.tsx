@@ -27,7 +27,8 @@ export class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoun
 
   render() {
     const { hasError, error } = this.state;
-    const { children, fallback } = this.props;
+    // Use type assertion to avoid TS error: Property 'props' does not exist on type 'ErrorBoundary'
+    const { children, fallback } = (this as any).props as ErrorBoundaryProps;
 
     if (hasError) {
       if (fallback) return fallback;
