@@ -113,7 +113,7 @@ const RecycleBin = () => {
 };
 
 const Settings: React.FC = () => {
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, checkCloudVersion } = useTanxing();
   const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'backup' | 'recycle'>('theme');
 
   // General Settings State
@@ -215,6 +215,19 @@ with check (true);`;
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
           setSupabaseConnectionStatus('success');
           showToast('✅ 配置已保存，云端连接成功！', 'success');
+
+          // --- AUTO SYNC CHECK ---
+          // Immediately check if there is data on the cloud to pull
+          const lastBackup = await checkCloudVersion();
+          if (lastBackup) {
+              const dateStr = new Date(lastBackup).toLocaleString();
+              if (confirm(`检测到云端存在备份数据 (${dateStr})。\n\n是否立即同步到本机？\n(这将覆盖当前本地的初始/空数据)`)) {
+                  setIsSyncing(true);
+                  await pullFromCloud();
+                  setIsSyncing(false);
+              }
+          }
+
       } catch (e: any) {
           console.error("Supabase Connection Error:", e);
           setSupabaseConnectionStatus('error');
@@ -241,9 +254,11 @@ with check (true);`;
   };
 
   const handleSyncPull = async () => {
-      setIsSyncing(true);
-      await pullFromCloud();
-      setIsSyncing(false);
+      if(confirm("确定要从云端恢复数据吗？这将覆盖当前的本地数据。")) {
+          setIsSyncing(true);
+          await pullFromCloud();
+          setIsSyncing(false);
+      }
   };
 
   const handleResetData = () => {

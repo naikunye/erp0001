@@ -275,12 +275,14 @@ const TanxingContext = createContext<{
     showToast: (message: string, type: Toast['type']) => void;
     syncToCloud: () => Promise<void>;
     pullFromCloud: () => Promise<void>;
+    checkCloudVersion: () => Promise<string | null>; // New Method
 }>({
     state: mockState,
     dispatch: () => null,
     showToast: () => null,
     syncToCloud: async () => {},
-    pullFromCloud: async () => {}
+    pullFromCloud: async () => {},
+    checkCloudVersion: async () => null
 });
 
 // --- Provider Component ---
@@ -331,6 +333,28 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    // New lightweight check
+    const checkCloudVersion = async (): Promise<string | null> => {
+        const supabase = getSupabaseClient();
+        if (!supabase) return null;
+        try {
+            // Head request or minimal select to check if table exists and has data
+            const { data, error } = await supabase.from('app_backups')
+                .select('updated_at')
+                .order('updated_at', { ascending: false })
+                .limit(1)
+                .single();
+            
+            if (error) {
+                console.error("Check cloud version error", error);
+                return null;
+            }
+            return data?.updated_at || null;
+        } catch (e) {
+            return null;
+        }
+    };
+
     const pullFromCloud = async () => {
         const supabase = getSupabaseClient();
         if (!supabase) { showToast('请先在设置中配置 Supabase', 'warning'); return; }
@@ -338,11 +362,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const { data, error } = await supabase.from('app_backups').select('*').order('updated_at', { ascending: false }).limit(1).single();
             if (error) throw error;
             if (!data) { showToast('云端无备份数据', 'info'); return; }
-            if (confirm(`发现云端备份 (${data.updated_at})。是否覆盖本地数据？`)) {
-                dispatch({ type: 'HYDRATE_STATE', payload: data.data });
-                dispatch({ type: 'SET_LAST_SYNC', payload: new Date(data.updated_at).toLocaleString() });
-                showToast('数据恢复成功', 'success');
-            }
+            
+            // Assume confirmation happens in UI before calling this
+            dispatch({ type: 'HYDRATE_STATE', payload: data.data });
+            dispatch({ type: 'SET_LAST_SYNC', payload: new Date(data.updated_at).toLocaleString() });
+            showToast('数据恢复成功', 'success');
+            
         } catch (e: any) {
             console.error("Pull Error", e);
             showToast(`拉取失败: ${e.message}`, 'error');
@@ -350,7 +375,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     return (
-        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud }}>
+        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, checkCloudVersion }}>
             {children}
         </TanxingContext.Provider>
     );
