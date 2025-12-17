@@ -11,7 +11,7 @@ import {
   AlertCircle, TrendingUp, TrendingDown, Target, BarChart3, Zap, 
   Link2, Calendar, User, Scale, Ruler, Truck,
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
-  Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight
+  Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet
 } from 'lucide-react';
 
 // --- Components ---
@@ -557,18 +557,43 @@ const Inventory: React.FC = () => {
                 ? ((pStats.revenue30d - pStats.revenuePrev30d) / pStats.revenuePrev30d) * 100 
                 : 0;
 
+            // --- REAL PROFIT CALCULATION ---
+            // Unit Profit = Price - COGS - Freight - (PlatformFee + CreatorFee + FixedCost + LastLeg + AdCost)
+            // Note: Assume price is in USD for profit calculation if logistics unit cost is in USD.
+            // If costs are mixed currency, we need standardization. 
+            // For this view, we assume all economic inputs in Product type are in the same currency as Price (USD).
+            const unitFreight = p.logistics?.unitFreightCost || 0;
+            const eco = p.economics || {};
+            const platformFee = p.price * ((eco.platformFeePercent || 0) / 100);
+            const creatorFee = p.price * ((eco.creatorFeePercent || 0) / 100);
+            const otherCosts = (eco.fixedCost || 0) + (eco.lastLegShipping || 0) + (eco.adCost || 0);
+            
+            // Assume Cost Price is converted to USD if input as RMB (approx / 7.2) - OR assume input is already USD for simplicity in this view
+            // In a real app, strict currency management is needed. Here we assume `costPrice` is USD for consistency with `price`.
+            // If `costPrice` was typically RMB in input forms, we'd divide by 7.2 here.
+            // Based on EditModal, costPrice label is "¥/pcs" (RMB), but Price is "$" (USD).
+            // Let's standardise: Convert Cost Price (CNY) to USD.
+            const costPriceUSD = (p.costPrice || 0) / 7.2; 
+            
+            // Unit Freight is usually RMB or USD? EditModal says "¥". Convert to USD.
+            const unitFreightUSD = unitFreight / 7.2;
+
+            const totalUnitCost = costPriceUSD + unitFreightUSD + platformFee + creatorFee + otherCosts;
+            const unitProfit = p.price - totalUnitCost;
+            
             return {
                 ...p,
                 dailyBurnRate,
                 daysRemaining,
                 safetyStock,
                 reorderPoint,
-                totalInvestment: stock * (p.costPrice || 0),
-                freightCost: stock * (p.logistics?.unitFreightCost || 0),
-                goodsCost: stock * (p.costPrice || 0),
-                revenue30d: pStats.revenue30d, // REAL REVENUE
+                totalInvestment: stock * (p.costPrice || 0), // Kept in CNY for investment view
+                freightCost: stock * (p.logistics?.unitFreightCost || 0), // Kept in CNY
+                goodsCost: stock * (p.costPrice || 0), // Kept in CNY
+                revenue30d: pStats.revenue30d, // REAL REVENUE (USD)
                 growth: growth,                 // REAL GROWTH
-                profit: 0,
+                profit: unitProfit, // UNIT PROFIT (USD)
+                margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0, // MARGIN %
                 totalWeight: stock * (p.unitWeight || 0),
                 boxes: Math.ceil(stock / (p.itemsPerBox || 1))
             };
@@ -611,6 +636,7 @@ const Inventory: React.FC = () => {
             revenue30d: 0,
             growth: 0,
             profit: 0,
+            margin: 0,
             totalWeight: 0,
             boxes: 0,
             lifecycle: 'New',
@@ -677,7 +703,7 @@ const Inventory: React.FC = () => {
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">物流状态 (Tracking)</th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-32">资金投入</th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-40">库存数量</th>
-                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-32">销售表现</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-32">销售 & 利润</th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">备注信息</th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-20 text-right">操作</th>
                         </tr>
@@ -769,15 +795,22 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
 
-                                {/* Sales */}
+                                {/* Sales & Profit (UPDATED) */}
                                 <td className="px-4 py-4 align-top">
-                                    <div className="font-mono">
-                                        <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</div>
-                                        <div className="text-[10px] text-slate-500">/30天</div>
-                                        <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-0.5 font-bold">
-                                            <TrendingUp className="w-3 h-3"/> {(Math.random() * 20 + 5).toFixed(1)}%
+                                    <div className="font-mono space-y-2">
+                                        <div>
+                                            <div className="text-xs text-slate-500">30天营收</div>
+                                            <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</div>
                                         </div>
-                                        <div className="text-[10px] text-slate-500 mt-0.5">日销: {item.dailyBurnRate} 件</div>
+                                        <div className="bg-white/5 p-1.5 rounded border border-white/5">
+                                            <div className="flex items-center gap-1 mb-0.5">
+                                                <Wallet className="w-3 h-3 text-indigo-400" />
+                                                <span className="text-[10px] text-slate-400">单品净利</span>
+                                            </div>
+                                            <div className={`text-xs font-bold ${item.profit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                                ${item.profit.toFixed(2)} <span className="opacity-70 text-[9px]">({item.margin?.toFixed(0)}%)</span>
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
 

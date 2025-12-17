@@ -62,6 +62,7 @@ export interface ReplenishmentItem extends Product {
   revenue30d: number;
   growth: number;
   profit: number;
+  margin?: number;
   totalWeight: number;
   boxes: number;
 }
