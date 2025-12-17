@@ -374,33 +374,37 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
 
     // Live Calculation Handlers
     const handleBoxCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const count = parseInt(e.target.value) || 0;
+        const val = e.target.value;
+        const count = val === '' ? 0 : parseInt(val);
         setBoxCount(count);
-        // Auto-update stock total when box count changes (One-way binding)
+        
         const items = formData.itemsPerBox || 1;
         const newTotal = count * items;
+        
         setStockTotal(newTotal);
-        // Sync to formData to be safe, although stockTotal is used on save
+        // Sync formData immediately
         setFormData(prev => ({ ...prev, stock: newTotal }));
     };
 
     const handleItemsPerBoxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const items = parseInt(e.target.value) || 0;
-        setFormData({ ...formData, itemsPerBox: items });
-        // Recalculate stock based on current box count
-        if (boxCount > 0) {
-            const newTotal = boxCount * items;
-            setStockTotal(newTotal);
-            // Sync to formData to be safe
-            setFormData(prev => ({ ...prev, stock: newTotal, itemsPerBox: items }));
-        }
+        const val = e.target.value;
+        const items = parseInt(val) || 0;
+        
+        const newTotal = boxCount * items;
+        setStockTotal(newTotal);
+        
+        setFormData(prev => ({ 
+            ...prev, 
+            itemsPerBox: items,
+            stock: newTotal
+        }));
     };
 
     const handleStockTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const total = parseInt(e.target.value) || 0;
+        const val = e.target.value;
+        const total = val === '' ? 0 : parseInt(val);
+        
         setStockTotal(total);
-        // Decoupled: We do NOT auto-update boxCount here.
-        // This allows for manual override (e.g., loose items) without fighting the box calculation.
         setFormData(prev => ({ ...prev, stock: total }));
     };
 
