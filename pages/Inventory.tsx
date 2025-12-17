@@ -167,10 +167,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
-            <div className="bg-[#0f1218] w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+            <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217]" onClick={e => e.stopPropagation()}>
                
                {/* Modal Header */}
-               <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-[#18181b]">
+               <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                    <div>
                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
                            编辑: {formData.name}
@@ -186,11 +186,11 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                </div>
                
                {/* Modal Content - Bento Grid Layout */}
-               <div className="flex-1 overflow-y-auto p-6 bg-[#09090b]">
+               <div className="flex-1 overflow-y-auto p-6 bg-black/40">
                    <div className="grid grid-cols-12 gap-6">
                        
                        {/* Section 1: Product & Supply Chain (Top Wide) */}
-                       <div className="col-span-12 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                       <div className="col-span-12 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">1</div>
                                产品与供应链 (Product & Gallery)
@@ -305,7 +305,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        </div>
 
                        {/* Section 2: Procurement & CRM (Left) */}
-                       <div className="col-span-5 bg-[#18181b] border border-white/5 rounded-xl p-5 flex flex-col">
+                       <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5 flex flex-col">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">2</div>
                                采购与供应商 (CRM)
@@ -344,7 +344,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        </div>
 
                        {/* Section 3: Packing (Right Top) */}
-                       <div className="col-span-7 bg-[#18181b] border border-white/5 rounded-xl p-5 relative overflow-hidden">
+                       <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5 relative overflow-hidden">
                            <div className="absolute top-0 right-0 p-2 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-bl-lg border-b border-l border-amber-500/20 shadow-lg">
                                {totalBoxes} 箱 | {totalVolume.toFixed(3)} CBM
                            </div>
@@ -402,7 +402,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        </div>
 
                        {/* Section 4: Logistics (Left Bottom) */}
-                       <div className="col-span-7 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                       <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">4</div>
                                头程物流 (First Leg)
@@ -480,7 +480,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        </div>
 
                        {/* Section 5: Sales (Right Bottom) */}
-                       <div className="col-span-5 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                       <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
                                TikTok 销售与竞品 (Market Intel)
@@ -514,17 +514,21 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                            <label className="text-[9px] text-slate-500 font-bold">达人佣金 (%)</label>
                                            <input type="number" value={formData.economics?.creatorFeePercent} onChange={e => handleNestedChange('economics', 'creatorFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
                                        </div>
-                                       <div className="col-span-2 mt-1">
+                                       <div>
                                            <label className="text-[9px] text-slate-500 font-bold">每单固定费 ($)</label>
                                            <input type="number" value={formData.economics?.fixedCost} onChange={e => handleNestedChange('economics', 'fixedCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
                                        </div>
-                                       <div className="col-span-2 mt-1">
+                                       <div>
                                            <label className="text-[9px] text-slate-500 font-bold">预估退货率 (%)</label>
-                                           <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" defaultValue={3} />
+                                           <input type="number" value={formData.economics?.refundRatePercent} onChange={e => handleNestedChange('economics', 'refundRatePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" placeholder="3" />
                                        </div>
-                                       <div className="col-span-2 mt-1">
-                                           <label className="text-[9px] text-slate-500 font-bold">预估运费 ($)</label>
-                                           <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" defaultValue={10} />
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold">尾程派送费 ($)</label>
+                                           <input type="number" value={formData.economics?.lastLegShipping} onChange={e => handleNestedChange('economics', 'lastLegShipping', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" placeholder="0" />
+                                       </div>
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold">预估广告费 ($)</label>
+                                           <input type="number" value={formData.economics?.adCost} onChange={e => handleNestedChange('economics', 'adCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" placeholder="0" />
                                        </div>
                                    </div>
                                </div>
@@ -532,7 +536,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        </div>
 
                        {/* Notes Section (Full Width Bottom) */}
-                       <div className="col-span-12 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                       <div className="col-span-12 bg-white/5 border border-white/5 rounded-xl p-5">
                            <label className="text-xs font-bold text-slate-400 block mb-2">备注信息 (Notes)</label>
                            <textarea 
                                 value={formData.notes || ''} 
@@ -546,7 +550,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                </div>
 
                {/* Footer */}
-               <div className="p-4 border-t border-white/10 bg-[#18181b] flex justify-center items-center">
+               <div className="p-4 border-t border-white/10 bg-white/5 flex justify-center items-center">
                    <button onClick={() => onSave(formData)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all">
                        <Save className="w-4 h-4" /> 保存修改并记录日志
                    </button>
@@ -564,7 +568,9 @@ const Inventory: React.FC = () => {
 
     // Transform products to ReplenishmentItems
     const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
-        return state.products.map(p => {
+        return state.products
+            .filter(p => !p.deletedAt)
+            .map(p => {
             const dailyBurnRate = p.dailyBurnRate || 0;
             const stock = p.stock || 0;
             const daysRemaining = dailyBurnRate > 0 ? Math.floor(stock / dailyBurnRate) : 999;
@@ -644,9 +650,9 @@ const Inventory: React.FC = () => {
     };
 
     return (
-        <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-[#0f1218]">
+        <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-black/20">
             {/* Header */}
-            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1e1e24]/50 backdrop-blur-md z-20">
+            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-20">
                 <div>
                     <h2 className="text-white font-bold text-lg flex items-center gap-2">
                         <PackageCheck className="w-5 h-5 text-indigo-500" />
@@ -682,9 +688,9 @@ const Inventory: React.FC = () => {
             </div>
 
             {/* List */}
-            <div className="flex-1 overflow-auto bg-[#0a0a0c]">
+            <div className="flex-1 overflow-auto bg-transparent">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-[#1e1e24] sticky top-0 z-10 shadow-sm border-b border-white/5">
+                    <thead className="bg-white/5 backdrop-blur-md sticky top-0 z-10 shadow-sm border-b border-white/5">
                         <tr>
                             <th className="px-4 py-3 w-10"><input type="checkbox" className="rounded bg-black/40 border-white/20"/></th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">SKU / 阶段</th>
