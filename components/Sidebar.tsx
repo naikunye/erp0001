@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers, Link2, Container, Factory, Calculator } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers, Container, Factory, Calculator } from 'lucide-react';
 import { Page } from '../types';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -27,7 +27,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'marketing', label: '营销投放', subLabel: 'Marketing', icon: Megaphone },
     { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
     { id: 'suppliers', label: '供应商管理', subLabel: 'Suppliers', icon: Factory },
-    { id: 'integrations', label: '店铺集成', subLabel: 'Integrations', icon: Link2 },
     { id: 'settings', label: '系统设置', subLabel: 'Settings', icon: Settings },
   ];
 

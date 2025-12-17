@@ -176,6 +176,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
     const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
 
+    // Live Freight Calculation for Modal
+    const liveBillingWeight = formData.logistics?.billingWeight || (formData.stock * (formData.unitWeight || 0));
+    const liveTotalFreight = (formData.logistics?.unitFreightCost || 0) * liveBillingWeight;
+
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
             <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217]" onClick={e => e.stopPropagation()}>
@@ -443,7 +447,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                                <div className="grid grid-cols-2 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">空运单价 (/KG)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">空运单价 (¥/KG)</label>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
                                                <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">¥</span>
@@ -473,6 +477,15 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        <div className="text-[9px] text-right text-slate-600 mt-1 font-mono">理论实重: {(formData.stock * (formData.unitWeight || 0)).toFixed(2)} kg</div>
                                    </div>
                                </div>
+                               
+                               {/* LIVE TOTAL FREIGHT DISPLAY */}
+                               <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex justify-between items-center">
+                                   <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
+                                   <span className="text-sm font-bold text-blue-100 font-mono">
+                                       ¥ {liveTotalFreight.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                   </span>
+                               </div>
+
                                <div className="grid grid-cols-2 gap-4">
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥)</label>
@@ -659,16 +672,27 @@ const Inventory: React.FC = () => {
             // 1. Exchange Rate (CNY to USD for costs)
             const exchangeRate = 7.2;
 
-            // 2. Base Costs in USD
+            // 2. Weight Calculation
+            // If manual billing weight is provided, use it. Otherwise calculate theoretical weight.
+            const manualBillingWeight = p.logistics?.billingWeight || 0;
+            const theoreticalWeight = p.stock * (p.unitWeight || 0);
+            const finalBillingWeight = manualBillingWeight > 0 ? manualBillingWeight : theoreticalWeight;
+
+            // 3. Freight Cost Calculation (CNY)
+            // Unit Freight Cost (Rate per KG)
+            const freightRateCNY = p.logistics?.unitFreightCost || 0;
+            // Total Freight Cost = Rate/KG * Total Weight
+            const totalFreightCostCNY = freightRateCNY * finalBillingWeight;
+            
+            // Per Unit Freight Cost (for profit calc)
+            const unitFreightCostCNY = p.stock > 0 ? totalFreightCostCNY / p.stock : 0;
+
+            // 4. Profit Calculation (USD)
             const priceUSD = p.price || 0;
             const costPriceUSD = (p.costPrice || 0) / exchangeRate;
+            const freightCostUSD = unitFreightCostCNY / exchangeRate; // Converted per unit freight
 
-            // 3. Logistics: Rate (CNY/KG) * Weight (KG)
-            const freightRateCNY = p.logistics?.unitFreightCost || 0; 
-            const weightKG = p.unitWeight || 0;
-            const freightCostUSD = (freightRateCNY * weightKG) / exchangeRate;
-
-            // 4. TikTok/Marketing Costs (USD)
+            // 5. TikTok/Marketing Costs (USD)
             const eco = p.economics || {};
             const platformFee = priceUSD * ((eco.platformFeePercent || 0) / 100);
             const creatorFee = priceUSD * ((eco.creatorFeePercent || 0) / 100);
@@ -677,7 +701,7 @@ const Inventory: React.FC = () => {
             const adSpend = eco.adCost || 0;
             const estimatedRefundCost = priceUSD * ((eco.refundRatePercent || 0) / 100); 
 
-            // 5. Total Unit Cost & Profit
+            // 6. Total Unit Cost & Profit
             const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
             const unitProfit = priceUSD - totalUnitCost;
             
@@ -688,13 +712,13 @@ const Inventory: React.FC = () => {
                 safetyStock,
                 reorderPoint,
                 totalInvestment: stock * (p.costPrice || 0), // Kept in CNY for investment view
-                freightCost: stock * (p.logistics?.unitFreightCost || 0), // Kept in CNY
+                freightCost: totalFreightCostCNY, // Update total freight display (CNY)
                 goodsCost: stock * (p.costPrice || 0), // Kept in CNY
                 revenue30d: pStats.revenue30d, // REAL REVENUE (USD)
                 growth: growth,                 // REAL GROWTH
                 profit: unitProfit, // UNIT PROFIT (USD)
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0, // MARGIN %
-                totalWeight: stock * (p.unitWeight || 0),
+                totalWeight: finalBillingWeight, // Update to reflect used weight
                 boxes: Math.ceil(stock / (p.itemsPerBox || 1))
             };
         });

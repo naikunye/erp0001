@@ -17,7 +17,6 @@ import Analytics from './pages/Analytics';
 import CalculatorCenter from './pages/CalculatorCenter';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
-import Integrations from './pages/Integrations'; 
 import Suppliers from './pages/Suppliers'; 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
@@ -69,7 +68,6 @@ const MainLayout: React.FC = () => {
       case 'calculator': return '智能计算 (Intelligent Calc)';
       case 'calendar': return '运营日历 (Operations Timeline)';
       case 'settings': return '系统配置 (System Config)';
-      case 'integrations': return '店铺集成 (Integrations)';
       case 'suppliers': return '供应商管理 (Suppliers)';
       default: return '探行 OS (Quantum Edition)';
     }
@@ -89,7 +87,6 @@ const MainLayout: React.FC = () => {
       case 'analytics': return <Analytics />;
       case 'calculator': return <CalculatorCenter />;
       case 'settings': return <Settings />;
-      case 'integrations': return <Integrations />;
       case 'suppliers': return <Suppliers />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
