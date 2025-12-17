@@ -137,8 +137,23 @@ const Tracking: React.FC = () => {
       }
   };
 
-  const getStatusColor = (status: Shipment['status']) => {
-      switch (status) {
+  // --- Helper to translate status to Chinese ---
+  const translateStatus = (status: string) => {
+      if (!status) return '待处理';
+      // Normalize input
+      const s = status.toLowerCase();
+      
+      if (s.includes('pending') || s === '待处理') return '待处理';
+      if (s.includes('transit') || s === '运输中') return '运输中';
+      if (s.includes('deliver') || s === '已送达') return '已送达';
+      if (s.includes('exception') || s === '异常') return '异常';
+      
+      return status; // Return as is if no match (or already correct)
+  };
+
+  const getStatusColor = (status: string) => {
+      const s = translateStatus(status);
+      switch (s) {
           case '已送达': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
           case '运输中': return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
           case '异常': return 'text-red-400 bg-red-500/10 border-red-500/20';
@@ -191,7 +206,7 @@ const Tracking: React.FC = () => {
                   >
                       <div className="flex justify-between items-start mb-2">
                           <span className="font-mono text-sm font-bold text-white">{shipment.trackingNo}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded border ${getStatusColor(shipment.status)}`}>{shipment.status}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded border ${getStatusColor(shipment.status)}`}>{translateStatus(shipment.status)}</span>
                       </div>
                       <div className="text-xs text-slate-400 mb-2 flex items-center gap-1">
                           <span className="truncate">{shipment.productName || 'Unknown Product'}</span>
@@ -373,7 +388,7 @@ const Tracking: React.FC = () => {
                           <div>
                               <label className="text-xs text-slate-400 block mb-1">状态 (Status)</label>
                               <select 
-                                  value={editForm.status || '待处理'} 
+                                  value={translateStatus(editForm.status || '待处理')} 
                                   onChange={e => setEditForm({...editForm, status: e.target.value as any})}
                                   className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
                               >
