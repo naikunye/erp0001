@@ -654,28 +654,32 @@ const Inventory: React.FC = () => {
                 : 0;
 
             // --- REAL PROFIT CALCULATION ---
-            // Unit Profit = Price - COGS - Freight - (PlatformFee + CreatorFee + FixedCost + LastLeg + AdCost)
-            // Note: Assume price is in USD for profit calculation if logistics unit cost is in USD.
-            // If costs are mixed currency, we need standardization. 
-            // For this view, we assume all economic inputs in Product type are in the same currency as Price (USD).
-            const unitFreight = p.logistics?.unitFreightCost || 0;
-            const eco = p.economics || {};
-            const platformFee = p.price * ((eco.platformFeePercent || 0) / 100);
-            const creatorFee = p.price * ((eco.creatorFeePercent || 0) / 100);
-            const otherCosts = (eco.fixedCost || 0) + (eco.lastLegShipping || 0) + (eco.adCost || 0);
+            // Unit Profit = Price - (COGS + Freight + Fees + Ads + etc)
             
-            // Assume Cost Price is converted to USD if input as RMB (approx / 7.2) - OR assume input is already USD for simplicity in this view
-            // In a real app, strict currency management is needed. Here we assume `costPrice` is USD for consistency with `price`.
-            // If `costPrice` was typically RMB in input forms, we'd divide by 7.2 here.
-            // Based on EditModal, costPrice label is "¥/pcs" (RMB), but Price is "$" (USD).
-            // Let's standardise: Convert Cost Price (CNY) to USD.
-            const costPriceUSD = (p.costPrice || 0) / 7.2; 
-            
-            // Unit Freight is usually RMB or USD? EditModal says "¥". Convert to USD.
-            const unitFreightUSD = unitFreight / 7.2;
+            // 1. Exchange Rate (CNY to USD for costs)
+            const exchangeRate = 7.2;
 
-            const totalUnitCost = costPriceUSD + unitFreightUSD + platformFee + creatorFee + otherCosts;
-            const unitProfit = p.price - totalUnitCost;
+            // 2. Base Costs in USD
+            const priceUSD = p.price || 0;
+            const costPriceUSD = (p.costPrice || 0) / exchangeRate;
+
+            // 3. Logistics: Rate (CNY/KG) * Weight (KG)
+            const freightRateCNY = p.logistics?.unitFreightCost || 0; 
+            const weightKG = p.unitWeight || 0;
+            const freightCostUSD = (freightRateCNY * weightKG) / exchangeRate;
+
+            // 4. TikTok/Marketing Costs (USD)
+            const eco = p.economics || {};
+            const platformFee = priceUSD * ((eco.platformFeePercent || 0) / 100);
+            const creatorFee = priceUSD * ((eco.creatorFeePercent || 0) / 100);
+            const fixedFee = eco.fixedCost || 0;
+            const lastLeg = eco.lastLegShipping || 0;
+            const adSpend = eco.adCost || 0;
+            const estimatedRefundCost = priceUSD * ((eco.refundRatePercent || 0) / 100); 
+
+            // 5. Total Unit Cost & Profit
+            const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
+            const unitProfit = priceUSD - totalUnitCost;
             
             return {
                 ...p,
