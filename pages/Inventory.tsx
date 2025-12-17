@@ -66,7 +66,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         // Ensure defaults
         dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
         logistics: product.logistics || { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0, targetWarehouse: '' },
-        economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0 },
+        economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0, refundRatePercent: 0 },
     });
     
     // Gallery State
@@ -441,10 +441,76 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        </div>
                                    </div>
                                </div>
-                               <div>
-                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">目的仓库</label>
-                                   <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="火星/休斯顿/美中" />
-                                </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">空运单价 (/KG)</label>
+                                       <div className="flex items-center gap-1">
+                                           <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
+                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">¥</span>
+                                           </div>
+                                           <input 
+                                                type="number" 
+                                                value={formData.logistics?.unitFreightCost} 
+                                                onChange={e => handleNestedChange('logistics', 'unitFreightCost', parseFloat(e.target.value))} 
+                                                className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
+                                           />
+                                       </div>
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">计费总重 (Manual)</label>
+                                       <div className="flex items-center gap-1">
+                                           <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
+                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">⚖️</span>
+                                           </div>
+                                           <input 
+                                                type="number" 
+                                                value={formData.logistics?.billingWeight} 
+                                                onChange={e => handleNestedChange('logistics', 'billingWeight', parseFloat(e.target.value))} 
+                                                className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
+                                                placeholder="0"
+                                           />
+                                       </div>
+                                       <div className="text-[9px] text-right text-slate-600 mt-1 font-mono">理论实重: {(formData.stock * (formData.unitWeight || 0)).toFixed(2)} kg</div>
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥)</label>
+                                       <input 
+                                            type="number" 
+                                            value={formData.logistics?.consumablesFee} 
+                                            onChange={e => handleNestedChange('logistics', 'consumablesFee', parseFloat(e.target.value))}
+                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
+                                            placeholder="30"
+                                       />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥)</label>
+                                       <input 
+                                            type="number" 
+                                            value={formData.logistics?.customsFee} 
+                                            onChange={e => handleNestedChange('logistics', 'customsFee', parseFloat(e.target.value))}
+                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
+                                            placeholder="0"
+                                       />
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥)</label>
+                                       <input 
+                                            type="number" 
+                                            value={formData.logistics?.portFee} 
+                                            onChange={e => handleNestedChange('logistics', 'portFee', parseFloat(e.target.value))}
+                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
+                                            placeholder="0"
+                                       />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">目的仓库</label>
+                                       <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="火星/休斯顿/美中" />
+                                   </div>
+                               </div>
                            </div>
                        </div>
 
@@ -452,7 +518,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
-                               TikTok 销售与竞品
+                               TikTok 销售与竞品 (Market Intel)
                            </div>
                            
                            <div className="space-y-4">
@@ -469,6 +535,36 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div className="flex gap-2 mb-2">
                                        <input type="text" placeholder="竞品链接/ASIN" className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-slate-300" />
                                        <input type="text" placeholder="$ 0" className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 text-center" />
+                                   </div>
+                               </div>
+
+                               <div className="bg-purple-500/5 border border-purple-500/10 rounded-lg p-3">
+                                   <label className="text-[10px] text-purple-400 block mb-3 font-bold flex items-center gap-1 uppercase tracking-wider"><Zap className="w-3 h-3"/> TikTok Cost Structure</label>
+                                   <div className="grid grid-cols-2 gap-3">
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold block mb-1">平台佣金 (%)</label>
+                                           <input type="number" value={formData.economics?.platformFeePercent} onChange={e => handleNestedChange('economics', 'platformFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="2" />
+                                       </div>
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold block mb-1">达人佣金 (%)</label>
+                                           <input type="number" value={formData.economics?.creatorFeePercent} onChange={e => handleNestedChange('economics', 'creatorFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="10" />
+                                       </div>
+                                       <div className="col-span-2">
+                                           <label className="text-[9px] text-slate-500 font-bold block mb-1">每单固定费 ($)</label>
+                                           <input type="number" value={formData.economics?.fixedCost} onChange={e => handleNestedChange('economics', 'fixedCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="0.3" />
+                                       </div>
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold block mb-1">预估退货率 (%)</label>
+                                           <input type="number" value={formData.economics?.refundRatePercent} onChange={e => handleNestedChange('economics', 'refundRatePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="3" />
+                                       </div>
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold block mb-1">尾程派送费 ($)</label>
+                                           <input type="number" value={formData.economics?.lastLegShipping} onChange={e => handleNestedChange('economics', 'lastLegShipping', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="5.44" />
+                                       </div>
+                                       <div className="col-span-2">
+                                           <label className="text-[9px] text-slate-500 font-bold block mb-1">预估广告费 ($)</label>
+                                           <input type="number" value={formData.economics?.adCost} onChange={e => handleNestedChange('economics', 'adCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-2 text-xs text-white outline-none focus:border-purple-500" placeholder="10" />
+                                       </div>
                                    </div>
                                </div>
                            </div>

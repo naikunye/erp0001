@@ -40,9 +40,19 @@ export interface Product {
     unitFreightCost: number; 
     totalFreightCost?: number; // Added for manual total override
     billingWeight?: number; // Added for manual billing weight override
+    consumablesFee?: number; // 耗材/贴标费
+    customsFee?: number; // 报关费
+    portFee?: number; // 港口/操作费
     targetWarehouse: string 
   };
-  economics?: { platformFeePercent: number; creatorFeePercent: number; fixedCost: number; lastLegShipping: number; adCost: number; refundRatePercent?: number };
+  economics?: { 
+    platformFeePercent: number; 
+    creatorFeePercent: number; 
+    fixedCost: number; 
+    lastLegShipping: number; 
+    adCost: number; 
+    refundRatePercent?: number; // 预估退货率
+  };
   deletedAt?: string;
   // New fields
   image?: string; // Kept for backward compatibility (primary image)
