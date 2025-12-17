@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, ArrowDownRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight, Package, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ComposedChart, Line, Area } from 'recharts';
@@ -35,38 +36,82 @@ const Dashboard: React.FC = () => {
 
   // Financial & Inventory Metrics
   const metrics = useMemo(() => {
-      
+      const EXCHANGE_RATE = 7.2;
+
       // 1. Inventory Stock Value (Linked to Replenishment Center)
+      // Value in CNY (Cost basis)
       const stockValue = activeProducts.reduce((acc, p) => {
           return acc + (p.stock * (p.costPrice || 0));
       }, 0);
       
-      // 2. Real Net Profit (REAL LOGIC: Revenue - Actual Expenses from Transactions)
-      const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
-      
-      // Calculate actual expenses from Transactions (Cash Basis)
-      let totalActualExpenses = 0;
-      const EXCHANGE_RATE = 7.2; // Assumed CNY to USD rate for normalization
+      // 2. Total Stock Profit (Potential Profit of current inventory)
+      // Logic mirrored from Inventory.tsx for consistency
+      let totalStockProfitUSD = 0;
+      let totalStockRevenuePotentialUSD = 0;
 
-      state.transactions.forEach(t => {
-          if (t.type === 'expense' && t.status === 'completed') {
-              // Convert to USD
-              const amountUSD = t.currency === 'CNY' ? t.amount / EXCHANGE_RATE : t.amount;
-              totalActualExpenses += amountUSD;
+      activeProducts.forEach(p => {
+          // A. Unit Freight Calculation
+          const unitRealWeight = p.unitWeight || 0;
+          const dims = p.dimensions || {l:0, w:0, h:0};
+          const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
+          const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+          
+          let activeTotalBillingWeight = 0;
+          if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+              activeTotalBillingWeight = p.logistics.billingWeight;
+          } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
+              activeTotalBillingWeight = p.logistics.unitBillingWeight * p.stock;
+          } else {
+              activeTotalBillingWeight = autoUnitChargeableWeight * p.stock;
           }
+
+          const rate = p.logistics?.unitFreightCost || 0;
+          const baseFreightCost = activeTotalBillingWeight * rate;
+          const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+          const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
+          
+          const manualTotalFreightCNY = p.logistics?.totalFreightCost;
+          const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
+          
+          const effectiveUnitFreightCNY = p.stock > 0 
+              ? effectiveTotalFreightCNY / p.stock 
+              : (rate * autoUnitChargeableWeight);
+
+          const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
+          const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
+
+          // B. Profit Calculation (USD)
+          const priceUSD = p.price || 0;
+          const costPriceUSD = (p.costPrice || 0) / EXCHANGE_RATE;
+          const freightCostUSD = totalUnitLogisticsCNY / EXCHANGE_RATE;
+
+          const eco = p.economics;
+          const platformFee = priceUSD * ((eco?.platformFeePercent || 0) / 100);
+          const creatorFee = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
+          const fixedFee = eco?.fixedCost || 0;
+          const lastLeg = eco?.lastLegShipping || 0;
+          const adSpend = eco?.adCost || 0;
+          const estimatedRefundCost = priceUSD * ((eco?.refundRatePercent || 0) / 100); 
+
+          const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
+          const unitProfit = priceUSD - totalUnitCost;
+          
+          totalStockProfitUSD += unitProfit * p.stock;
+          totalStockRevenuePotentialUSD += priceUSD * p.stock;
       });
 
-      const netProfit = totalRevenue - totalActualExpenses;
-      // ROI = Net Profit / Total Invested (Expenses)
-      const roi = totalActualExpenses > 0 ? (netProfit / totalActualExpenses) * 100 : 0;
+      // Calculate potential margin for current stock
+      const stockPotentialMargin = totalStockRevenuePotentialUSD > 0 
+          ? (totalStockProfitUSD / totalStockRevenuePotentialUSD) * 100 
+          : 0;
 
       // 3. Logistics Weight (Inventory total weight)
       const logisticsWeight = activeProducts.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
       
       return {
           stockValue: stockValue, // Actual inventory value in CNY
-          netProfit: netProfit,
-          roi: roi.toFixed(1),
+          totalStockProfit: totalStockProfitUSD, // Potential Profit in USD
+          stockMargin: stockPotentialMargin.toFixed(1),
           logisticsWeight: logisticsWeight.toFixed(1),
       };
   }, [activeOrders, activeProducts, state.products, state.transactions]);
@@ -159,12 +204,12 @@ const Dashboard: React.FC = () => {
             
             Real-time Metrics (Verified):
             - Stock Assets: ¥${metrics.stockValue.toLocaleString()}
-            - Real Net Profit: $${metrics.netProfit.toFixed(2)} (Calculated via Actual Expenses vs Revenue)
-            - ROI: ${metrics.roi}%
+            - Total Potential Stock Profit: $${metrics.totalStockProfit.toLocaleString()}
+            - Avg Potential Margin: ${metrics.stockMargin}%
             
             Task: Provide a strategic executive summary (in Chinese).
-            1. Analyze the health of the profit margin considering the real cost structure.
-            2. Give a specific suggestion for inventory management based on the stock value.
+            1. Analyze the inventory profitability potential.
+            2. Give a specific suggestion for inventory management based on the margin.
             
             Format: HTML string using <b> for highlights. Keep it professional and under 60 words.
           `;
@@ -259,8 +304,17 @@ const Dashboard: React.FC = () => {
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
             <StatCard loading={isLoading} title="库存资金占用 (Stock Asset)" value={`¥${metrics.stockValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Linked to Inv." trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
+        {/* REPLACED: Real Net -> Total Stock Profit */}
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
-            <StatCard loading={isLoading} title="真实净利 (Real Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
+            <StatCard 
+                loading={isLoading} 
+                title="库存潜在总利 (Stock Profit)" 
+                value={`$${metrics.totalStockProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} 
+                trend={`${metrics.stockMargin}% Margin`} 
+                trendUp={parseFloat(metrics.stockMargin) > 0} 
+                icon={TrendingUp} 
+                accentColor="green" 
+            />
         </div>
         
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
