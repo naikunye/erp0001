@@ -172,13 +172,22 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         setSkuTags(skuTags.filter(t => t !== tagToRemove));
     };
 
-    // Derived calculations for the "Section 3" badge
+    // --- Dynamic Calculations for Modal ---
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
     const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
 
-    // Live Freight Calculation for Modal
-    const liveBillingWeight = formData.logistics?.billingWeight || (formData.stock * (formData.unitWeight || 0));
-    const liveTotalFreight = (formData.logistics?.unitFreightCost || 0) * liveBillingWeight;
+    // Unit Weight Logic
+    const unitRealWeight = formData.unitWeight || 0;
+    const unitVolWeight = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0)) / 6000;
+    const unitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+    
+    // Fees
+    const unitFreightCostCNY = (formData.logistics?.unitFreightCost || 0) * unitChargeableWeight;
+    const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0); // Per Unit
+    const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0); // Total Batch
+    
+    // Total Estimated Freight
+    const estimatedTotalFreightCNY = (unitFreightCostCNY * formData.stock) + (unitConsumablesCNY * formData.stock) + batchFeesCNY;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
@@ -341,7 +350,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        <input type="number" value={formData.costPrice} onChange={e => handleChange('costPrice', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
                                    </div>
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">单个重量 (KG)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">单个实重 (KG)</label>
                                        <input type="number" value={formData.unitWeight} onChange={e => handleChange('unitWeight', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
                                    </div>
                                </div>
@@ -379,6 +388,14 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <input type="number" value={formData.dimensions?.h} onChange={e => handleDimensionChange('h', parseFloat(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
                                </div>
                            </div>
+                           
+                           {/* Volumetric Weight Display */}
+                           <div className="flex justify-between items-center text-[10px] text-slate-500 bg-white/5 p-2 rounded mb-4 font-mono">
+                               <span>单品实重: {unitRealWeight} kg</span>
+                               <span>单品材积: {unitVolWeight.toFixed(2)} kg (÷6000)</span>
+                               <span className="text-amber-400 font-bold border border-amber-500/30 px-1 rounded">计费重: {unitChargeableWeight.toFixed(2)} kg</span>
+                           </div>
+
                            <div className="grid grid-cols-2 gap-4 mb-4">
                                <div>
                                    <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货数量</label>
@@ -447,7 +464,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                                <div className="grid grid-cols-2 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">空运单价 (¥/KG)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">单价 (¥/KG)</label>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
                                                <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">¥</span>
@@ -461,34 +478,40 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        </div>
                                    </div>
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">计费总重 (Manual)</label>
+                                       <div className="flex justify-between mb-1">
+                                            <label className="text-[10px] text-slate-500 font-bold">单品运费 (自动计算)</label>
+                                            <span className="text-[9px] text-slate-500">Rate x Chargeable Weight</span>
+                                       </div>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
-                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">⚖️</span>
+                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">¥</span>
                                            </div>
                                            <input 
                                                 type="number" 
-                                                value={formData.logistics?.billingWeight} 
-                                                onChange={e => handleNestedChange('logistics', 'billingWeight', parseFloat(e.target.value))} 
-                                                className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
-                                                placeholder="0"
+                                                value={unitFreightCostCNY.toFixed(2)} 
+                                                readOnly
+                                                className="w-full bg-black/20 border border-white/10 rounded-r px-3 py-2 text-sm text-slate-400 font-mono outline-none font-bold cursor-not-allowed" 
                                            />
                                        </div>
-                                       <div className="text-[9px] text-right text-slate-600 mt-1 font-mono">理论实重: {(formData.stock * (formData.unitWeight || 0)).toFixed(2)} kg</div>
                                    </div>
                                </div>
                                
                                {/* LIVE TOTAL FREIGHT DISPLAY */}
-                               <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex justify-between items-center">
-                                   <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
-                                   <span className="text-sm font-bold text-blue-100 font-mono">
-                                       ¥ {liveTotalFreight.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
-                                   </span>
+                               <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-1">
+                                   <div className="flex justify-between items-center">
+                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Estimated Total Freight)</span>
+                                       <span className="text-sm font-bold text-blue-100 font-mono">
+                                           ¥ {estimatedTotalFreightCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                       </span>
+                                   </div>
+                                   <div className="text-[9px] text-blue-300/50 text-right">
+                                       (单品运费 + 耗材) * 库存 + 整批杂费
+                                   </div>
                                </div>
 
                                <div className="grid grid-cols-2 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥/pcs)</label>
                                        <input 
                                             type="number" 
                                             value={formData.logistics?.consumablesFee} 
@@ -498,7 +521,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        />
                                    </div>
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥/Total Batch)</label>
                                        <input 
                                             type="number" 
                                             value={formData.logistics?.customsFee} 
@@ -510,7 +533,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                                <div className="grid grid-cols-2 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥/Total Batch)</label>
                                        <input 
                                             type="number" 
                                             value={formData.logistics?.portFee} 
@@ -618,8 +641,6 @@ const Inventory: React.FC = () => {
     useEffect(() => {
         if (state.navParams?.searchQuery) {
             setSearchTerm(state.navParams.searchQuery);
-            // Optional: Auto-open edit modal if it's a direct SKU match?
-            // For now, just filter is enough.
             dispatch({ type: 'CLEAR_NAV_PARAMS' });
         }
     }, [state.navParams, dispatch]);
@@ -667,44 +688,56 @@ const Inventory: React.FC = () => {
                 : 0;
 
             // --- REAL PROFIT CALCULATION ---
-            // Unit Profit = Price - (COGS + Freight + Fees + Ads + etc)
+            // Unit Profit = Price - (COGS + Unit Freight + Fees + Ads + etc)
             
             // 1. Exchange Rate (CNY to USD for costs)
             const exchangeRate = 7.2;
 
-            // 2. Weight Calculation
-            // If manual billing weight is provided, use it. Otherwise calculate theoretical weight.
-            const manualBillingWeight = p.logistics?.billingWeight || 0;
-            const theoreticalWeight = p.stock * (p.unitWeight || 0);
-            const finalBillingWeight = manualBillingWeight > 0 ? manualBillingWeight : theoreticalWeight;
-
-            // 3. Freight Cost Calculation (CNY)
-            // Unit Freight Cost (Rate per KG)
-            const freightRateCNY = p.logistics?.unitFreightCost || 0;
-            // Total Freight Cost = Rate/KG * Total Weight
-            const totalFreightCostCNY = freightRateCNY * finalBillingWeight;
+            // 2. Unit Freight Calculation (Correct Logic)
+            // Use Chargeable Weight per Unit: Max(Real, Volumetric)
+            const unitRealWeight = p.unitWeight || 0;
+            const dims = p.dimensions || {l:0, w:0, h:0};
+            // Volumetric Weight (KG) = L*W*H / 6000 (Air standard)
+            const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
+            const chargeableWeight = Math.max(unitRealWeight, unitVolWeight);
             
-            // Per Unit Freight Cost (for profit calc)
-            const unitFreightCostCNY = p.stock > 0 ? totalFreightCostCNY / p.stock : 0;
+            // Unit Freight Cost (CNY)
+            const unitFreightCNY = (p.logistics?.unitFreightCost || 0) * chargeableWeight;
+
+            // 3. Other Logistics Fees (Allocated)
+            // Consumables: Per Unit
+            const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
+            
+            // Batch Fees (Customs/Port): Allocate by stock quantity (assuming current stock is a batch proxy, or negligible)
+            // To be safer, we can ignore batch fixed fees for *unit* profit if stock is low to avoid skewing, 
+            // or assume a standard batch size. Let's allocate based on current stock but clamp minimum divisor.
+            const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+            const allocatedBatchFeeCNY = p.stock > 0 ? batchFeesCNY / p.stock : 0; 
+
+            // Total Unit Logistics Cost (CNY)
+            const totalUnitLogisticsCNY = unitFreightCNY + unitConsumablesCNY + allocatedBatchFeeCNY;
 
             // 4. Profit Calculation (USD)
             const priceUSD = p.price || 0;
             const costPriceUSD = (p.costPrice || 0) / exchangeRate;
-            const freightCostUSD = unitFreightCostCNY / exchangeRate; // Converted per unit freight
+            const freightCostUSD = totalUnitLogisticsCNY / exchangeRate; // Converted total logistics
 
             // 5. TikTok/Marketing Costs (USD)
-            const eco = p.economics || {};
-            const platformFee = priceUSD * ((eco.platformFeePercent || 0) / 100);
-            const creatorFee = priceUSD * ((eco.creatorFeePercent || 0) / 100);
-            const fixedFee = eco.fixedCost || 0;
-            const lastLeg = eco.lastLegShipping || 0;
-            const adSpend = eco.adCost || 0;
-            const estimatedRefundCost = priceUSD * ((eco.refundRatePercent || 0) / 100); 
+            const eco = p.economics;
+            const platformFee = priceUSD * ((eco?.platformFeePercent || 0) / 100);
+            const creatorFee = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
+            const fixedFee = eco?.fixedCost || 0;
+            const lastLeg = eco?.lastLegShipping || 0;
+            const adSpend = eco?.adCost || 0;
+            const estimatedRefundCost = priceUSD * ((eco?.refundRatePercent || 0) / 100); 
 
             // 6. Total Unit Cost & Profit
             const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
             const unitProfit = priceUSD - totalUnitCost;
             
+            // Total Freight for Display (Estimate for current stock)
+            const totalFreightEstimateCNY = totalUnitLogisticsCNY * stock;
+
             return {
                 ...p,
                 dailyBurnRate,
@@ -712,13 +745,13 @@ const Inventory: React.FC = () => {
                 safetyStock,
                 reorderPoint,
                 totalInvestment: stock * (p.costPrice || 0), // Kept in CNY for investment view
-                freightCost: totalFreightCostCNY, // Update total freight display (CNY)
+                freightCost: totalFreightEstimateCNY, // Update total freight display (CNY)
                 goodsCost: stock * (p.costPrice || 0), // Kept in CNY
                 revenue30d: pStats.revenue30d, // REAL REVENUE (USD)
                 growth: growth,                 // REAL GROWTH
                 profit: unitProfit, // UNIT PROFIT (USD)
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0, // MARGIN %
-                totalWeight: finalBillingWeight, // Update to reflect used weight
+                totalWeight: stock * unitRealWeight, // Real weight total
                 boxes: Math.ceil(stock / (p.itemsPerBox || 1))
             };
         });

@@ -4,7 +4,6 @@ import { TanxingProvider, useTanxing } from './context/TanxingContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
-import Orders from './pages/Orders';
 import Inventory from './pages/Inventory';
 import Intelligence from './pages/Intelligence';
 import Customers from './pages/Customers';
@@ -59,7 +58,6 @@ const MainLayout: React.FC = () => {
       case 'dashboard': return '指挥中枢 (Command Center)';
       case 'finance': return '资金财务 (Finance & Capital)';
       case 'tracking': return '全球物流 (Global Logistics)';
-      case 'orders': return '订单履约 (Order Fulfillment)';
       case 'customers': return '客户数据库 (Client Database)';
       case 'inventory': return '库存供应链 (Inventory & Supply)';
       case 'intelligence': return 'AI 实验室 (AI Laboratory)';
@@ -79,7 +77,6 @@ const MainLayout: React.FC = () => {
       case 'finance': return <Finance />;
       case 'tracking': return <Tracking />;
       case 'calendar': return <Calendar />;
-      case 'orders': return <Orders />;
       case 'customers': return <Customers />;
       case 'inventory': return <Inventory />;
       case 'intelligence': return <Intelligence />;

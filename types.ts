@@ -1,5 +1,5 @@
 
-export type Page = 'dashboard' | 'inventory' | 'orders' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'calculator';
+export type Page = 'dashboard' | 'inventory' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'calculator';
 
 export interface User {
   id: string;

@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useEffect } from 'react';
 import { DollarSign, Box, Wallet, BarChart4, ArrowUpRight, ArrowDownRight, Loader2, TrendingUp, Sparkles, Command, Zap, Layers, ArrowRight, Package, AlertTriangle } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, ComposedChart, Line, Area } from 'recharts';
@@ -88,10 +87,10 @@ const Dashboard: React.FC = () => {
                   // Replicate Deep Cost Calculation for per-item accuracy
                   const cogsUSD = (product.costPrice || 0) / EXCHANGE_RATE;
                   const freightUSD = ((product.logistics?.unitFreightCost || 0) * (product.unitWeight || 0)) / EXCHANGE_RATE;
-                  const eco = product.economics || {};
-                  const otherCosts = (item.price * ((eco.platformFeePercent||0)/100)) + 
-                                     (item.price * ((eco.creatorFeePercent||0)/100)) + 
-                                     (eco.fixedCost||0) + (eco.lastLegShipping||0) + (eco.adCost||0);
+                  const eco = product.economics;
+                  const otherCosts = (item.price * ((eco?.platformFeePercent||0)/100)) + 
+                                     (item.price * ((eco?.creatorFeePercent||0)/100)) + 
+                                     (eco?.fixedCost||0) + (eco?.lastLegShipping||0) + (eco?.adCost||0);
                   
                   const unitCost = cogsUSD + freightUSD + otherCosts;
                   itemProfit = (item.price - unitCost) * item.quantity;

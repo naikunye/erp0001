@@ -23,7 +23,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
     { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },
     { id: 'calendar', label: '运营日历', subLabel: 'Calendar', icon: CalendarDays },
-    { id: 'orders', label: '订单履约', subLabel: 'Orders', icon: ShoppingCart },
     { id: 'marketing', label: '营销投放', subLabel: 'Marketing', icon: Megaphone },
     { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
     { id: 'suppliers', label: '供应商管理', subLabel: 'Suppliers', icon: Factory },

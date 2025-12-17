@@ -104,10 +104,7 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
             {/* Left Column: Fulfillment & Logs */}
             <div className="col-span-3 flex flex-col gap-4">
                 {/* Fulfillment Monitor */}
-                <div 
-                    onClick={() => onNavigate('orders')}
-                    className="border border-cyan-900/50 bg-black/40 p-4 rounded-xl relative overflow-hidden group cursor-pointer hover:border-cyan-500/50 transition-all"
-                >
+                <div className="border border-cyan-900/50 bg-black/40 p-4 rounded-xl relative overflow-hidden group hover:border-cyan-500/50 transition-all">
                     <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity"><Package className="w-16 h-16" /></div>
                     <h3 className="text-cyan-500 text-xs font-bold uppercase mb-4 flex items-center gap-2">
                         <Truck className="w-4 h-4" /> 履约监控 (Fulfillment)
