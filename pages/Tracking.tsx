@@ -27,18 +27,11 @@ const Tracking: React.FC = () => {
 
   const getTrackingUrl = (carrier: string, trackingNo: string) => {
       const c = carrier.toLowerCase();
-      if (c.includes('ups')) {
-          return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
-      }
-      if (c.includes('dhl')) {
-          return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
-      }
-      if (c.includes('fedex')) {
-          return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
-      }
-      if (c.includes('usps')) {
-          return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
-      }
+      if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
+      if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
+      if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
+      if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+      if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
       return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
   };
 
@@ -193,7 +186,7 @@ const Tracking: React.FC = () => {
                   <div 
                       key={shipment.id}
                       onClick={() => setSelectedShipment(shipment)}
-                      className={`p-4 rounded-xl border transition-all cursor-pointer ${selectedShipment?.id === shipment.id ? 'bg-indigo-500/20 border-indigo-500/50' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'}`}
+                      className={`p-4 rounded-xl border transition-all cursor-pointer relative group ${selectedShipment?.id === shipment.id ? 'bg-indigo-500/20 border-indigo-500/50' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10'}`}
                   >
                       <div className="flex justify-between items-start mb-2">
                           <span className="font-mono text-sm font-bold text-white">{shipment.trackingNo}</span>
@@ -206,6 +199,18 @@ const Tracking: React.FC = () => {
                           <span>{shipment.carrier}</span>
                           <span>{shipment.lastUpdate}</span>
                       </div>
+                      
+                      {/* Direct Link Action in List Item */}
+                      <a 
+                          href={getTrackingUrl(shipment.carrier, shipment.trackingNo)} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="absolute bottom-2 right-2 p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded opacity-0 group-hover:opacity-100 transition-all z-10"
+                          title="直接跳转官网"
+                      >
+                          <ExternalLink className="w-3 h-3" />
+                      </a>
                   </div>
               ))}
           </div>

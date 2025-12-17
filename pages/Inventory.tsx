@@ -16,6 +16,17 @@ import {
 
 // --- Components ---
 
+const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
+    if (!trackingNo) return '#';
+    const c = carrier.toLowerCase();
+    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
+    if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
+    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
+    if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+    if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
+    return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+};
+
 const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     let color = 'bg-slate-800 text-slate-400 border-slate-700';
     let icon = <Info className="w-3 h-3" />;
@@ -168,7 +179,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
             <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217]" onClick={e => e.stopPropagation()}>
-               
                {/* Modal Header */}
                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                    <div>
@@ -196,7 +206,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                产品与供应链 (Product & Gallery)
                            </div>
                            <div className="flex gap-6">
-                               {/* Gallery Section - Updated Grid Layout */}
+                               {/* Gallery Section */}
                                <div className="flex flex-col gap-3 w-48 shrink-0">
                                    <div className="flex justify-between items-center">
                                        <label className="text-[10px] text-slate-500 font-bold">画廊 ({gallery.length})</label>
@@ -243,7 +253,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                
                                <div className="flex-1 grid grid-cols-4 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货日期 (Restock Date)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货日期</label>
                                        <input type="date" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
                                    </div>
                                    <div>
@@ -266,7 +276,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    
                                    {/* Multi-SKU Tag Input */}
                                    <div className="col-span-2">
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">SKU (Multi-Tag / Aliases)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">SKU (Multi-Tag)</label>
                                        <div className="flex flex-wrap items-center gap-1.5 bg-black/40 border border-white/10 rounded px-3 py-2 min-h-[42px]">
                                            {skuTags.map(tag => (
                                                <span key={tag} className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs border border-indigo-500/30 font-mono flex items-center gap-1">
@@ -283,18 +293,17 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                 placeholder={skuTags.length === 0 ? "输入 SKU 并回车..." : "添加更多..."}
                                            />
                                        </div>
-                                       <p className="text-[9px] text-slate-600 mt-1">支持输入多个 SKU 标签 (按 Enter 或逗号分隔)</p>
                                    </div>
 
                                    <div className="col-span-1">
-                                       <label className="text-[10px] text-amber-500/80 block mb-1 font-bold">生产+物流总时效 (Days)</label>
+                                       <label className="text-[10px] text-amber-500/80 block mb-1 font-bold">生产+物流总时效</label>
                                        <div className="relative">
                                            <Clock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-500" />
                                            <input type="number" value={formData.leadTime} onChange={e => handleChange('leadTime', parseInt(e.target.value))} className="w-full bg-amber-900/10 border border-amber-500/30 rounded pl-9 pr-3 py-2 text-sm text-amber-400 focus:border-amber-500 outline-none font-bold font-mono" />
                                        </div>
                                    </div>
                                    <div className="col-span-1">
-                                       <label className="text-[10px] text-amber-500/80 block mb-1 font-bold">安全库存天数 (Days)</label>
+                                       <label className="text-[10px] text-amber-500/80 block mb-1 font-bold">安全库存天数</label>
                                        <div className="relative">
                                            <CheckCircle2 className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-500" />
                                            <input type="number" value={formData.safetyStockDays} onChange={e => handleChange('safetyStockDays', parseInt(e.target.value))} className="w-full bg-amber-900/10 border border-amber-500/30 rounded pl-9 pr-3 py-2 text-sm text-amber-400 focus:border-amber-500 outline-none font-bold font-mono" />
@@ -395,7 +404,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                            </div>
 
-                           <div className="mt-4 pt-4 border-t border-white/5">
+                           <div className="mt-4 pt-4 border-t border-white/10">
                                <label className="text-[10px] text-slate-500 block mb-1 font-bold">预录入库单号</label>
                                <input type="text" value={formData.lingXingId || ''} onChange={e => handleChange('lingXingId', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-slate-300 font-mono focus:border-blue-500 outline-none" placeholder="IB..." />
                            </div>
@@ -432,46 +441,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        </div>
                                    </div>
                                </div>
-                               <div className="grid grid-cols-2 gap-4">
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">空运单价 (/KG)</label>
-                                       <div className="flex items-center gap-1">
-                                           <span className="text-slate-400 font-bold">¥</span>
-                                           <input type="number" value={formData.logistics?.unitFreightCost} onChange={e => handleNestedChange('logistics', 'unitFreightCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
-                                       </div>
-                                   </div>
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">计费总重 (Manual)</label>
-                                       <div className="flex items-center gap-1">
-                                           <span className="text-slate-400 font-bold">⚖️</span>
-                                           <input type="number" placeholder="自动计算" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
-                                       </div>
-                                       <div className="text-[9px] text-right text-slate-600 mt-1">理论实重: {(formData.stock * (formData.unitWeight || 0)).toFixed(2)} kg</div>
-                                   </div>
-                               </div>
-                               <div className="grid grid-cols-2 gap-4">
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">头程总运费 (Total Freight)</label>
-                                       <div className="flex items-center gap-1">
-                                           <span className="text-slate-400 font-bold">¥</span>
-                                           <input type="number" placeholder="手动输入总运费" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
-                                       </div>
-                                   </div>
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥)</label>
-                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={30} />
-                                   </div>
-                               </div>
-                               <div className="grid grid-cols-2 gap-4">
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥)</label>
-                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={0} />
-                                   </div>
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥)</label>
-                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={0} />
-                                   </div>
-                               </div>
                                <div>
                                    <label className="text-[10px] text-slate-500 block mb-1 font-bold">目的仓库</label>
                                    <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="火星/休斯顿/美中" />
@@ -483,7 +452,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
-                               TikTok 销售与竞品 (Market Intel)
+                               TikTok 销售与竞品
                            </div>
                            
                            <div className="space-y-4">
@@ -500,36 +469,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div className="flex gap-2 mb-2">
                                        <input type="text" placeholder="竞品链接/ASIN" className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-slate-300" />
                                        <input type="text" placeholder="$ 0" className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 text-center" />
-                                   </div>
-                               </div>
-
-                               <div>
-                                   <label className="text-[10px] text-purple-400 block mb-2 font-bold flex items-center gap-1"><Zap className="w-3 h-3"/> TIKTOK 成本结构</label>
-                                   <div className="grid grid-cols-2 gap-2">
-                                       <div>
-                                           <label className="text-[9px] text-slate-500 font-bold">平台佣金 (%)</label>
-                                           <input type="number" value={formData.economics?.platformFeePercent} onChange={e => handleNestedChange('economics', 'platformFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
-                                       </div>
-                                       <div>
-                                           <label className="text-[9px] text-slate-500 font-bold">达人佣金 (%)</label>
-                                           <input type="number" value={formData.economics?.creatorFeePercent} onChange={e => handleNestedChange('economics', 'creatorFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
-                                       </div>
-                                       <div>
-                                           <label className="text-[9px] text-slate-500 font-bold">每单固定费 ($)</label>
-                                           <input type="number" value={formData.economics?.fixedCost} onChange={e => handleNestedChange('economics', 'fixedCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
-                                       </div>
-                                       <div>
-                                           <label className="text-[9px] text-slate-500 font-bold">预估退货率 (%)</label>
-                                           <input type="number" value={formData.economics?.refundRatePercent} onChange={e => handleNestedChange('economics', 'refundRatePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" placeholder="3" />
-                                       </div>
-                                       <div>
-                                           <label className="text-[9px] text-slate-500 font-bold">尾程派送费 ($)</label>
-                                           <input type="number" value={formData.economics?.lastLegShipping} onChange={e => handleNestedChange('economics', 'lastLegShipping', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" placeholder="0" />
-                                       </div>
-                                       <div>
-                                           <label className="text-[9px] text-slate-500 font-bold">预估广告费 ($)</label>
-                                           <input type="number" value={formData.economics?.adCost} onChange={e => handleNestedChange('economics', 'adCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" placeholder="0" />
-                                       </div>
                                    </div>
                                </div>
                            </div>
@@ -747,7 +686,12 @@ const Inventory: React.FC = () => {
                                             <Plane className="w-3.5 h-3.5" />
                                             <span>{item.logistics?.method || 'Air'}</span>
                                         </div>
-                                        <a href="#" className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono">
+                                        <a 
+                                            href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono"
+                                        >
                                             {item.logistics?.trackingNo || '1Z9WV5620495954082'}
                                         </a>
                                         <div className="text-[10px] text-slate-500 font-mono">

@@ -18,39 +18,44 @@ const Dashboard: React.FC = () => {
   useEffect(() => {
       const timer = setTimeout(() => {
           setIsLoading(false);
-      }, 1200);
+      }, 800);
       return () => clearTimeout(timer);
   }, []);
 
   // --- 1. Real Data Calculations ---
 
+  // Filter out deleted items to match Inventory/Order pages
+  const activeProducts = useMemo(() => state.products.filter(p => !p.deletedAt), [state.products]);
+  const activeOrders = useMemo(() => state.orders.filter(o => !o.deletedAt && o.status !== 'cancelled'), [state.orders]);
+
   // Financial & Inventory Metrics
   const metrics = useMemo(() => {
-      const activeOrders = state.orders.filter(o => o.status !== 'cancelled');
       
       // 1. Inventory Stock Value (Linked to Replenishment Center)
-      // Calculates total value of current stock in warehouse (CNY)
-      const stockValue = state.products.reduce((acc, p) => {
+      // Strictly matches Inventory Page: Sum of (Stock * CostPrice) for active products
+      const stockValue = activeProducts.reduce((acc, p) => {
           return acc + (p.stock * (p.costPrice || 0));
       }, 0);
       
-      // 2. Estimated Net Profit (Based on Sales)
+      // 2. Estimated Net Profit (Based on Sales - Real Costs)
       const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
       let totalCost = 0;
       
       activeOrders.forEach(o => {
           if (o.lineItems && o.lineItems.length > 0) {
               o.lineItems.forEach(item => {
-                  const product = state.products.find(p => p.id === item.productId);
+                  const product = state.products.find(p => p.id === item.productId); // Use full list to find product even if deleted later
                   if (product) {
                       // Cost in CNY converted to USD approx / 7.2 + logistics
                       // This represents the cost of the sold item (COGS)
+                      // unitFreightCost is usually in USD or small amount, assuming USD here for simplicity or converted
                       const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0); 
                       totalCost += unitCostUSD * item.quantity;
                   }
               });
           } else {
-              // Fallback if no line items
+              // Fallback if no line items (Legacy orders)
+              // Assume 40% profit margin if no cost data available
               totalCost += o.total * 0.6; 
           }
       });
@@ -59,13 +64,13 @@ const Dashboard: React.FC = () => {
       const roi = totalCost > 0 ? (netProfit / totalCost) * 100 : 0;
 
       // 3. Logistics Weight (Inventory total weight)
-      const logisticsWeight = state.products.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
+      const logisticsWeight = activeProducts.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
 
-      // 4. Top Product
+      // 4. Top Product by Sales Volume
       const productSales: Record<string, number> = {};
       activeOrders.forEach(o => {
           o.lineItems?.forEach(item => {
-              productSales[item.sku] = (productSales[item.sku] || 0) + (item.price * item.quantity);
+              productSales[item.sku] = (productSales[item.sku] || 0) + item.quantity;
           });
       });
       const topProductSku = Object.keys(productSales).sort((a, b) => productSales[b] - productSales[a])[0];
@@ -77,33 +82,40 @@ const Dashboard: React.FC = () => {
           logisticsWeight: logisticsWeight.toFixed(1),
           topProduct: topProductSku || 'N/A'
       };
-  }, [state.orders, state.products]);
+  }, [activeOrders, activeProducts, state.products]);
 
-  // Top Products Chart Data
+  // Top Products Chart Data (Profit based)
   const profitData = useMemo(() => {
-      const salesMap: Record<string, number> = {};
-      state.orders.forEach(o => {
-          if (o.status === 'cancelled') return;
+      const profitMap: Record<string, number> = {};
+      
+      activeOrders.forEach(o => {
           o.lineItems?.forEach(item => {
-              // Estimate profit: Price * 0.3 (30% margin approx for demo)
-              const profit = item.price * item.quantity * 0.3;
               const product = state.products.find(p => p.id === item.productId);
-              const name = product ? product.name.substring(0, 10) + '...' : item.sku;
-              salesMap[name] = (salesMap[name] || 0) + profit;
+              let itemProfit = 0;
+              
+              if (product) {
+                  const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0);
+                  itemProfit = (item.price - unitCostUSD) * item.quantity;
+              } else {
+                  itemProfit = item.price * item.quantity * 0.3; // Fallback
+              }
+
+              const name = product ? product.name.substring(0, 10) + (product.name.length>10?'...':'') : item.sku;
+              profitMap[name] = (profitMap[name] || 0) + itemProfit;
           });
       });
 
-      return Object.entries(salesMap)
+      return Object.entries(profitMap)
           .map(([name, value]) => ({ name, value }))
           .sort((a, b) => b.value - a.value)
           .slice(0, 8);
-  }, [state.orders, state.products]);
+  }, [activeOrders, state.products]);
 
-  // Logistics Cost Structure Data (Sea vs Air based on Products)
+  // Logistics Cost Structure Data (Sea vs Air based on Active Products)
   const costData = useMemo(() => {
       let seaCost = 0;
       let airCost = 0;
-      state.products.forEach(p => {
+      activeProducts.forEach(p => {
           const method = p.logistics?.method || 'Sea';
           // Estimated logistics value held in stock
           const value = p.stock * (p.logistics?.unitFreightCost || 0); 
@@ -112,19 +124,18 @@ const Dashboard: React.FC = () => {
       });
       
       // Avoid empty chart
-      if (seaCost === 0 && airCost === 0) return [{ name: 'N/A', value: 1 }];
+      if (seaCost === 0 && airCost === 0) return [{ name: '无数据', value: 1 }];
 
       return [
           { name: '海运 (Sea)', value: parseFloat(seaCost.toFixed(2)) },
           { name: '空运 (Air)', value: parseFloat(airCost.toFixed(2)) },
       ];
-  }, [state.products]);
+  }, [activeProducts]);
 
   // Forecast Chart Data (Revenue over time)
   const forecastChartData = useMemo(() => {
       const revenueByDate: Record<string, number> = {};
-      state.orders.forEach(o => {
-          if (o.status === 'cancelled') return;
+      activeOrders.forEach(o => {
           const date = o.date; 
           revenueByDate[date] = (revenueByDate[date] || 0) + o.total;
       });
@@ -138,20 +149,22 @@ const Dashboard: React.FC = () => {
           forecast: null as number | null
       }));
 
-      // Generate 5 days forecast
-      const lastVal = history.length > 0 ? history[history.length - 1].actual : 1000;
+      // Generate 5 days forecast based on simple moving average of last 3 days
+      const last3 = history.slice(-3).map(h => h.actual);
+      let avg = last3.length > 0 ? last3.reduce((a,b) => a+b, 0) / last3.length : 1000;
+      
       const nextDays = [];
       for (let i = 1; i <= 5; i++) {
-          const forecastVal = lastVal * (1 + (Math.random() * 0.4 - 0.1)); // +/- volatility
+          avg = avg * 1.02; // Assumed 2% daily growth trend
           nextDays.push({
-              name: `Future +${i}`,
+              name: `+${i}d`,
               actual: null,
-              forecast: parseFloat(forecastVal.toFixed(2))
+              forecast: parseFloat(avg.toFixed(2))
           });
       }
 
       return history.length > 0 ? [...history, ...nextDays] : [...nextDays];
-  }, [state.orders]);
+  }, [activeOrders]);
 
 
   // --- 2. AI Implementation ---
@@ -167,18 +180,17 @@ const Dashboard: React.FC = () => {
             Role: Chief Operating Officer (COO) for an E-commerce brand.
             
             Current Live Metrics:
-            - Inventory Stock Value: ¥${metrics.stockValue} (Real-time data linked to Warehouse)
-            - Net Profit Estimate: $${metrics.netProfit.toFixed(2)}
+            - Inventory Asset Value: ¥${metrics.stockValue.toLocaleString()}
+            - Est. Net Profit: $${metrics.netProfit.toFixed(2)}
             - ROI: ${metrics.roi}%
-            - Top Selling Product SKU: ${metrics.topProduct}
-            - Logistics Weight: ${metrics.logisticsWeight} kg
+            - Top Seller: ${metrics.topProduct}
+            - Total Logistics Weight: ${metrics.logisticsWeight} kg
             
             Task: Provide a strategic executive summary (in Chinese).
-            1. Comment on the inventory level relative to profitability.
+            1. Comment on the inventory efficiency (Stock Value vs Profit).
             2. Suggest one actionable step for the top product.
-            3. Analyze if logistics weight implies a need for optimizing shipping methods.
             
-            Format: HTML string using <b> for highlights. Keep it professional, futuristic, and under 80 words.
+            Format: HTML string using <b> for highlights. Keep it under 60 words.
           `;
 
           const response = await ai.models.generateContent({
@@ -194,14 +206,13 @@ const Dashboard: React.FC = () => {
       }
   };
 
-  // HUD Style Custom Tooltip
+  // HUD Style Custom Tooltip (Cleaned up, no random variance)
   const CustomHUDTooltip = ({ active, payload, label }: any) => {
       if (active && payload && payload.length) {
           const data = payload[0].payload;
-          const variance = Math.floor(Math.random() * 30) - 10; 
           
           return (
-              <div className="bg-black/80 border border-white/10 p-4 rounded-xl shadow-2xl backdrop-blur-md z-50 min-w-[200px]">
+              <div className="bg-black/90 border border-white/10 p-3 rounded-xl shadow-2xl backdrop-blur-md z-50 min-w-[150px]">
                   <p className="text-xs text-slate-400 font-bold font-mono mb-2 border-b border-white/10 pb-2 uppercase tracking-wider">{label || data.name}</p>
                   {payload.map((entry: any, index: number) => (
                       <div key={index} className="flex items-center justify-between gap-4 text-xs font-mono mb-1">
@@ -214,16 +225,6 @@ const Dashboard: React.FC = () => {
                           </span>
                       </div>
                   ))}
-                  
-                  {/* AI Insight Section */}
-                  <div className="mt-3 pt-2 border-t border-white/10 text-[10px]">
-                      <div className="flex items-center gap-1 text-purple-400 mb-1 font-bold">
-                          <Sparkles className="w-3 h-3" /> 实时波动
-                      </div>
-                      <p className="text-slate-400 mt-0.5">
-                          环比: <span className={variance > 0 ? 'text-emerald-400' : 'text-red-400'}>{variance > 0 ? '+' : ''}{variance}%</span>
-                      </p>
-                  </div>
               </div>
           );
       }
@@ -250,7 +251,7 @@ const Dashboard: React.FC = () => {
                     </h2>
                     {!report && (
                         <p className="text-sm text-slate-400 font-mono mt-1 font-medium">
-                            正在同步 {state.products.length} 个 SKU 与 {state.orders.length} 条订单数据进行分析...
+                            正在同步 {activeProducts.length} 个活跃 SKU 与 {activeOrders.length} 条有效订单数据...
                         </p>
                     )}
                 </div>
@@ -278,13 +279,13 @@ const Dashboard: React.FC = () => {
       {/* Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
-            <StatCard loading={isLoading} title="库存资金占用 (Stock Asset)" value={`¥${metrics.stockValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Linked" trendUp={true} icon={Wallet} accentColor="blue" />
+            <StatCard loading={isLoading} title="库存资金占用 (Stock Asset)" value={`¥${metrics.stockValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Linked to Inv." trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
             <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-3">
-            <StatCard loading={isLoading} title="爆品 SKU (Top Seller)" value={metrics.topProduct} subValue="Rank #1" trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
+            <StatCard loading={isLoading} title="爆品 SKU (Top Volume)" value={metrics.topProduct} subValue="Rank #1" trend="Hot" trendUp={true} icon={BarChart4} accentColor="purple" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
             <StatCard loading={isLoading} title="物流总重 (Weight)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
@@ -300,16 +301,16 @@ const Dashboard: React.FC = () => {
                 <div>
                     <h3 className="text-base font-bold text-white uppercase tracking-wider flex items-center gap-3">
                         <span className="w-1 h-5 bg-cyan-500 rounded-full shadow-[0_0_10px_#06b6d4]"></span>
-                        营收预测 (Forecast)
+                        营收趋势 (Revenue Trend)
                     </h3>
-                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">基于 {forecastChartData.filter(d=>d.actual).length} 天真实数据的趋势推演</p>
+                    <p className="text-xs text-slate-500 mt-2 font-mono pl-4 font-semibold">基于 {forecastChartData.filter(d=>d.actual).length} 天真实数据的趋势</p>
                 </div>
                 <div className="flex gap-6">
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_5px_currentColor]"></span> 实际
+                        <span className="w-2 h-2 rounded-full bg-cyan-500 shadow-[0_0_5px_currentColor]"></span> 实际 (Actual)
                     </div>
                     <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                        <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_currentColor]"></span> AI 预测
+                        <span className="w-2 h-2 rounded-full bg-purple-500 shadow-[0_0_5px_currentColor]"></span> 预测 (Forecast)
                     </div>
                 </div>
             </div>
@@ -388,7 +389,7 @@ const Dashboard: React.FC = () => {
                     </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">物流成本(Est)</p>
+                    <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">运费估值</p>
                     <p className="text-3xl font-display font-bold text-white tracking-tight text-glow-cyan mt-1">
                         ¥{(costData.reduce((a,b) => a+b.value, 0) / 1000).toFixed(1)}k
                     </p>
@@ -413,7 +414,7 @@ const Dashboard: React.FC = () => {
           <div className="ios-glass-card p-8 hud-card animate-in fade-in slide-in-from-bottom-4 duration-700 animate-stagger-3">
              <h3 className="text-base font-bold text-white uppercase tracking-wider mb-8 flex items-center gap-3">
                 <span className="w-1 h-5 bg-emerald-500 rounded-full shadow-[0_0_10px_#10b981]"></span>
-                利润贡献排行 (Profit Leaders)
+                真实利润排行 (Real Profit Leaders)
              </h3>
              <div className="h-72">
                 {profitData.length > 0 ? (

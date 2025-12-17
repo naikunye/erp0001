@@ -1,9 +1,20 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText, Truck, CheckCircle, XCircle, Clock, ShoppingCart, X, Package, MapPin, CreditCard, ArrowRight, LayoutGrid, List, MoreHorizontal, Box, GripVertical, DollarSign, Calculator, Info, Zap, Plus, Trash2, PlayCircle, Search, Edit2, Save, Filter, Loader2 } from 'lucide-react';
+import { FileText, Truck, CheckCircle, XCircle, Clock, ShoppingCart, X, Package, MapPin, CreditCard, ArrowRight, LayoutGrid, List, MoreHorizontal, Box, GripVertical, DollarSign, Calculator, Info, Zap, Plus, Trash2, PlayCircle, Search, Edit2, Save, Filter, Loader2, ExternalLink } from 'lucide-react';
 import { Order, Product, AutomationRule, OrderLineItem } from '../types';
 import { useTanxing } from '../context/TanxingContext';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+
+const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
+    if (!trackingNo) return '#';
+    const c = carrier.toLowerCase();
+    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
+    if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
+    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
+    if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+    if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
+    return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+};
 
 const Orders: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
@@ -431,158 +442,6 @@ const Orders: React.FC = () => {
         </div>
       )}
 
-      {/* Rules Engine Modal */}
-      {showRulesModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowRulesModal(false)}>
-              <div className="ios-glass-panel w-full max-w-2xl h-[70vh] rounded-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                  <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
-                      <h3 className="text-lg font-bold text-white flex items-center gap-2"><Zap className="w-5 h-5 text-indigo-500" /> 自动化规则引擎 (Automation Rules)</h3>
-                      <button onClick={() => setShowRulesModal(false)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
-                  </div>
-                  <div className="flex-1 overflow-y-auto p-6 bg-black/20">
-                      <div className="space-y-4">
-                          {rules.map(rule => (
-                              <div key={rule.id} className="ios-glass-card p-4 flex justify-between items-center group hover:border-indigo-500/30 transition-all">
-                                  <div>
-                                      <div className="flex items-center gap-2 mb-1">
-                                          <div className={`w-3 h-3 rounded-full ${rule.active ? 'bg-emerald-500' : 'bg-slate-600'}`}></div>
-                                          <h4 className="font-bold text-white text-sm">{rule.name}</h4>
-                                      </div>
-                                      <div className="text-xs text-slate-400 flex items-center gap-2">
-                                          <span className="bg-white/5 px-1.5 rounded border border-white/10">IF {rule.trigger}</span>
-                                          <span>AND {rule.conditions[0].field} {rule.conditions[0].operator} {rule.conditions[0].value}</span>
-                                          <ArrowRight className="w-3 h-3" />
-                                          <span className="text-indigo-400">{rule.action.type}: {rule.action.value}</span>
-                                      </div>
-                                  </div>
-                                  <div className="flex items-center gap-4">
-                                      <div className="text-right">
-                                          <div className="text-xl font-bold text-slate-300 font-mono">{rule.executions}</div>
-                                          <div className="text-[10px] text-slate-500">次执行</div>
-                                      </div>
-                                      <button 
-                                        onClick={() => handleRunRule(rule.id)}
-                                        className="p-2 text-indigo-400 hover:text-white hover:bg-indigo-600 rounded-lg transition-all border border-indigo-500/30 hover:border-indigo-500 bg-indigo-500/10"
-                                        title="立即运行"
-                                      >
-                                          <PlayCircle className="w-5 h-5" />
-                                      </button>
-                                  </div>
-                              </div>
-                          ))}
-                          <button 
-                            onClick={() => {
-                                const newRule: AutomationRule = { 
-                                    id: `R${Date.now()}`, name: 'New Rule', active: true, 
-                                    trigger: 'Order Created', conditions: [{ field: 'Items', operator: '>', value: 10 }], 
-                                    action: { type: 'Add Tag', value: 'Bulk Order' }, executions: 0 
-                                };
-                                setRules([...rules, newRule]);
-                            }}
-                            className="w-full py-3 border-2 border-dashed border-white/10 rounded-xl text-slate-500 text-sm font-bold hover:border-indigo-500/50 hover:text-indigo-400 transition-all flex items-center justify-center gap-2"
-                          >
-                              <Plus className="w-4 h-4" /> 添加新规则
-                          </button>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Add/Edit Order Modal */}
-      {showOrderModal && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowOrderModal(false)}>
-              <div className="ios-glass-panel w-full max-w-2xl rounded-2xl shadow-2xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                  <div className="px-6 py-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                      <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                          {isEditing ? <Edit2 className="w-5 h-5 text-blue-500" /> : <Plus className="w-5 h-5 text-indigo-500" />}
-                          {isEditing ? '编辑订单' : '新建订单'}
-                      </h3>
-                      <button onClick={() => setShowOrderModal(false)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
-                  </div>
-                  
-                  <div className="p-6 overflow-y-auto flex-1 bg-black/20 space-y-6">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div>
-                              <label className="text-xs text-slate-400 block mb-1">客户名称 *</label>
-                              <input type="text" value={orderForm.customerName} onChange={e => setOrderForm({...orderForm, customerName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                          </div>
-                          <div>
-                              <label className="text-xs text-slate-400 block mb-1">订单状态</label>
-                              <select value={orderForm.status} onChange={e => setOrderForm({...orderForm, status: e.target.value as any})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white outline-none">
-                                  <option value="pending">待处理</option>
-                                  <option value="processing">处理中</option>
-                                  <option value="shipped">已发货</option>
-                                  <option value="delivered">已送达</option>
-                              </select>
-                          </div>
-                          <div>
-                              <label className="text-xs text-slate-400 block mb-1">日期</label>
-                              <input type="date" value={orderForm.date} onChange={e => setOrderForm({...orderForm, date: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                          </div>
-                          <div>
-                              <label className="text-xs text-slate-400 block mb-1">支付状态</label>
-                              <select value={orderForm.paymentStatus || 'unpaid'} onChange={e => setOrderForm({...orderForm, paymentStatus: e.target.value as any})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white outline-none">
-                                  <option value="paid">已支付</option>
-                                  <option value="unpaid">未支付</option>
-                              </select>
-                          </div>
-                      </div>
-
-                      <div className="border-t border-white/10 pt-4">
-                          <div className="flex justify-between items-center mb-2">
-                              <h4 className="text-xs font-bold text-slate-400 uppercase">商品明细</h4>
-                              <div className="relative group">
-                                  <button className="text-xs bg-indigo-600 px-2 py-1 rounded text-white flex items-center gap-1"><Plus className="w-3 h-3"/> 添加商品</button>
-                                  <div className="absolute right-0 top-full mt-1 w-48 bg-slate-800 border border-slate-700 rounded-lg shadow-xl z-20 hidden group-hover:block max-h-40 overflow-y-auto">
-                                      {state.products.map(p => (
-                                          <div key={p.id} onClick={() => handleAddItem(p.id)} className="px-3 py-2 hover:bg-slate-700 cursor-pointer text-xs text-white truncate border-b border-slate-700 last:border-0">
-                                              {p.sku} - ${p.price}
-                                          </div>
-                                      ))}
-                                  </div>
-                              </div>
-                          </div>
-                          <div className="space-y-2">
-                              {orderForm.lineItems?.map((item, idx) => (
-                                  <div key={idx} className="flex items-center gap-3 bg-white/5 p-2 rounded border border-white/5">
-                                      <div className="flex-1 text-sm text-white font-mono">{item.sku}</div>
-                                      <div className="flex items-center gap-2">
-                                          <input type="number" min="1" value={item.quantity} onChange={e => {
-                                              const newQty = parseInt(e.target.value);
-                                              const updated = [...(orderForm.lineItems || [])];
-                                              updated[idx].quantity = newQty;
-                                              const newTotal = updated.reduce((acc, i) => acc + (i.price * i.quantity), 0);
-                                              setOrderForm({...orderForm, lineItems: updated, total: newTotal, itemsCount: updated.reduce((acc, i) => acc + i.quantity, 0) });
-                                          }} className="w-16 bg-black/40 border border-white/10 rounded p-1 text-center text-sm text-white" />
-                                          <div className="w-20 text-right text-sm text-slate-300">${(item.price * item.quantity).toFixed(2)}</div>
-                                          <button onClick={() => handleRemoveItem(idx)} className="p-1 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded"><X className="w-4 h-4"/></button>
-                                      </div>
-                                  </div>
-                              ))}
-                              {(!orderForm.lineItems || orderForm.lineItems.length === 0) && <div className="text-center text-slate-500 text-xs py-4 border border-dashed border-white/10 rounded">暂无商品，请添加</div>}
-                          </div>
-                          <div className="flex justify-end mt-4 text-lg font-bold text-emerald-400">
-                              总计: ${orderForm.total?.toLocaleString() || 0}
-                          </div>
-                      </div>
-                  </div>
-
-                  <div className="p-4 border-t border-white/10 bg-white/5 flex justify-end gap-3">
-                      <button onClick={() => setShowOrderModal(false)} className="px-4 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm transition-colors">取消</button>
-                      <button 
-                        onClick={handleSaveOrder} 
-                        disabled={isSaving}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed transition-all"
-                      >
-                          {isSaving ? <Loader2 className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
-                          {isSaving ? '保存中...' : '保存订单'}
-                      </button>
-                  </div>
-              </div>
-          </div>
-      )}
-
       {selectedOrder && !showShipModal && !showOrderModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-black/60" onClick={handleCloseOrder}>
              <div className="ios-glass-panel w-full max-w-3xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -611,7 +470,18 @@ const Orders: React.FC = () => {
                                      <span className="text-sm font-medium text-white capitalize">{selectedOrder.status}</span>
                                  </div>
                                  <div className="flex items-center gap-3">
-                                     {selectedOrder.trackingNumber && <div className="flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded"><Truck className="w-3 h-3"/> {selectedOrder.shippingMethod}: {selectedOrder.trackingNumber}</div>}
+                                     {selectedOrder.trackingNumber && (
+                                         <a 
+                                            href={getTrackingUrl(selectedOrder.shippingMethod, selectedOrder.trackingNumber)}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded hover:bg-indigo-500/20 hover:text-white transition-colors border border-indigo-500/20 hover:border-indigo-500/40"
+                                         >
+                                             <Truck className="w-3 h-3"/> 
+                                             {selectedOrder.shippingMethod}: {selectedOrder.trackingNumber}
+                                             <ExternalLink className="w-3 h-3 opacity-50" />
+                                         </a>
+                                     )}
                                      {selectedOrder.paymentStatus !== 'paid' && selectedOrder.status !== 'cancelled' && (
                                          <button 
                                             onClick={() => handleMarkPaid(selectedOrder.id)}
@@ -622,7 +492,7 @@ const Orders: React.FC = () => {
                                      )}
                                  </div>
                             </div>
-                            
+                            {/* ... Rest of Order Details ... */}
                             <div className="grid grid-cols-2 gap-6">
                                 <div>
                                     <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">客户信息</h4>
@@ -658,6 +528,7 @@ const Orders: React.FC = () => {
                     {/* PROFIT TAB - WATERFALL */}
                     {activeTab === 'profit' && orderProfit && (
                         <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                            {/* ... Profit tab content ... */}
                             <div className="ios-glass-card p-5 flex items-center justify-between">
                                 <div>
                                     <div className="text-xs text-slate-500 uppercase font-bold mb-1">预估净利润 (Net Profit)</div>
