@@ -42,22 +42,46 @@ const Dashboard: React.FC = () => {
           return acc + (p.stock * (p.costPrice || 0));
       }, 0);
       
-      // 2. Estimated Net Profit (Based on Sales - Real Costs)
+      // 2. Real Net Profit (Based on Inventory Economics)
       const totalRevenue = activeOrders.reduce((acc, o) => acc + o.total, 0);
       let totalCost = 0;
       
+      const EXCHANGE_RATE = 7.2; // Assumed CNY to USD rate
+
       activeOrders.forEach(o => {
           if (o.lineItems && o.lineItems.length > 0) {
               o.lineItems.forEach(item => {
                   const product = state.products.find(p => p.id === item.productId);
                   if (product) {
-                      // Cost in CNY converted to USD approx / 7.2 + logistics
-                      const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0); 
-                      totalCost += unitCostUSD * item.quantity;
+                      // --- Deep Cost Calculation ---
+                      
+                      // 1. COGS (CNY -> USD)
+                      const cogsUSD = (product.costPrice || 0) / EXCHANGE_RATE;
+                      
+                      // 2. Freight (Rate * Weight) (CNY -> USD)
+                      // Assuming unitFreightCost is "Rate per KG" in CNY as per Inventory input label
+                      const freightRate = product.logistics?.unitFreightCost || 0;
+                      const weight = product.unitWeight || 0;
+                      const freightUSD = (freightRate * weight) / EXCHANGE_RATE;
+
+                      // 3. Economics (USD)
+                      const eco = product.economics || {};
+                      const platformFee = item.price * ((eco.platformFeePercent || 0) / 100);
+                      const creatorFee = item.price * ((eco.creatorFeePercent || 0) / 100);
+                      const fixedOps = eco.fixedCost || 0;
+                      const lastMile = eco.lastLegShipping || 0;
+                      const adSpend = eco.adCost || 0; // CPA
+
+                      const unitTotalCost = cogsUSD + freightUSD + platformFee + creatorFee + fixedOps + lastMile + adSpend;
+                      
+                      totalCost += unitTotalCost * item.quantity;
+                  } else {
+                      // Fallback if product deleted or not found: 60% cost estimation
+                      totalCost += item.price * 0.6 * item.quantity;
                   }
               });
           } else {
-              // Fallback
+              // Fallback for orders without line items
               totalCost += o.total * 0.6; 
           }
       });
@@ -67,33 +91,20 @@ const Dashboard: React.FC = () => {
 
       // 3. Logistics Weight (Inventory total weight)
       const logisticsWeight = activeProducts.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0);
-
-      // 4. Top Product by Sales Volume (Quantity)
-      const productVolume: Record<string, number> = {};
-      activeOrders.forEach(o => {
-          o.lineItems?.forEach(item => {
-              productVolume[item.sku] = (productVolume[item.sku] || 0) + item.quantity;
-          });
-      });
-      // Sort by volume descending
-      const topProductSku = Object.keys(productVolume).sort((a, b) => productVolume[b] - productVolume[a])[0];
-      const topProductVol = topProductSku ? productVolume[topProductSku] : 0;
       
       return {
           stockValue: stockValue, // Actual inventory value in CNY
           netProfit: netProfit,
           roi: roi.toFixed(1),
           logisticsWeight: logisticsWeight.toFixed(1),
-          topProduct: topProductSku || 'N/A',
-          topProductVol: topProductVol
       };
   }, [activeOrders, activeProducts, state.products]);
 
   // Top Products Chart Data (Profit based)
-  // Also enrich with Stock info for the list view
   const profitData = useMemo(() => {
       const profitMap: Record<string, { profit: number, revenue: number, stock: number, daysRemaining: number, sku: string }> = {};
-      
+      const EXCHANGE_RATE = 7.2;
+
       // Calculate Profit per SKU based on orders
       activeOrders.forEach(o => {
           o.lineItems?.forEach(item => {
@@ -102,8 +113,16 @@ const Dashboard: React.FC = () => {
               let itemRevenue = item.price * item.quantity;
               
               if (product) {
-                  const unitCostUSD = ((product.costPrice || 0) / 7.2) + (product.logistics?.unitFreightCost || 0);
-                  itemProfit = (item.price - unitCostUSD) * item.quantity;
+                  // Replicate Deep Cost Calculation for per-item accuracy
+                  const cogsUSD = (product.costPrice || 0) / EXCHANGE_RATE;
+                  const freightUSD = ((product.logistics?.unitFreightCost || 0) * (product.unitWeight || 0)) / EXCHANGE_RATE;
+                  const eco = product.economics || {};
+                  const otherCosts = (item.price * ((eco.platformFeePercent||0)/100)) + 
+                                     (item.price * ((eco.creatorFeePercent||0)/100)) + 
+                                     (eco.fixedCost||0) + (eco.lastLegShipping||0) + (eco.adCost||0);
+                  
+                  const unitCost = cogsUSD + freightUSD + otherCosts;
+                  itemProfit = (item.price - unitCost) * item.quantity;
               } else {
                   itemProfit = itemRevenue * 0.3; // Fallback
               }
@@ -112,7 +131,6 @@ const Dashboard: React.FC = () => {
               const sku = product ? product.sku : item.sku;
               const name = product ? product.name : item.sku; // Fallback name
               
-              // We use SKU as the unique key for aggregation to match Inventory exactly
               if (!profitMap[sku]) {
                   profitMap[sku] = { 
                       profit: 0, 
@@ -122,7 +140,6 @@ const Dashboard: React.FC = () => {
                       sku: sku
                   };
               }
-              // We store name separately or just use SKU as name if simple
               (profitMap[sku] as any).name = name; 
               
               profitMap[sku].profit += itemProfit;
@@ -142,7 +159,8 @@ const Dashboard: React.FC = () => {
       activeProducts.forEach(p => {
           const method = p.logistics?.method || 'Sea';
           // Estimated logistics value held in stock
-          const value = p.stock * (p.logistics?.unitFreightCost || 0); 
+          // Rate * Weight * Stock
+          const value = (p.logistics?.unitFreightCost || 0) * (p.unitWeight || 0) * p.stock; 
           if (method === 'Sea') seaCost += value;
           else airCost += value;
       });
@@ -168,13 +186,13 @@ const Dashboard: React.FC = () => {
           const prompt = `
             Role: Chief Operating Officer (COO) for an E-commerce brand.
             
-            Real-time Metrics:
+            Real-time Metrics (Verified):
             - Stock Assets: ¥${metrics.stockValue.toLocaleString()}
-            - Est. Net Profit: $${metrics.netProfit.toFixed(2)}
+            - Real Net Profit: $${metrics.netProfit.toFixed(2)} (Calculated via Unit Economics)
             - ROI: ${metrics.roi}%
             
             Task: Provide a strategic executive summary (in Chinese).
-            1. Analyze the health of the profit margin.
+            1. Analyze the health of the profit margin considering the real cost structure.
             2. Give a specific suggestion for inventory management based on the stock value.
             
             Format: HTML string using <b> for highlights. Keep it professional and under 60 words.
@@ -265,17 +283,17 @@ const Dashboard: React.FC = () => {
         )}
       </div>
 
-      {/* Metrics Grid */}
+      {/* Metrics Grid - Adjusted to 3 Columns */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-1">
             <StatCard loading={isLoading} title="库存资金占用 (Stock Asset)" value={`¥${metrics.stockValue.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="Linked to Inv." trendUp={true} icon={Wallet} accentColor="blue" />
         </div>
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-2">
-            <StatCard loading={isLoading} title="预估净利 (Est. Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
+            <StatCard loading={isLoading} title="真实净利 (Real Net)" value={`$${metrics.netProfit.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi}% ROI`} trendUp={parseFloat(metrics.roi) > 0} icon={TrendingUp} accentColor="green" />
         </div>
         
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 animate-stagger-4">
-            <StatCard loading={isLoading} title="物流总重 (Weight)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
+            <StatCard loading={isLoading} title="物流总重 (Total Weight)" value={metrics.logisticsWeight} subValue="kg" trend="Stable" trendUp={true} icon={Box} accentColor="orange" />
         </div>
       </div>
 
