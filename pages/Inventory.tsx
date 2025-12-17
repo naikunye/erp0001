@@ -1097,12 +1097,6 @@ const Inventory: React.FC = () => {
                                 {/* Sales & Profit (UPDATED) */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono space-y-2">
-                                        {/* Revenue */}
-                                        <div className="flex justify-between items-baseline">
-                                             <span className="text-[10px] text-slate-500">30天营收</span>
-                                             <span className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</span>
-                                        </div>
-                                        
                                         {/* Profit Block */}
                                         <div className="bg-white/5 p-2 rounded border border-white/5 space-y-1.5">
                                             {/* Unit Profit */}
