@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef } from 'react';
 import { 
   Wallet, TrendingUp, TrendingDown, DollarSign, Plus, FileText, 
@@ -56,10 +57,19 @@ const Finance: React.FC = () => {
   const [isSmartFilling, setIsSmartFilling] = useState(false);
 
   // --- Helpers ---
-  const convertToActive = (amount: number, currency: 'USD' | 'CNY') => {
+  const convertToActive = (amount: number, currency: string) => {
     if (currency === activeCurrency) return amount;
-    if (activeCurrency === 'CNY') return amount * exchangeRate;
-    return amount / exchangeRate;
+    
+    // Normalize to USD first (Mock rates)
+    let valInUSD = amount;
+    if (currency === 'CNY') valInUSD = amount / 7.2;
+    else if (currency === 'EUR') valInUSD = amount * 1.08;
+    
+    // Convert to target currency
+    if (activeCurrency === 'USD') return valInUSD;
+    if (activeCurrency === 'CNY') return valInUSD * exchangeRate;
+    
+    return amount;
   };
 
   const formatMoney = (amount: number) => {

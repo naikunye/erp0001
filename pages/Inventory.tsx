@@ -1,961 +1,556 @@
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
 import { ReplenishmentItem, Product } from '../types';
-import { GoogleGenAI } from "@google/genai";
 import { 
   PackageCheck, Search, Download, X, 
   Sparkles, Calculator, 
   Box, DollarSign, Save,
-  Plane, Ship, Info, Factory, Image as ImageIcon, History, FileText, Loader2, Bot,
-  AlertCircle, TrendingUp, Target, BarChart3, Zap, Megaphone, BrainCircuit,
-  Plus, Trash2, MoreHorizontal, CheckSquare, Square, Edit2, Calendar,
-  Clock, ShieldCheck, Truck, Scale, Ruler, Users, Layers, Activity, Copy, Upload, ExternalLink, Link, StickyNote
+  Plane, Ship, Info, Image as ImageIcon,
+  AlertCircle, TrendingUp, Target, BarChart3, Zap, 
+  Link2, Calendar, User, Scale, Ruler, Truck,
+  CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
+  Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight
 } from 'lucide-react';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, BarChart, Bar, XAxis, YAxis, CartesianGrid, Legend } from 'recharts';
 
 // --- Components ---
 
 const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     let color = 'bg-slate-800 text-slate-400 border-slate-700';
-    let icon = <Zap className="w-3 h-3" />;
+    let icon = <Info className="w-3 h-3" />;
+    let label = type;
     
     if (type === 'New' || type === '新品测试') {
         color = 'bg-blue-900/30 text-blue-400 border-blue-500/30';
         icon = <Sparkles className="w-3 h-3" />;
+        label = 'NEW';
     } else if (type === 'Growing' || type === '爆品增长') {
-        color = 'bg-pink-900/30 text-pink-400 border-pink-500/30';
+        color = 'bg-purple-900/30 text-purple-400 border-purple-500/30';
         icon = <TrendingUp className="w-3 h-3" />;
+        label = 'HOT';
     } else if (type === 'Stable' || type === '稳定热卖') {
         color = 'bg-emerald-900/30 text-emerald-400 border-emerald-500/30';
-        icon = <Target className="w-3 h-3" />;
+        icon = <CheckCircle2 className="w-3 h-3" />;
+        label = 'Stable';
     } else if (type === 'Clearance') {
         color = 'bg-red-900/30 text-red-400 border-red-500/30';
-        icon = <AlertCircle className="w-3 h-3" />;
+        icon = <AlertTriangle className="w-3 h-3" />;
+        label = 'Clear';
     }
 
     return (
-        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded border text-xs font-bold uppercase w-fit ${color}`}>
+        <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded text-[10px] font-bold border ${color} uppercase tracking-wider`}>
             {icon}
-            <span>{type}</span>
+            <span>{label}</span>
         </div>
     );
 };
 
-// --- Add Product Modal ---
-const AddProductModal: React.FC<{ onClose: () => void }> = ({ onClose }) => {
-    const { dispatch, showToast } = useTanxing();
-    const [isSaving, setIsSaving] = useState(false);
-    const [skuInput, setSkuInput] = useState('');
-    const [imageUrlInput, setImageUrlInput] = useState('');
-    const [form, setForm] = useState<Partial<Product>>({
-        name: '',
-        sku: '',
-        category: 'General',
-        price: 0,
-        costPrice: 0,
-        stock: 0,
-        status: 'active',
-        lifecycle: 'New',
-        supplier: '',
-        leadTime: 15,
-        itemsPerBox: 20,
-        lingXingId: '',
-        notes: '',
-        images: [] // Initialize empty array
-    });
-
-    const addImage = (url: string) => {
-        setForm(prev => ({ 
-            ...prev, 
-            images: [...(prev.images || []), url],
-            image: !prev.image ? url : prev.image // Set primary if empty
-        }));
-    };
-
-    const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                addImage(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        }
-        // Reset input
-        e.target.value = ''; 
-    };
-
-    const handleUrlAdd = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && imageUrlInput) {
-            e.preventDefault();
-            addImage(imageUrlInput);
-            setImageUrlInput('');
-        }
-    };
-
-    const removeImage = (index: number) => {
-        setForm(prev => {
-            const newImages = [...(prev.images || [])];
-            newImages.splice(index, 1);
-            return {
-                ...prev,
-                images: newImages,
-                // Update primary image if the first one was removed
-                image: newImages.length > 0 ? newImages[0] : ''
-            };
-        });
-    };
-
-    // Global paste handler for the modal to catch images
-    const handlePaste = (e: React.ClipboardEvent) => {
-        const items = e.clipboardData?.items;
-        if (items) {
-            for (const item of items) {
-                if (item.type.indexOf('image') !== -1) {
-                    e.preventDefault();
-                    const file = item.getAsFile();
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            const result = event.target?.result as string;
-                            addImage(result);
-                            showToast('图片已从剪贴板添加', 'success');
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                    return;
-                }
-            }
-        }
-    };
-
-    // --- SKU Tag Input Logic ---
-    const commitSku = (val: string) => {
-        const cleanVal = val.trim().toUpperCase();
-        if (!cleanVal) return;
-        const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-        if (!current.includes(cleanVal)) {
-            setForm(prev => ({ ...prev, sku: [...current, cleanVal].join(',') }));
-        }
-    };
-
-    const handleSkuKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            commitSku(skuInput);
-            setSkuInput('');
-        } else if (e.key === 'Backspace' && !skuInput) {
-            const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-            if (current.length > 0) {
-                current.pop();
-                setForm(prev => ({ ...prev, sku: current.join(',') }));
-            }
-        }
-    };
-
-    const handleSkuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        if (val.includes(',')) {
-            const parts = val.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-            const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-            const combined = Array.from(new Set([...current, ...parts])).join(',');
-            setForm(prev => ({ ...prev, sku: combined }));
-            setSkuInput('');
-        } else {
-            setSkuInput(val);
-        }
-    };
-
-    const removeSkuTag = (tag: string) => {
-        const current = form.sku ? form.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-        setForm(prev => ({ ...prev, sku: current.filter(t => t !== tag).join(',') }));
-    };
-
-    const handleSubmit = () => {
-        // Ensure pending input is committed
-        if (skuInput.trim()) {
-            commitSku(skuInput);
-        }
-        
-        // Wait a tick for state update if necessary, or check derived value
-        const finalSku = skuInput.trim() ? (form.sku ? `${form.sku},${skuInput.trim().toUpperCase()}` : skuInput.trim().toUpperCase()) : form.sku;
-
-        if (!form.name || !finalSku) {
-            showToast('请填写产品名称和 SKU', 'warning');
-            return;
-        }
-        
-        setIsSaving(true);
-        // Simulate network delay for better UX feedback
-        setTimeout(() => {
-            const newProduct: Product = {
-                ...form as Product,
-                sku: finalSku as string, // Use computed final sku
-                id: `PROD-${Date.now()}`,
-                lastUpdated: new Date().toISOString(),
-                inventoryBreakdown: [],
-                dailyBurnRate: 0, // Initial
-                // Ensure primary image is set if images array exists
-                image: form.images && form.images.length > 0 ? form.images[0] : (form.image || '')
-            };
-            dispatch({ type: 'ADD_PRODUCT', payload: newProduct });
-            showToast('新 SKU 已添加至清单', 'success');
-            setIsSaving(false);
-            onClose();
-        }, 600);
-    };
-
-    return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/70" onClick={onClose}>
-            <div 
-                className="ios-glass-panel w-full max-w-2xl rounded-xl shadow-2xl p-6 animate-in zoom-in-95 border border-white/10" 
-                onClick={e => e.stopPropagation()}
-                onPaste={handlePaste}
-            >
-                <div className="flex justify-between items-center mb-6 border-b border-white/10 pb-4">
-                    <h3 className="text-lg font-bold text-white flex items-center gap-2">
-                        <Plus className="w-5 h-5 text-indigo-500" />
-                        添加新 SKU (Add Product)
-                    </h3>
-                    <button onClick={onClose}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
-                </div>
-                
-                <div className="grid grid-cols-3 gap-6 mb-6">
-                    {/* Multi-Image Upload Column */}
-                    <div className="col-span-1 flex flex-col gap-3">
-                        <div className="text-xs text-slate-400 font-bold">产品图片 ({form.images?.length || 0})</div>
-                        
-                        <div className="grid grid-cols-2 gap-2 max-h-60 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10">
-                            {/* Render existing images */}
-                            {form.images?.map((img, idx) => (
-                                <div key={idx} className="aspect-square bg-black/40 border border-white/10 rounded-lg relative group overflow-hidden">
-                                    <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
-                                    <button 
-                                        onClick={() => removeImage(idx)} 
-                                        className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
-                                </div>
-                            ))}
-
-                            {/* Add Button */}
-                            <div className="aspect-square bg-black/40 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center text-slate-500 relative hover:border-indigo-500/50 hover:text-indigo-400 transition-all cursor-pointer">
-                                <Plus className="w-6 h-6" />
-                                <span className="text-[10px] mt-1">添加图片</span>
-                                <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                            </div>
-                        </div>
-
-                        <div className="relative group mt-2">
-                            <Link className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500 pointer-events-none" />
-                            <input 
-                                type="text" 
-                                placeholder="输入图片 URL + 回车" 
-                                className="w-full bg-black/40 border border-white/10 rounded-lg pl-8 pr-2 py-2 text-xs text-white focus:border-indigo-500 outline-none placeholder-slate-600 transition-colors hover:bg-black/60"
-                                value={imageUrlInput}
-                                onChange={(e) => setImageUrlInput(e.target.value)}
-                                onKeyDown={handleUrlAdd}
-                            />
-                        </div>
-                    </div>
-
-                    <div className="col-span-2 grid grid-cols-2 gap-4">
-                        <div className="col-span-2">
-                            <label className="text-xs text-slate-400 block mb-1">产品名称 Name</label>
-                            <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                        </div>
-                        <div className="col-span-2">
-                            <label className="text-xs text-slate-400 block mb-1">SKU (多标签 - 回车添加)</label>
-                            <div className="w-full bg-black/40 border border-white/10 rounded-lg p-2 flex flex-wrap gap-2 focus-within:border-indigo-500 transition-colors">
-                                {form.sku?.split(',').map(s => s.trim()).filter(Boolean).map((tag, index) => (
-                                    <span key={index} className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-xs flex items-center gap-1 font-mono">
-                                        {tag}
-                                        <button onClick={() => removeSkuTag(tag)} className="hover:text-white"><X className="w-3 h-3" /></button>
-                                    </span>
-                                ))}
-                                <input 
-                                    type="text" 
-                                    value={skuInput} 
-                                    onChange={handleSkuChange} 
-                                    onKeyDown={handleSkuKeyDown}
-                                    onBlur={() => { commitSku(skuInput); setSkuInput(''); }}
-                                    className="bg-transparent outline-none flex-1 min-w-[80px] text-sm text-white font-mono uppercase placeholder-slate-600" 
-                                    placeholder={form.sku ? "" : "输入SKU..."}
-                                />
-                            </div>
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-400 block mb-1">类目 Category</label>
-                            <input type="text" value={form.category} onChange={e => setForm({...form, category: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-400 block mb-1">领星入库单号</label>
-                            <input type="text" value={form.lingXingId} onChange={e => setForm({...form, lingXingId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" placeholder="LX-..." />
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-400 block mb-1">销售价 ($)</label>
-                            <input type="number" value={form.price} onChange={e => setForm({...form, price: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-400 block mb-1">采购成本 (¥)</label>
-                            <input type="number" value={form.costPrice} onChange={e => setForm({...form, costPrice: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-400 block mb-1">初始库存</label>
-                            <input type="number" value={form.stock} onChange={e => setForm({...form, stock: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                        </div>
-                        <div>
-                            <label className="text-xs text-slate-400 block mb-1">每箱数量 (Pcs/Box)</label>
-                            <input type="number" value={form.itemsPerBox} onChange={e => setForm({...form, itemsPerBox: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none" />
-                        </div>
-                    </div>
-                </div>
-                
-                <div>
-                    <label className="text-xs text-slate-400 block mb-1">备注 (Notes)</label>
-                    <textarea value={form.notes} onChange={e => setForm({...form, notes: e.target.value})} className="w-full h-20 bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none resize-none" placeholder="添加备注..." />
-                </div>
-
-                <div className="flex justify-end gap-3 mt-6">
-                    <button onClick={onClose} className="px-4 py-2 text-slate-400 hover:text-white text-sm transition-colors">取消</button>
-                    <button 
-                        onClick={handleSubmit} 
-                        disabled={isSaving}
-                        className="px-6 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-sm font-bold shadow-lg flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
-                    >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-                        {isSaving ? '添加中...' : '确认添加'}
-                    </button>
-                </div>
-            </div>
-        </div>,
-        document.body
-    );
-};
-
-// --- High Fidelity Edit Modal (Tanxing OS Dark/Glass Style) ---
-const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ product, onClose }) => {
-    const { dispatch, showToast } = useTanxing();
-    const [isSaving, setIsSaving] = useState(false);
-    
-    // Initial values logic:
-    // If product.boxCount is set, use it. Otherwise calculate default but don't bind logic tightly.
-    const [boxCount, setBoxCount] = useState<number>(() => {
-        if (product.boxCount !== undefined) return product.boxCount;
-        const items = product.itemsPerBox || 1;
-        const stock = product.stock || 0;
-        return Math.ceil(stock / items);
-    });
-    
-    // Separate state for Stock Total
-    const [stockTotal, setStockTotal] = useState(product.stock || 0);
-    const [skuInput, setSkuInput] = useState('');
-    const [imageUrlInput, setImageUrlInput] = useState('');
-
-    const [formData, setFormData] = useState({
+// --- Edit Modal (High Fidelity Restoration) ---
+const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
+    // Local State for inputs
+    const [formData, setFormData] = useState<Product>({
         ...product,
-        // Ensure images array exists, fallback to single image if array is empty but string exists
-        images: product.images && product.images.length > 0 ? product.images : (product.image ? [product.image] : []),
-        // Ensure nested objects exist
-        dimensions: product.dimensions || { l: 32, w: 24, h: 18 },
-        economics: product.economics || { platformFeePercent: 2, creatorFeePercent: 10, fixedCost: 0.3, lastLegShipping: 5.44, adCost: 10, refundRatePercent: 3 },
-        logistics: product.logistics || { method: 'Air', carrier: 'Matson/UPS', trackingNo: '', unitFreightCost: 62, totalFreightCost: 0, billingWeight: 0 },
-        lingXingId: product.lingXingId || '',
-        notes: product.notes || ''
+        // Ensure defaults
+        dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
+        logistics: product.logistics || { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0, targetWarehouse: '' },
+        economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0 },
     });
+    
+    // Gallery State
+    const [gallery, setGallery] = useState<string[]>(
+        (product.images && product.images.length > 0) ? product.images : (product.image ? [product.image] : [])
+    );
+    const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-    // Image Handlers
-    const addImage = (url: string) => {
-        setFormData(prev => ({ 
-            ...prev, 
-            images: [...(prev.images || []), url],
-            image: !prev.image ? url : prev.image // Sync main image if needed
+    // SKU Tags State
+    const [skuTags, setSkuTags] = useState<string[]>(
+        product.sku ? product.sku.split(',').map(s => s.trim()).filter(Boolean) : []
+    );
+    const [skuInput, setSkuInput] = useState('');
+    
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // Sync formData images when gallery changes
+    useEffect(() => {
+        setFormData(prev => ({
+            ...prev,
+            images: gallery,
+            image: gallery.length > 0 ? gallery[0] : undefined
+        }));
+    }, [gallery]);
+
+    // Sync formData sku when tags change
+    useEffect(() => {
+        setFormData(prev => ({
+            ...prev,
+            sku: skuTags.join(', ')
+        }));
+    }, [skuTags]);
+
+    const handleChange = (field: keyof Product, value: any) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+    };
+
+    const handleNestedChange = (parent: keyof Product, field: string, value: any) => {
+        setFormData(prev => ({
+            ...prev,
+            [parent]: { ...(prev[parent] as any), [field]: value }
         }));
     };
 
-    const removeImage = (index: number) => {
-        setFormData(prev => {
-            const newImages = [...(prev.images || [])];
-            newImages.splice(index, 1);
-            return {
-                ...prev,
-                images: newImages,
-                image: newImages.length > 0 ? newImages[0] : ''
-            };
-        });
+    const handleDimensionChange = (dim: 'l'|'w'|'h', val: number) => {
+        setFormData(prev => ({
+            ...prev,
+            dimensions: { ...(prev.dimensions || {l:0,w:0,h:0}), [dim]: val }
+        }));
     };
-
+    
+    // --- Gallery Handlers ---
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
             const reader = new FileReader();
             reader.onloadend = () => {
-                addImage(reader.result as string);
+                const newImg = reader.result as string;
+                setGallery(prev => [...prev, newImg]);
+                setActiveImageIndex(gallery.length); // Point to the new (last) image
             };
             reader.readAsDataURL(file);
         }
+        // Reset input to allow same file selection
         e.target.value = '';
     };
 
-    const handleUrlAdd = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && imageUrlInput) {
-            e.preventDefault();
-            addImage(imageUrlInput);
-            setImageUrlInput('');
-        }
-    };
-
-    const handlePaste = (e: React.ClipboardEvent) => {
-        const items = e.clipboardData?.items;
-        if (items) {
-            for (const item of items) {
-                if (item.type.indexOf('image') !== -1) {
-                    e.preventDefault();
-                    const file = item.getAsFile();
-                    if (file) {
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                            addImage(event.target?.result as string);
-                            showToast('图片已从剪贴板粘贴', 'success');
-                        };
-                        reader.readAsDataURL(file);
-                    }
-                    return;
-                }
-            }
-        }
-    };
-
-    const handleSave = () => {
-        // Ensure pending input is committed
-        if (skuInput.trim()) {
-            commitSku(skuInput);
-        }
-        
-        // Wait a tick or use updated value logic
-        const finalSku = skuInput.trim() ? (formData.sku ? `${formData.sku},${skuInput.trim().toUpperCase()}` : skuInput.trim().toUpperCase()) : formData.sku;
-
-        setIsSaving(true);
-        // Important: Update the stock with the manual total
-        const updatedProduct = {
-            ...formData,
-            sku: finalSku,
-            stock: stockTotal, // Save the manually input stock total
-            boxCount: boxCount, // Save the manually input box count (persist this!)
-            image: formData.images && formData.images.length > 0 ? formData.images[0] : '' // Ensure primary image is sync
-        };
-
-        // Simulate processing delay
-        setTimeout(() => {
-            dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
-            showToast('SKU 信息已更新并记录日志', 'success');
-            setIsSaving(false);
-            onClose();
-        }, 600);
-    };
-
-    // --- Decoupled Handlers ---
-    // Change to COMPLETELY MANUAL INPUT as requested.
-    // Changing one does NOT affect the others.
-
-    const handleBoxCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        const count = val === '' ? 0 : parseInt(val);
-        setBoxCount(count);
-        // No side effects
-    };
-
-    const handleItemsPerBoxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        const items = parseInt(val) || 0;
-        setFormData(prev => ({ ...prev, itemsPerBox: items }));
-        // No side effects
-    };
-
-    const handleStockTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        const total = val === '' ? 0 : parseInt(val);
-        setStockTotal(total);
-        setFormData(prev => ({ ...prev, stock: total }));
-        // No side effects
-    };
-
-    // --- SKU Tag Input Logic (Edit Mode) ---
-    const commitSku = (val: string) => {
-        const cleanVal = val.trim().toUpperCase();
-        if (!cleanVal) return;
-        const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-        if (!current.includes(cleanVal)) {
-            setFormData(prev => ({ ...prev, sku: [...current, cleanVal].join(',') }));
-        }
-    };
-
-    const handleSkuKeyDown = (e: React.KeyboardEvent) => {
+    const handleUrlInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
         if (e.key === 'Enter') {
-            e.preventDefault();
-            commitSku(skuInput);
-            setSkuInput('');
-        } else if (e.key === 'Backspace' && !skuInput) {
-            const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-            if (current.length > 0) {
-                current.pop();
-                setFormData(prev => ({ ...prev, sku: current.join(',') }));
+            const url = e.currentTarget.value.trim();
+            if (url) {
+                setGallery(prev => [...prev, url]);
+                setActiveImageIndex(gallery.length);
+                e.currentTarget.value = '';
             }
         }
     };
 
-    const handleSkuChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const val = e.target.value;
-        if (val.includes(',')) {
-            const parts = val.split(',').map(s => s.trim().toUpperCase()).filter(Boolean);
-            const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-            const combined = Array.from(new Set([...current, ...parts])).join(',');
-            setFormData(prev => ({ ...prev, sku: combined }));
-            setSkuInput('');
-        } else {
-            setSkuInput(val);
+    const handleRemoveImage = (index: number, e: React.MouseEvent) => {
+        e.stopPropagation();
+        const newGallery = gallery.filter((_, i) => i !== index);
+        setGallery(newGallery);
+        if (activeImageIndex >= index && activeImageIndex > 0) {
+            setActiveImageIndex(activeImageIndex - 1);
         }
     };
 
-    const removeSkuTag = (tag: string) => {
-        const current = formData.sku ? formData.sku.split(',').map(s => s.trim()).filter(Boolean) : [];
-        setFormData(prev => ({ ...prev, sku: current.filter(t => t !== tag).join(',') }));
+    // --- SKU Tag Handlers ---
+    const handleSkuKeyDown = (e: React.KeyboardEvent) => {
+        if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            const val = skuInput.trim();
+            if (val && !skuTags.includes(val)) {
+                setSkuTags([...skuTags, val]);
+                setSkuInput('');
+            }
+        } else if (e.key === 'Backspace' && !skuInput && skuTags.length > 0) {
+            setSkuTags(skuTags.slice(0, -1));
+        }
     };
 
-    const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (formData.itemsPerBox || 1); 
+    const removeSkuTag = (tagToRemove: string) => {
+        setSkuTags(skuTags.filter(t => t !== tagToRemove));
+    };
 
-    // Helper for input classes to maintain consistency in Dark UI
-    const inputClass = "w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/20 transition-all shadow-sm placeholder-white/20";
-    const labelClass = "text-xs font-semibold text-slate-400 mb-1.5 block";
-    const sectionTitleClass = "text-sm font-bold text-slate-200 mb-4 flex items-center gap-2";
-    const badgeClass = "w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center text-xs font-bold mr-2";
+    // Derived calculations for the "Section 3" badge
+    const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
+    const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
 
     return createPortal(
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-sm bg-black/80" onClick={onClose}>
-            {/* Dark Glass Theme for this Modal */}
-            <div 
-                className="ios-glass-panel w-full max-w-5xl h-[90vh] rounded-xl shadow-2xl flex flex-col overflow-hidden text-slate-200 animate-in zoom-in-95 font-sans border border-white/10" 
-                onClick={e => e.stopPropagation()}
-                onPaste={handlePaste}
-            >
-                
-                {/* Header */}
-                <div className="px-6 py-4 bg-white/5 border-b border-white/10 flex justify-between items-center shrink-0">
-                    <div>
-                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
-                            编辑: {formData.name}
-                        </h3>
-                        <p className="text-xs text-slate-400 mt-1">完善参数以获得更准确的智能补货建议</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded text-xs text-slate-300 flex items-center gap-1 font-medium transition-colors shadow-sm">
-                            <FileText className="w-3.5 h-3.5"/> 详情
-                        </button>
-                        <button className="px-3 py-1.5 bg-white/5 border border-white/10 hover:bg-white/10 rounded text-xs text-slate-300 flex items-center gap-1 font-medium transition-colors shadow-sm">
-                            <History className="w-3.5 h-3.5"/> 变更历史
-                        </button>
-                        <button onClick={onClose} className="p-1.5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors ml-2">
-                            <X className="w-5 h-5"/>
-                        </button>
-                    </div>
-                </div>
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
+            <div className="bg-[#0f1218] w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+               
+               {/* Modal Header */}
+               <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-[#18181b]">
+                   <div>
+                       <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                           编辑: {formData.name}
+                       </h3>
+                       <p className="text-xs text-slate-500 mt-1">完善参数以获得更准确的智能补货建议</p>
+                   </div>
+                   <div className="flex items-center gap-3">
+                       <button className="px-3 py-1.5 border border-white/10 rounded text-xs text-slate-400 hover:text-white flex items-center gap-2 hover:bg-white/5 transition-colors">
+                           <Clock className="w-3 h-3"/> 变更历史
+                       </button>
+                       <button onClick={onClose}><X className="w-6 h-6 text-slate-500 hover:text-white" /></button>
+                   </div>
+               </div>
+               
+               {/* Modal Content - Bento Grid Layout */}
+               <div className="flex-1 overflow-y-auto p-6 bg-[#09090b]">
+                   <div className="grid grid-cols-12 gap-6">
+                       
+                       {/* Section 1: Product & Supply Chain (Top Wide) */}
+                       <div className="col-span-12 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                           <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
+                               <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">1</div>
+                               产品与供应链 (Product & Gallery)
+                           </div>
+                           <div className="flex gap-6">
+                               {/* Gallery Section - Updated Grid Layout */}
+                               <div className="flex flex-col gap-3 w-48 shrink-0">
+                                   <div className="flex justify-between items-center">
+                                       <label className="text-[10px] text-slate-500 font-bold">画廊 ({gallery.length})</label>
+                                   </div>
+                                   
+                                   <div className="grid grid-cols-2 gap-2">
+                                       {gallery.map((img, idx) => (
+                                           <div 
+                                                key={idx} 
+                                                className={`aspect-square rounded-lg border relative group overflow-hidden cursor-pointer ${activeImageIndex === idx ? 'border-indigo-500 ring-1 ring-indigo-500/50' : 'border-white/10'}`}
+                                                onClick={() => setActiveImageIndex(idx)}
+                                           >
+                                               <img src={img} className="w-full h-full object-cover" alt="Product" />
+                                               <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors"></div>
+                                               <button 
+                                                    onClick={(e) => handleRemoveImage(idx, e)}
+                                                    className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/60 text-white rounded opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all transform scale-90 hover:scale-100"
+                                               >
+                                                   <X className="w-3 h-3" />
+                                               </button>
+                                           </div>
+                                       ))}
+                                       {/* Add Button */}
+                                       <button 
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="aspect-square rounded-lg border border-dashed border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/40 flex items-center justify-center text-slate-400 hover:text-white transition-all group"
+                                       >
+                                           <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />
+                                       </button>
+                                   </div>
+                                   
+                                   <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
 
-                {/* Body - Dark Glass Layout */}
-                <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
-                    
-                    {/* SECTION 1: Product & Supply Chain */}
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-5 mb-6 shadow-lg">
-                        <h4 className={sectionTitleClass}><span className={badgeClass}>1</span> 产品与供应链</h4>
-                        
-                        <div className="flex gap-6">
-                            {/* Multi-Image Gallery */}
-                            <div className="flex flex-col gap-3 w-48 shrink-0">
-                                <div className="text-xs text-slate-400 font-bold mb-1">画廊 ({formData.images?.length || 0})</div>
-                                <div className="grid grid-cols-2 gap-2">
-                                    {formData.images?.map((img, idx) => (
-                                        <div key={idx} className="aspect-square bg-black/40 border border-white/10 rounded-lg relative group overflow-hidden">
-                                            <img src={img} alt={`Thumb ${idx}`} className="w-full h-full object-cover" />
-                                            <button 
-                                                onClick={() => removeImage(idx)} 
-                                                className="absolute top-1 right-1 bg-red-500/80 text-white rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    ))}
-                                    {/* Add Button */}
-                                    <div className="aspect-square bg-black/40 border-2 border-dashed border-white/10 rounded-lg flex flex-col items-center justify-center text-slate-500 relative hover:border-indigo-500/50 hover:text-indigo-400 transition-all cursor-pointer">
-                                        <Plus className="w-6 h-6" />
-                                        <input type="file" accept="image/*" onChange={handleImageUpload} className="absolute inset-0 opacity-0 cursor-pointer" />
-                                    </div>
-                                </div>
-                                <div className="relative group mt-1">
-                                    <Link className="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500 pointer-events-none" />
-                                    <input 
-                                        type="text" 
-                                        placeholder="URL..." 
-                                        className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 pl-8 text-xs text-white outline-none focus:border-indigo-500 placeholder-slate-600 transition-colors hover:bg-black/60"
-                                        value={imageUrlInput}
-                                        onChange={(e) => setImageUrlInput(e.target.value)}
-                                        onKeyDown={handleUrlAdd}
-                                    />
-                                </div>
-                            </div>
-                            
-                            <div className="flex-1 grid grid-cols-2 gap-x-6 gap-y-4">
-                                <div>
-                                    <label className={labelClass}>备货日期 (Restock Date)</label>
-                                    <div className="relative">
-                                        <input type="text" defaultValue={new Date().toISOString().split('T')[0]} className={inputClass} />
-                                        <Calendar className="w-4 h-4 absolute right-3 top-2.5 text-slate-500" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>生命周期阶段</label>
-                                    <select value={formData.lifecycle} onChange={e => setFormData({...formData, lifecycle: e.target.value})} className={inputClass}>
-                                        <option value="New">⚡ 稳定热卖 (Stable)</option>
-                                        <option value="Stable">🔥 爆品增长 (Growing)</option>
-                                        <option value="Growing">🚀 新品测试 (New)</option>
-                                        <option value="Clearance">📉 清仓处理 (Clearance)</option>
-                                    </select>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>产品名称</label>
-                                    <input type="text" value={formData.name} onChange={e => setFormData({...formData, name: e.target.value})} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>SKU (多标签)</label>
-                                    <div className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 flex flex-wrap gap-2 focus-within:border-indigo-500 shadow-sm transition-all min-h-[38px]">
-                                         {formData.sku?.split(',').map(s => s.trim()).filter(Boolean).map((tag, index) => (
-                                            <span key={index} className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded text-xs flex items-center gap-1 font-mono">
-                                                {tag}
-                                                <button onClick={() => removeSkuTag(tag)} className="hover:text-white"><X className="w-3 h-3" /></button>
-                                            </span>
-                                        ))}
-                                        <input 
-                                            type="text" 
-                                            value={skuInput} 
-                                            onChange={handleSkuChange}
-                                            onKeyDown={handleSkuKeyDown}
-                                            onBlur={() => { commitSku(skuInput); setSkuInput(''); }}
-                                            className="bg-transparent outline-none flex-1 min-w-[60px] h-full py-0.5 text-white placeholder-slate-600 font-mono text-sm uppercase" 
-                                            placeholder={formData.sku ? "" : "添加 SKU..."} 
-                                        />
-                                    </div>
-                                </div>
-                                <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                                    <label className="text-xs font-bold text-amber-400 mb-1 block">生产+物流总时效 (Days)</label>
-                                    <div className="relative">
-                                        <Clock className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
-                                        <input type="number" value={formData.leadTime} onChange={e => setFormData({...formData, leadTime: parseInt(e.target.value)})} className="w-full pl-9 bg-black/40 border border-amber-500/30 rounded px-3 py-2 text-sm text-amber-100 font-bold outline-none focus:border-amber-500" />
-                                    </div>
-                                </div>
-                                <div className="bg-amber-500/10 p-3 rounded-lg border border-amber-500/20">
-                                    <label className="text-xs font-bold text-amber-400 mb-1 block">安全库存天数 (Days)</label>
-                                    <div className="relative">
-                                        <ShieldCheck className="w-4 h-4 absolute left-3 top-2.5 text-amber-500" />
-                                        <input type="number" value={formData.safetyStockDays} onChange={e => setFormData({...formData, safetyStockDays: parseInt(e.target.value)})} className="w-full pl-9 bg-black/40 border border-amber-500/30 rounded px-3 py-2 text-sm text-amber-100 font-bold outline-none focus:border-amber-500" />
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                                   <div className="relative">
+                                       <LinkIcon className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-500" />
+                                       <input 
+                                           type="text" 
+                                           placeholder="URL..."
+                                           className="w-full bg-black/40 border border-white/10 rounded-lg py-2 pl-8 pr-2 text-xs text-white focus:border-indigo-500 outline-none placeholder-slate-600"
+                                           onKeyDown={handleUrlInputKeyDown}
+                                       />
+                                   </div>
+                               </div>
+                               
+                               <div className="flex-1 grid grid-cols-4 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货日期 (Restock Date)</label>
+                                       <input type="date" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">生命周期阶段</label>
+                                       <select 
+                                            value={formData.lifecycle} 
+                                            onChange={e => handleChange('lifecycle', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none appearance-none"
+                                       >
+                                           <option value="New">💎 新品测试 (New)</option>
+                                           <option value="Growing">🚀 爆品增长 (Growing)</option>
+                                           <option value="Stable">⚡ 稳定热卖 (Stable)</option>
+                                           <option value="Clearance">🗑️ 清仓处理 (Clearance)</option>
+                                       </select>
+                                   </div>
+                                   <div className="col-span-2">
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">产品名称</label>
+                                       <input type="text" value={formData.name} onChange={e => handleChange('name', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                   </div>
+                                   
+                                   {/* Multi-SKU Tag Input */}
+                                   <div className="col-span-2">
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">SKU (Multi-Tag / Aliases)</label>
+                                       <div className="flex flex-wrap items-center gap-1.5 bg-black/40 border border-white/10 rounded px-3 py-2 min-h-[42px]">
+                                           {skuTags.map(tag => (
+                                               <span key={tag} className="bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded text-xs border border-indigo-500/30 font-mono flex items-center gap-1">
+                                                   {tag}
+                                                   <button onClick={() => removeSkuTag(tag)} className="hover:text-white"><X className="w-3 h-3"/></button>
+                                               </span>
+                                           ))}
+                                           <input 
+                                                type="text" 
+                                                value={skuInput} 
+                                                onChange={e => setSkuInput(e.target.value)}
+                                                onKeyDown={handleSkuKeyDown}
+                                                className="bg-transparent text-sm text-white focus:outline-none flex-1 font-mono min-w-[80px]" 
+                                                placeholder={skuTags.length === 0 ? "输入 SKU 并回车..." : "添加更多..."}
+                                           />
+                                       </div>
+                                       <p className="text-[9px] text-slate-600 mt-1">支持输入多个 SKU 标签 (按 Enter 或逗号分隔)</p>
+                                   </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        
-                        {/* SECTION 2: Procurement */}
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg flex flex-col h-full">
-                            <h4 className={sectionTitleClass}><span className={badgeClass}>2</span> 采购与供应商 (CRM)</h4>
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className={labelClass}>供应商名称</label>
-                                    <div className="relative">
-                                        <Factory className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-                                        <input type="text" value={formData.supplier} placeholder="工厂名称" onChange={e => setFormData({...formData, supplier: e.target.value})} className={`${inputClass} pl-9`} />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>联系方式</label>
-                                    <input type="text" value={formData.supplierContact} placeholder="微信/Email" onChange={e => setFormData({...formData, supplierContact: e.target.value})} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>采购单价 (¥/pcs)</label>
-                                    <input type="number" value={formData.costPrice} onChange={e => setFormData({...formData, costPrice: parseFloat(e.target.value)})} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>单个重量 (KG)</label>
-                                    <input type="number" value={formData.unitWeight} onChange={e => setFormData({...formData, unitWeight: parseFloat(e.target.value)})} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>预估日销 (Daily Sales)</label>
-                                    <div className="relative">
-                                        <BarChart3 className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-                                        <input type="number" value={formData.dailyBurnRate} onChange={e => setFormData({...formData, dailyBurnRate: parseFloat(e.target.value)})} className={`${inputClass} pl-9`} />
-                                    </div>
-                                    <div className="text-[10px] text-emerald-400 mt-1 font-medium text-right">可售天数: {Math.floor(stockTotal / (formData.dailyBurnRate || 1))}天</div>
-                                </div>
-                            </div>
-                        </div>
+                                   <div className="col-span-1">
+                                       <label className="text-[10px] text-amber-500/80 block mb-1 font-bold">生产+物流总时效 (Days)</label>
+                                       <div className="relative">
+                                           <Clock className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-500" />
+                                           <input type="number" value={formData.leadTime} onChange={e => handleChange('leadTime', parseInt(e.target.value))} className="w-full bg-amber-900/10 border border-amber-500/30 rounded pl-9 pr-3 py-2 text-sm text-amber-400 focus:border-amber-500 outline-none font-bold font-mono" />
+                                       </div>
+                                   </div>
+                                   <div className="col-span-1">
+                                       <label className="text-[10px] text-amber-500/80 block mb-1 font-bold">安全库存天数 (Days)</label>
+                                       <div className="relative">
+                                           <CheckCircle2 className="w-3.5 h-3.5 absolute left-3 top-2.5 text-amber-500" />
+                                           <input type="number" value={formData.safetyStockDays} onChange={e => handleChange('safetyStockDays', parseInt(e.target.value))} className="w-full bg-amber-900/10 border border-amber-500/30 rounded pl-9 pr-3 py-2 text-sm text-amber-400 focus:border-amber-500 outline-none font-bold font-mono" />
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
 
-                        {/* SECTION 3: Box Settings */}
-                        <div className="bg-amber-900/10 border border-amber-500/20 rounded-xl p-5 shadow-lg flex flex-col h-full relative overflow-hidden">
-                            <div className="absolute top-0 right-0 bg-amber-500/20 text-amber-300 text-[10px] px-2 py-1 rounded-bl-lg font-bold border-l border-b border-amber-500/20">{boxCount} 箱 | {(totalCBM * boxCount).toFixed(3)} CBM</div>
-                            <h4 className="text-sm font-bold text-amber-400 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-bold mr-2 border border-amber-500/30">3</span> 箱规与入库</h4>
-                            
-                            <div className="grid grid-cols-3 gap-3 mb-4">
-                                <div>
-                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">长 (cm)</label>
-                                    <input type="number" value={formData.dimensions?.l} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions!, l: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">宽 (cm)</label>
-                                    <input type="number" value={formData.dimensions?.w} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions!, w: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
-                                </div>
-                                <div>
-                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">高 (cm)</label>
-                                    <input type="number" value={formData.dimensions?.h} onChange={e => setFormData({...formData, dimensions: {...formData.dimensions!, h: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" />
-                                </div>
-                            </div>
+                       {/* Section 2: Procurement & CRM (Left) */}
+                       <div className="col-span-5 bg-[#18181b] border border-white/5 rounded-xl p-5 flex flex-col">
+                           <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
+                               <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">2</div>
+                               采购与供应商 (CRM)
+                           </div>
+                           <div className="space-y-4 flex-1">
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">供应商名称</label>
+                                   <div className="relative">
+                                       <User className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                                       <input type="text" value={formData.supplier} onChange={e => handleChange('supplier', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded pl-9 pr-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                   </div>
+                               </div>
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">联系方式</label>
+                                   <input type="text" value={formData.supplierContact} onChange={e => handleChange('supplierContact', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="微信/Email..." />
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">采购单价 (¥/pcs)</label>
+                                       <input type="number" value={formData.costPrice} onChange={e => handleChange('costPrice', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">单个重量 (KG)</label>
+                                       <input type="number" value={formData.unitWeight} onChange={e => handleChange('unitWeight', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
+                                   </div>
+                               </div>
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">预估日销 (Daily Sales)</label>
+                                   <div className="relative">
+                                       <BarChart3 className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                                       <input type="number" value={formData.dailyBurnRate} onChange={e => handleChange('dailyBurnRate', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded pl-9 pr-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
+                                   </div>
+                                   <div className="text-[10px] text-emerald-500 text-right mt-1 cursor-pointer hover:underline font-bold">可售天数: {(formData.stock / (formData.dailyBurnRate || 1)).toFixed(0)}天</div>
+                               </div>
+                           </div>
+                       </div>
 
-                            <div className="flex items-end gap-3 mb-4">
-                                <div className="flex-1">
-                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">每箱数量 (Pcs)</label>
-                                    <input 
-                                        type="number" 
-                                        value={formData.itemsPerBox} 
-                                        onChange={handleItemsPerBoxChange} 
-                                        className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" 
-                                    />
-                                </div>
-                                <div className="pb-2 text-amber-500/50 font-bold">x</div>
-                                <div className="flex-1">
-                                    <label className="text-xs font-semibold text-amber-200/70 mb-1 block">备货箱数 (Box)</label>
-                                    <input 
-                                        type="number" 
-                                        value={boxCount || ''} 
-                                        onChange={handleBoxCountChange} 
-                                        className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100 placeholder-amber-500/30"
-                                        placeholder="手工录入..."
-                                    />
-                                </div>
-                            </div>
+                       {/* Section 3: Packing (Right Top) */}
+                       <div className="col-span-7 bg-[#18181b] border border-white/5 rounded-xl p-5 relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-2 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-bl-lg border-b border-l border-amber-500/20 shadow-lg">
+                               {totalBoxes} 箱 | {totalVolume.toFixed(3)} CBM
+                           </div>
+                           <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
+                               <div className="w-6 h-6 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-mono">3</div>
+                               箱规与入库
+                           </div>
+                           <div className="grid grid-cols-3 gap-4 mb-4">
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">长 (cm)</label>
+                                   <input type="number" value={formData.dimensions?.l} onChange={e => handleDimensionChange('l', parseFloat(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
+                               </div>
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">宽 (cm)</label>
+                                   <input type="number" value={formData.dimensions?.w} onChange={e => handleDimensionChange('w', parseFloat(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
+                               </div>
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">高 (cm)</label>
+                                   <input type="number" value={formData.dimensions?.h} onChange={e => handleDimensionChange('h', parseFloat(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
+                               </div>
+                           </div>
+                           <div className="grid grid-cols-2 gap-4 mb-4">
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货数量</label>
+                                   <input type="number" value={formData.itemsPerBox} onChange={e => handleChange('itemsPerBox', parseInt(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
+                               </div>
+                               <div className="flex items-end gap-2">
+                                   <div className="text-amber-500 pb-2 font-bold">x</div>
+                                   <div className="flex-1">
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货箱数 (Box)</label>
+                                       <input type="number" placeholder="自动计算" value={totalBoxes} readOnly className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold opacity-70" />
+                                   </div>
+                               </div>
+                           </div>
+                           
+                           <div className="bg-amber-950/20 border border-amber-900/30 rounded-lg p-3">
+                               <div className="flex justify-between items-center mb-1">
+                                   <span className="text-[10px] text-amber-500 font-bold uppercase tracking-wider">当前库存总数 (Total Stock)</span>
+                                   <span className="text-[9px] text-amber-600 cursor-pointer hover:underline">手动修改库存 &gt;</span>
+                               </div>
+                               <div className="flex items-center gap-2">
+                                   <input 
+                                        type="number"
+                                        value={formData.stock}
+                                        onChange={e => handleChange('stock', parseInt(e.target.value))}
+                                        className="text-3xl font-black text-amber-100 font-mono tracking-tighter bg-transparent border-none outline-none w-full"
+                                   />
+                               </div>
+                           </div>
 
-                            <div className="bg-black/20 p-3 rounded border border-amber-500/10 relative">
-                                <label className="text-xs font-semibold text-amber-200/70 mb-1 block">当前库存总数 (Total Stock)</label>
-                                <input 
-                                    type="number" 
-                                    value={stockTotal} 
-                                    onChange={handleStockTotalChange}
-                                    className="w-full bg-transparent border-none text-xl font-bold text-amber-100 outline-none placeholder-amber-500/30 font-mono" 
-                                />
-                                <div className="absolute right-3 top-3 text-[10px] text-amber-500/50 flex flex-col items-end">
-                                    <span>手动修改库存</span>
-                                    <span>独立输入 (Decoupled)</span>
-                                </div>
-                            </div>
-                            
-                            {/* LingXing ID */}
-                            <div className="mt-4">
-                                <label className="text-xs font-semibold text-amber-200/70 mb-1 block">领星入库单号</label>
-                                <input 
-                                    type="text" 
-                                    value={formData.lingXingId} 
-                                    onChange={e => setFormData({...formData, lingXingId: e.target.value})}
-                                    placeholder="LX-2023..."
-                                    className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm text-amber-100 outline-none focus:border-amber-500 font-mono"
-                                />
-                            </div>
-                        </div>
-                    </div>
+                           <div className="mt-4 pt-4 border-t border-white/5">
+                               <label className="text-[10px] text-slate-500 block mb-1 font-bold">预录入库单号</label>
+                               <input type="text" value={formData.lingXingId || ''} onChange={e => handleChange('lingXingId', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-slate-300 font-mono focus:border-blue-500 outline-none" placeholder="IB..." />
+                           </div>
+                       </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        
-                        {/* SECTION 4: Logistics */}
-                        <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg">
-                            <h4 className={sectionTitleClass}><span className={badgeClass}>4</span> 头程物流 (First Leg)</h4>
-                            
-                            <div className="mb-4">
-                                <label className={labelClass}>运输渠道</label>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <button 
-                                        className={`flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-all ${formData.logistics?.method === 'Air' ? 'bg-sky-500/20 border-sky-500 text-sky-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
-                                        onClick={() => setFormData({...formData, logistics: {...formData.logistics!, method: 'Air'}})}
-                                    >
-                                        <Plane className="w-4 h-4" /> 空运 (Air)
-                                    </button>
-                                    <button 
-                                        className={`flex items-center justify-center gap-2 py-2 rounded-lg border text-sm font-medium transition-all ${formData.logistics?.method === 'Sea' ? 'bg-blue-500/20 border-blue-500 text-blue-400' : 'bg-white/5 border-white/10 text-slate-400 hover:bg-white/10'}`}
-                                        onClick={() => setFormData({...formData, logistics: {...formData.logistics!, method: 'Sea'}})}
-                                    >
-                                        <Ship className="w-4 h-4" /> 海运 (Sea)
-                                    </button>
+                       {/* Section 4: Logistics (Left Bottom) */}
+                       <div className="col-span-7 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                           <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
+                               <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">4</div>
+                               头程物流 (First Leg)
+                           </div>
+                           <div className="space-y-4">
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">运输渠道</label>
+                                   <div className="grid grid-cols-2 gap-2">
+                                       <button className={`py-2 text-xs rounded border flex items-center justify-center gap-2 font-bold ${formData.logistics?.method === 'Air' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/30' : 'bg-black/40 border-white/10 text-slate-400'}`} onClick={() => handleNestedChange('logistics', 'method', 'Air')}>
+                                           <Plane className="w-3 h-3" /> 空运 (Air)
+                                       </button>
+                                       <button className={`py-2 text-xs rounded border flex items-center justify-center gap-2 font-bold ${formData.logistics?.method === 'Sea' ? 'bg-blue-600 border-blue-500 text-white shadow-lg shadow-blue-900/30' : 'bg-black/40 border-white/10 text-slate-400'}`} onClick={() => handleNestedChange('logistics', 'method', 'Sea')}>
+                                           <Ship className="w-3 h-3" /> 海运 (Sea)
+                                       </button>
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">承运商 / 船司</label>
+                                       <input type="text" value={formData.logistics?.carrier} onChange={e => handleNestedChange('logistics', 'carrier', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="Matson/UPS" />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">物流追踪号</label>
+                                       <div className="relative">
+                                           <Truck className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
+                                           <input type="text" value={formData.logistics?.trackingNo} onChange={e => handleNestedChange('logistics', 'trackingNo', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded pl-9 pr-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                       </div>
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">空运单价 (/KG)</label>
+                                       <div className="flex items-center gap-1">
+                                           <span className="text-slate-400 font-bold">¥</span>
+                                           <input type="number" value={formData.logistics?.unitFreightCost} onChange={e => handleNestedChange('logistics', 'unitFreightCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
+                                       </div>
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">计费总重 (Manual)</label>
+                                       <div className="flex items-center gap-1">
+                                           <span className="text-slate-400 font-bold">⚖️</span>
+                                           <input type="number" placeholder="自动计算" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
+                                       </div>
+                                       <div className="text-[9px] text-right text-slate-600 mt-1">理论实重: {(formData.stock * (formData.unitWeight || 0)).toFixed(2)} kg</div>
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">头程总运费 (Total Freight)</label>
+                                       <div className="flex items-center gap-1">
+                                           <span className="text-slate-400 font-bold">¥</span>
+                                           <input type="number" placeholder="手动输入总运费" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
+                                       </div>
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥)</label>
+                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={30} />
+                                   </div>
+                               </div>
+                               <div className="grid grid-cols-2 gap-4">
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥)</label>
+                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={0} />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥)</label>
+                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={0} />
+                                   </div>
+                               </div>
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">目的仓库</label>
+                                   <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="火星/休斯顿/美中" />
                                 </div>
-                            </div>
+                           </div>
+                       </div>
 
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className={labelClass}>承运商 / 船司</label>
-                                    <input type="text" value={formData.logistics?.carrier} onChange={e => setFormData({...formData, logistics: {...formData.logistics!, carrier: e.target.value}})} className={inputClass} placeholder="Matson/UPS" />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>物流追踪号</label>
-                                    <div className="relative">
-                                        <Truck className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-                                        <input type="text" value={formData.logistics?.trackingNo} placeholder="Tracking No." onChange={e => setFormData({...formData, logistics: {...formData.logistics!, trackingNo: e.target.value}})} className={`${inputClass} pl-9`} />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>空运单价 (/KG)</label>
-                                    <div className="flex">
-                                        <div className="relative w-full">
-                                            <span className="absolute left-3 top-2 text-slate-500 text-xs">¥</span>
-                                            <input type="number" value={formData.logistics?.unitFreightCost} onChange={e => setFormData({...formData, logistics: {...formData.logistics!, unitFreightCost: parseFloat(e.target.value)}})} className={`${inputClass} pl-6`} />
-                                        </div>
-                                        <div className="flex ml-2 border border-white/10 rounded overflow-hidden shrink-0">
-                                            <button className="px-2 bg-blue-500/20 text-blue-400 text-xs font-bold border-r border-white/10">CNY</button>
-                                            <button className="px-2 bg-black/40 text-slate-400 text-xs hover:bg-white/5">USD</button>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>计费总重 (Manual)</label>
-                                    <div className="relative">
-                                        <Scale className="w-4 h-4 absolute left-3 top-2.5 text-slate-500" />
-                                        <input 
-                                            type="number" 
-                                            value={formData.logistics?.billingWeight || ''} 
-                                            onChange={e => setFormData({
-                                                ...formData, 
-                                                logistics: {
-                                                    ...formData.logistics!, 
-                                                    billingWeight: parseFloat(e.target.value)
-                                                }
-                                            })}
-                                            placeholder={((stockTotal || 0) * (formData.unitWeight || 0)).toFixed(2)} // Placeholder hint as theoretical weight
-                                            className={`${inputClass} pl-9`} 
-                                        />
-                                    </div>
-                                    <div className="text-[10px] text-slate-500 text-right mt-1">理论实重: {((stockTotal || 0) * (formData.unitWeight || 0)).toFixed(2)} kg</div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>头程总运费 (Total Freight)</label>
-                                    <div className="relative">
-                                        <span className="absolute left-3 top-2 text-slate-500 text-xs">¥</span>
-                                        <input 
-                                            type="number" 
-                                            value={formData.logistics?.totalFreightCost} 
-                                            onChange={e => setFormData({
-                                                ...formData, 
-                                                logistics: {
-                                                    ...formData.logistics!, 
-                                                    totalFreightCost: parseFloat(e.target.value)
-                                                }
-                                            })} 
-                                            className={`${inputClass} pl-6`} 
-                                            placeholder="手动输入总运费"
-                                        />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className={labelClass}>耗材/贴标费 (¥)</label>
-                                    <input type="number" defaultValue={30} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>报关费 (¥)</label>
-                                    <input type="number" defaultValue={0} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>港口/操作费 (¥)</label>
-                                    <input type="number" defaultValue={0} className={inputClass} />
-                                </div>
-                                <div>
-                                    <label className={labelClass}>目的仓库</label>
-                                    <input type="text" defaultValue="火星/休斯顿/美中" className={inputClass} />
-                                </div>
-                            </div>
-                        </div>
+                       {/* Section 5: Sales (Right Bottom) */}
+                       <div className="col-span-5 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                           <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
+                               <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
+                               TikTok 销售与竞品 (Market Intel)
+                           </div>
+                           
+                           <div className="space-y-4">
+                               <div>
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">我方销售价格 ($)</label>
+                                   <input type="number" value={formData.price} onChange={e => handleChange('price', parseFloat(e.target.value))} className="w-full bg-black/40 border border-purple-500/30 rounded px-4 py-3 text-lg font-bold text-white font-mono focus:border-purple-500 outline-none" />
+                               </div>
+                               
+                               <div className="bg-purple-900/10 border border-purple-500/20 rounded-lg p-3">
+                                   <div className="flex justify-between items-center mb-2">
+                                       <span className="text-[10px] text-purple-400 font-bold flex items-center gap-1"><Target className="w-3 h-3"/> 竞品监控</span>
+                                       <span className="text-[9px] bg-purple-500 text-white px-1.5 py-0.5 rounded font-bold">AI 攻防分析</span>
+                                   </div>
+                                   <div className="flex gap-2 mb-2">
+                                       <input type="text" placeholder="竞品链接/ASIN" className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-slate-300" />
+                                       <input type="text" placeholder="$ 0" className="w-16 bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-slate-300 text-center" />
+                                   </div>
+                               </div>
 
-                        {/* SECTION 5: Sales & Market */}
-                        <div className="bg-purple-900/10 border border-purple-500/20 rounded-xl p-5 shadow-lg flex flex-col h-full">
-                            <h4 className="text-sm font-bold text-slate-200 mb-4 flex items-center gap-2"><span className="w-6 h-6 rounded-full bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-bold mr-2 border border-purple-500/30">5</span> TikTok 销售与竞品 (Market Intel)</h4>
-                            
-                            <div className="mb-4">
-                                <label className="text-xs font-semibold text-purple-200/70 mb-1 block">我方销售价格 ($)</label>
-                                <input type="number" value={formData.price} onChange={e => setFormData({...formData, price: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-purple-500/30 rounded-lg px-3 py-3 text-lg font-bold text-white outline-none focus:border-purple-500" />
-                            </div>
+                               <div>
+                                   <label className="text-[10px] text-purple-400 block mb-2 font-bold flex items-center gap-1"><Zap className="w-3 h-3"/> TIKTOK 成本结构</label>
+                                   <div className="grid grid-cols-2 gap-2">
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold">平台佣金 (%)</label>
+                                           <input type="number" value={formData.economics?.platformFeePercent} onChange={e => handleNestedChange('economics', 'platformFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
+                                       </div>
+                                       <div>
+                                           <label className="text-[9px] text-slate-500 font-bold">达人佣金 (%)</label>
+                                           <input type="number" value={formData.economics?.creatorFeePercent} onChange={e => handleNestedChange('economics', 'creatorFeePercent', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
+                                       </div>
+                                       <div className="col-span-2 mt-1">
+                                           <label className="text-[9px] text-slate-500 font-bold">每单固定费 ($)</label>
+                                           <input type="number" value={formData.economics?.fixedCost} onChange={e => handleNestedChange('economics', 'fixedCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
+                                       </div>
+                                       <div className="col-span-2 mt-1">
+                                           <label className="text-[9px] text-slate-500 font-bold">预估退货率 (%)</label>
+                                           <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" defaultValue={3} />
+                                       </div>
+                                       <div className="col-span-2 mt-1">
+                                           <label className="text-[9px] text-slate-500 font-bold">预估运费 ($)</label>
+                                           <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" defaultValue={10} />
+                                       </div>
+                                   </div>
+                               </div>
+                           </div>
+                       </div>
 
-                            <div className="bg-black/20 p-3 rounded-lg border border-purple-500/20 mb-4">
-                                <div className="flex justify-between items-center mb-2">
-                                    <div className="text-xs font-bold text-red-400 flex items-center gap-1"><Target className="w-3.5 h-3.5" /> 竞品监控</div>
-                                    <button className="bg-slate-800 text-white text-[10px] px-2 py-0.5 rounded font-bold border border-white/10 hover:bg-slate-700">AI 攻防分析</button>
-                                </div>
-                                <div className="flex gap-2">
-                                    <input type="text" placeholder="竞品链接/ASIN" className="flex-1 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none" />
-                                    <input type="number" placeholder="$ 0" className="w-20 bg-black/40 border border-white/10 rounded px-2 py-1.5 text-xs text-white outline-none" />
-                                </div>
-                            </div>
+                       {/* Notes Section (Full Width Bottom) */}
+                       <div className="col-span-12 bg-[#18181b] border border-white/5 rounded-xl p-5">
+                           <label className="text-xs font-bold text-slate-400 block mb-2">备注信息 (Notes)</label>
+                           <textarea 
+                                value={formData.notes || ''} 
+                                onChange={e => handleChange('notes', e.target.value)} 
+                                className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-slate-300 focus:border-indigo-500 outline-none resize-none"
+                                placeholder="填写备货注意事项、产品细节说明等..."
+                           />
+                       </div>
 
-                            <div className="border-t border-purple-500/20 pt-4 mt-2">
-                                <h5 className="text-xs font-bold text-purple-400 uppercase mb-3 flex items-center gap-1"><Zap className="w-3 h-3"/> TikTok 成本结构</h5>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">平台佣金 (%)</label>
-                                        <input type="number" value={formData.economics?.platformFeePercent} onChange={e => setFormData({...formData, economics: {...formData.economics!, platformFeePercent: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">达人佣金 (%)</label>
-                                        <input type="number" value={formData.economics?.creatorFeePercent} onChange={e => setFormData({...formData, economics: {...formData.economics!, creatorFeePercent: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">每单固定费 ($)</label>
-                                        <input type="number" value={formData.economics?.fixedCost} onChange={e => setFormData({...formData, economics: {...formData.economics!, fixedCost: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3 mt-3">
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">预估退货率 (%)</label>
-                                        <input type="number" value={formData.economics?.refundRatePercent} onChange={e => setFormData({...formData, economics: {...formData.economics!, refundRatePercent: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-bold text-slate-400 block mb-1">尾程派送费 ($)</label>
-                                        <input type="number" value={formData.economics?.lastLegShipping} onChange={e => setFormData({...formData, economics: {...formData.economics!, lastLegShipping: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
-                                    </div>
-                                </div>
-                                <div className="mt-3">
-                                    <label className="text-[10px] font-bold text-slate-400 block mb-1">预估广告费 ($)</label>
-                                    <input type="number" value={formData.economics?.adCost} onChange={e => setFormData({...formData, economics: {...formData.economics!, adCost: parseFloat(e.target.value)}})} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1.5 text-sm text-white" />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    {/* SECTION 6: Notes */}
-                    <div className="bg-white/5 border border-white/10 rounded-xl p-5 shadow-lg mb-6">
-                        <h4 className={sectionTitleClass}>备注信息 (Notes)</h4>
-                        <textarea 
-                            value={formData.notes} 
-                            onChange={e => setFormData({...formData, notes: e.target.value})} 
-                            className="w-full h-24 bg-black/40 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-indigo-500 outline-none resize-none"
-                            placeholder="填写备货注意事项、产品细节说明等..."
-                        />
-                    </div>
+                   </div>
+               </div>
 
-                </div>
-                
-                {/* Footer Actions */}
-                <div className="bg-black/40 backdrop-blur-md border-t border-white/10 p-4 shrink-0 z-20 flex justify-center">
-                    <button 
-                        onClick={handleSave} 
-                        disabled={isSaving}
-                        className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold py-3 rounded-lg shadow-lg transition-all active:scale-95 text-sm flex items-center justify-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckSquare className="w-4 h-4" />}
-                        {isSaving ? '正在保存更改...' : '保存修改并记录日志'}
-                    </button>
-                </div>
+               {/* Footer */}
+               <div className="p-4 border-t border-white/10 bg-[#18181b] flex justify-center items-center">
+                   <button onClick={() => onSave(formData)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all">
+                       <Save className="w-4 h-4" /> 保存修改并记录日志
+                   </button>
+               </div>
             </div>
         </div>,
         document.body
@@ -963,333 +558,272 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
 };
 
 const Inventory: React.FC = () => {
-  const { state, dispatch, showToast } = useTanxing();
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+    const { state, dispatch, showToast } = useTanxing();
+    const [searchTerm, setSearchTerm] = useState('');
+    const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
 
-  // --- Logic ---
-  const replenishmentItems = useMemo(() => {
-      // Filter out deleted products!
-      return state.products
-          .filter(p => !p.deletedAt)
-          .map(p => {
-              const burnRate = p.dailyBurnRate || 1; // Daily sales
-              const dos = Math.floor(p.stock / (burnRate || 1)); // Days of Stock
-              const leadTime = p.leadTime || 30;
-              const safetyStock = p.safetyStockDays || 15;
-              const reorderPoint = leadTime + safetyStock;
-              
-              // Metrics
-              const totalInvestment = p.stock * (p.costPrice || 0); // Total capital in stock (CNY)
-              
-              const totalWeight = p.stock * (p.unitWeight || 0);
-              let freightCost = 0;
-              
-              // Freight Cost Calculation: Use Manual Billing Weight if available
-              if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
-                  freightCost = p.logistics.billingWeight * (p.logistics.unitFreightCost || 0);
-              } else if (p.logistics?.totalFreightCost !== undefined && p.logistics?.totalFreightCost > 0) {
-                  freightCost = p.logistics.totalFreightCost;
-              } else {
-                  // Fallback to stock * unitWeight * unitFreightCost (assuming unitFreightCost is per KG)
-                  freightCost = totalWeight * (p.logistics?.unitFreightCost || 0);
-              }
+    // Transform products to ReplenishmentItems
+    const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
+        return state.products.map(p => {
+            const dailyBurnRate = p.dailyBurnRate || 0;
+            const stock = p.stock || 0;
+            const daysRemaining = dailyBurnRate > 0 ? Math.floor(stock / dailyBurnRate) : 999;
+            const leadTime = p.leadTime || 30;
+            const safetyStock = (p.safetyStockDays || 15) * dailyBurnRate;
+            const reorderPoint = safetyStock + (leadTime * dailyBurnRate);
+            
+            return {
+                ...p,
+                dailyBurnRate,
+                daysRemaining,
+                safetyStock,
+                reorderPoint,
+                totalInvestment: stock * (p.costPrice || 0),
+                freightCost: stock * (p.logistics?.unitFreightCost || 0),
+                goodsCost: stock * (p.costPrice || 0),
+                revenue30d: dailyBurnRate * 30 * p.price,
+                growth: 0, 
+                profit: 0,
+                totalWeight: stock * (p.unitWeight || 0),
+                boxes: Math.ceil(stock / (p.itemsPerBox || 1))
+            };
+        });
+    }, [state.products]);
 
-              const goodsCost = totalInvestment - freightCost;
-              
-              // Sales (Mock growth for demo)
-              const revenue30d = burnRate * 30 * p.price;
-              const growth = (Math.random() * 40) - 10; // -10% to +30%
-              const profit = revenue30d * 0.25; // 25% margin estimate
+    const filteredItems = replenishmentItems.filter(i => 
+        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        i.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
-              // Use persisted box count if available, else derive
-              const boxes = p.boxCount !== undefined ? p.boxCount : Math.ceil(p.stock / (p.itemsPerBox || 1));
+    const handleSaveProduct = (updatedProduct: Product) => {
+        const exists = state.products.find(p => p.id === updatedProduct.id);
+        if (exists) {
+            dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
+        } else {
+            dispatch({ type: 'ADD_PRODUCT', payload: updatedProduct });
+        }
+        setEditingItem(null);
+        showToast('商品策略已更新', 'success');
+    };
 
-              return {
-                  ...p,
-                  dailyBurnRate: burnRate,
-                  daysRemaining: dos,
-                  safetyStock: safetyStock,
-                  reorderPoint,
-                  totalInvestment,
-                  freightCost,
-                  goodsCost,
-                  revenue30d,
-                  growth,
-                  profit,
-                  totalWeight: totalWeight,
-                  boxes: boxes
-              };
-          }).filter(p => 
-              p.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-              p.sku.toLowerCase().includes(searchTerm.toLowerCase())
-          ).sort((a, b) => a.daysRemaining - b.daysRemaining); // Sort by urgency (low stock first)
-  }, [state.products, searchTerm]);
+    const handleAddNew = () => {
+        const newProduct: ReplenishmentItem = {
+            id: `NEW-${Date.now()}`,
+            name: '',
+            sku: '',
+            category: 'Uncategorized',
+            stock: 0,
+            price: 0,
+            status: 'draft',
+            lastUpdated: new Date().toISOString(),
+            dailyBurnRate: 0,
+            daysRemaining: 999,
+            safetyStock: 0,
+            reorderPoint: 0,
+            totalInvestment: 0,
+            freightCost: 0,
+            goodsCost: 0,
+            revenue30d: 0,
+            growth: 0,
+            profit: 0,
+            totalWeight: 0,
+            boxes: 0,
+            lifecycle: 'New',
+            dimensions: { l: 0, w: 0, h: 0 },
+            logistics: { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0, targetWarehouse: '' },
+            economics: { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0 }
+        };
+        setEditingItem(newProduct);
+    };
 
-  const toggleSelect = (id: string) => {
-      const newSet = new Set(selectedItems);
-      if (newSet.has(id)) newSet.delete(id);
-      else newSet.add(id);
-      setSelectedItems(newSet);
-  };
+    const handleDelete = (id: string) => {
+        if(confirm('确定要删除此商品吗？')) {
+            dispatch({ type: 'DELETE_PRODUCT', payload: id });
+            showToast('商品已删除', 'info');
+        }
+    };
 
-  const handleDeleteSKU = (id: string, e: React.MouseEvent) => {
-      e.stopPropagation(); // Stop row click
-      if(confirm('确定要删除此 SKU 吗？这将影响所有关联的历史数据。')) {
-          dispatch({ type: 'DELETE_PRODUCT', payload: id });
-          showToast('SKU 已删除', 'info');
-      }
-  };
+    return (
+        <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-[#0f1218]">
+            {/* Header */}
+            <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1e1e24]/50 backdrop-blur-md z-20">
+                <div>
+                    <h2 className="text-white font-bold text-lg flex items-center gap-2">
+                        <PackageCheck className="w-5 h-5 text-indigo-500" />
+                        智能备货清单 (Replenishment List)
+                    </h2>
+                    <div className="text-xs text-slate-500 mt-1 flex gap-2">
+                        <span>SKU 总数: <span className="text-white font-mono font-bold">{filteredItems.length}</span></span>
+                        <span className="w-px h-3 bg-white/10"></span>
+                        <span>资金占用: <span className="text-emerald-400 font-mono font-bold">¥{filteredItems.reduce((a,b)=>a+b.totalInvestment, 0).toLocaleString()}</span></span>
+                    </div>
+                </div>
+                <div className="flex gap-3">
+                    <div className="relative group">
+                        <Search className="w-3.5 h-3.5 text-slate-500 absolute left-3 top-2.5 group-hover:text-white transition-colors" />
+                        <input 
+                            type="text" 
+                            placeholder="搜索 SKU / 名称..." 
+                            value={searchTerm}
+                            onChange={e => setSearchTerm(e.target.value)}
+                            className="w-64 pl-9 pr-4 py-1.5 bg-black/40 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-indigo-500 transition-all placeholder-slate-600"
+                        />
+                    </div>
+                    <button 
+                        onClick={handleAddNew}
+                        className="px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold shadow-lg shadow-indigo-900/20 flex items-center gap-1 transition-all"
+                    >
+                        <Plus className="w-3.5 h-3.5"/> 添加 SKU
+                    </button>
+                    <button className="px-3 py-1.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-lg border border-white/10">
+                        <Download className="w-4 h-4"/>
+                    </button>
+                </div>
+            </div>
 
-  const handleEditClick = (product: Product, e: React.MouseEvent) => {
-      e.stopPropagation(); // Stop row click
-      setEditingProduct(product);
-  };
+            {/* List */}
+            <div className="flex-1 overflow-auto bg-[#0a0a0c]">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-[#1e1e24] sticky top-0 z-10 shadow-sm border-b border-white/5">
+                        <tr>
+                            <th className="px-4 py-3 w-10"><input type="checkbox" className="rounded bg-black/40 border-white/20"/></th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">SKU / 阶段</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-64">产品信息 / 供应商</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">物流状态 (Tracking)</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-32">资金投入</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-40">库存数量</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-32">销售表现</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">备注信息</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-20 text-right">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/5">
+                        {filteredItems.map(item => (
+                            <tr key={item.id} className="hover:bg-white/5 transition-colors group">
+                                <td className="px-4 py-4"><input type="checkbox" className="rounded bg-black/40 border-white/20"/></td>
+                                
+                                {/* SKU / Stage */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="flex flex-col gap-2">
+                                        <div className="flex items-center gap-2">
+                                            <div className={`w-2 h-2 rounded-full ${item.dailyBurnRate > 5 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-500'}`}></div>
+                                            <span className="text-xl font-bold text-white tracking-tight font-mono">{item.sku}</span>
+                                            <ExternalLink className="w-3 h-3 text-slate-600 hover:text-white cursor-pointer"/>
+                                        </div>
+                                        <StrategyBadge type={item.lifecycle || 'Stable'} />
+                                    </div>
+                                </td>
 
-  const handleCopySku = (sku: string, e: React.MouseEvent) => {
-      e.stopPropagation();
-      navigator.clipboard.writeText(sku);
-      showToast(`SKU: ${sku} 已复制`, 'success');
-  }
+                                {/* Product Info */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="flex gap-3">
+                                        <div className="w-12 h-12 bg-white/5 rounded border border-white/10 shrink-0 overflow-hidden relative">
+                                            {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-600 m-auto mt-3"/>}
+                                            {item.images && item.images.length > 1 && (
+                                                <div className="absolute bottom-0 right-0 bg-black/60 text-[9px] text-white px-1 rounded-tl-sm">+{item.images.length-1}</div>
+                                            )}
+                                        </div>
+                                        <div className="flex flex-col gap-1 min-w-0">
+                                            <div className="text-sm font-bold text-white truncate" title={item.name}>{item.name}</div>
+                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {item.supplier || '阳江老罗'}</div>
+                                            {/* PURPLE LX BADGE */}
+                                            <div className="text-[10px] bg-[#312e81] text-[#a5b4fc] px-1.5 py-0.5 rounded w-fit border border-[#4338ca] font-mono font-bold tracking-tight">
+                                                LX: {item.lingXingId || 'IB112251215RS'}
+                                            </div>
+                                        </div>
+                                    </div>
+                                </td>
 
-  const handleExportCSV = () => {
-      const headers = ['SKU', 'Name', 'Stock', 'Box Count', 'Days Remaining', 'Burn Rate', 'Total Cost', 'Tracking', 'Billing Weight'];
-      const rows = replenishmentItems.map(item => [
-          item.sku, 
-          `"${item.name.replace(/"/g, '""')}"`, // Escape quotes
-          item.stock,
-          item.boxes, // Export box count
-          item.daysRemaining,
-          item.dailyBurnRate,
-          item.totalInvestment,
-          item.logistics?.trackingNo,
-          item.logistics?.billingWeight || 0
-      ].join(','));
-      
-      const csvContent = "data:text/csv;charset=utf-8," 
-          + headers.join(',') + "\n" 
-          + rows.join('\n');
-      
-      const encodedUri = encodeURI(csvContent);
-      const link = document.createElement("a");
-      link.setAttribute("href", encodedUri);
-      link.setAttribute("download", `Inventory_Export_${new Date().toISOString().slice(0,10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      showToast('库存清单 CSV 已下载', 'success');
-  };
+                                {/* Logistics */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center gap-2 text-xs text-blue-400 font-bold">
+                                            <Plane className="w-3.5 h-3.5" />
+                                            <span>{item.logistics?.method || 'Air'}</span>
+                                        </div>
+                                        <a href="#" className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono">
+                                            {item.logistics?.trackingNo || '1Z9WV5620495954082'}
+                                        </a>
+                                        <div className="text-[10px] text-slate-500 font-mono">
+                                            {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
+                                        </div>
+                                    </div>
+                                </td>
 
-  return (
-    <div className="flex flex-col h-[calc(100vh-6rem)]">
-      {showAddModal && <AddProductModal onClose={() => setShowAddModal(false)} />}
-      {editingProduct && <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} />}
-      
-      {/* Container Card */}
-      <div className="ios-glass-panel rounded-2xl flex flex-col h-full overflow-hidden relative m-1 border border-white/10 shadow-2xl">
-          
-          {/* Header Section */}
-          <div className="p-5 border-b border-white/10 bg-white/5 relative z-10 shrink-0 flex justify-between items-center">
-              <div>
-                  <h1 className="text-xl font-bold text-white flex items-center gap-2">
-                      <PackageCheck className="w-6 h-6 text-indigo-500" />
-                      智能备货清单 (Replenishment List)
-                  </h1>
-                  <p className="text-xs text-slate-400 mt-1">
-                      SKU 总数: <span className="text-white font-mono">{replenishmentItems.length}</span> | 
-                      资金占用: <span className="text-emerald-400 font-mono">¥{replenishmentItems.reduce((a,b)=>a+b.totalInvestment,0).toLocaleString()}</span>
-                  </p>
-              </div>
-              
-              <div className="flex gap-3 items-center">
-                  <div className="relative">
-                      <input 
-                          type="text" 
-                          placeholder="搜索 SKU / 名称..." 
-                          value={searchTerm}
-                          onChange={e => setSearchTerm(e.target.value)}
-                          className="pl-9 pr-3 py-2 bg-black/40 border border-white/10 rounded-lg text-sm text-white w-64 focus:border-indigo-500 outline-none"
-                      />
-                      <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                  </div>
-                  <button 
-                      onClick={() => setShowAddModal(true)}
-                      className="flex items-center gap-1 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-bold rounded-lg shadow-lg transition-all active:scale-95"
-                  >
-                      <Plus className="w-4 h-4" /> 添加 SKU
-                  </button>
-                  <button 
-                    onClick={handleExportCSV}
-                    className="p-2 bg-white/5 hover:bg-white/10 rounded-lg border border-white/10 text-slate-400 hover:text-white transition-colors"
-                    title="导出 CSV"
-                  >
-                      <Download className="w-5 h-5" />
-                  </button>
-              </div>
-          </div>
+                                {/* Investment */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="font-mono space-y-1">
+                                        <div className="text-sm font-bold text-emerald-400">¥{item.totalInvestment.toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">货值: ¥{item.goodsCost.toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
+                                    </div>
+                                </td>
 
-          {/* List Section (ERP Style) */}
-          <div className="flex-1 overflow-y-auto bg-black/20 scrollbar-thin scrollbar-thumb-white/10">
-              
-              {/* Table Header with Custom Grid - Updated layout for notes */}
-              <div className="sticky top-0 z-20 grid grid-cols-[40px_1.4fr_2.4fr_1.2fr_1.2fr_0.9fr_1.5fr_1.1fr_80px] gap-3 px-4 py-3 bg-[#0f1218] border-b border-white/10 text-xs font-bold text-slate-500 uppercase tracking-wider shadow-lg">
-                  <div className="flex items-center justify-center"><Square className="w-4 h-4" /></div>
-                  <div>SKU / 阶段</div>
-                  <div>产品信息 / 供应商</div>
-                  <div>物流状态 (Tracking)</div>
-                  <div>资金投入</div>
-                  <div>库存数量</div>
-                  <div>备注信息</div>
-                  <div className="text-right">销售表现</div>
-                  <div className="text-center">操作</div>
-              </div>
+                                {/* Inventory */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="flex flex-col gap-1.5">
+                                        <div className="flex items-end gap-1">
+                                            <span className="text-lg font-bold text-white font-mono">{item.stock}</span>
+                                            <span className="text-xs text-slate-500 mb-0.5">件</span>
+                                        </div>
+                                        <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded w-fit border ${item.daysRemaining < 15 ? 'text-red-400 bg-red-900/20 border-red-500/30' : 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30'}`}>
+                                            可售: {item.daysRemaining} 天
+                                        </div>
+                                        {/* Progress Bar */}
+                                        <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+                                            <div 
+                                                className={`h-full ${item.daysRemaining < 15 ? 'bg-red-500' : 'bg-emerald-500'}`} 
+                                                style={{width: `${Math.min(100, (item.daysRemaining / 45)*100)}%`}}
+                                            ></div>
+                                        </div>
+                                    </div>
+                                </td>
 
-              {/* Rows */}
-              <div className="divide-y divide-white/5">
-                  {replenishmentItems.map(item => (
-                      <div key={item.id} className="grid grid-cols-[40px_1.4fr_2.4fr_1.2fr_1.2fr_0.9fr_1.5fr_1.1fr_80px] gap-3 px-4 py-4 hover:bg-white/[0.02] transition-colors group items-center relative">
-                          
-                          {/* 1. Selection */}
-                          <div className="flex items-center justify-center">
-                              <button onClick={() => toggleSelect(item.id)} className="text-slate-600 hover:text-indigo-500 transition-colors">
-                                  {selectedItems.has(item.id) ? <CheckSquare className="w-5 h-5 text-indigo-500" /> : <Square className="w-5 h-5" />}
-                              </button>
-                          </div>
+                                {/* Sales */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="font-mono">
+                                        <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">/30天</div>
+                                        <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-0.5 font-bold">
+                                            <TrendingUp className="w-3 h-3"/> {(Math.random() * 20 + 5).toFixed(1)}%
+                                        </div>
+                                        <div className="text-[10px] text-slate-500 mt-0.5">日销: {item.dailyBurnRate} 件</div>
+                                    </div>
+                                </td>
 
-                          {/* 2. SKU / Status */}
-                          <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2">
-                                  <div className={`w-2.5 h-2.5 rounded-full ${item.status === 'out_of_stock' ? 'bg-red-500 animate-pulse' : item.status === 'low_stock' ? 'bg-orange-500' : 'bg-emerald-500'}`}></div>
-                                  <span className="text-base font-black text-white font-mono tracking-tight">{item.sku}</span>
-                                  <button onClick={(e) => handleCopySku(item.sku, e)} className="text-slate-600 hover:text-white transition-colors" title="复制 SKU">
-                                      <Copy className="w-3.5 h-3.5" />
-                                  </button>
-                              </div>
-                              <StrategyBadge type={item.lifecycle || 'Stable'} />
-                          </div>
+                                {/* Remarks (New Column Position) */}
+                                <td className="px-4 py-4 align-top">
+                                    <div className="text-xs text-slate-400 max-w-[180px] line-clamp-3 leading-relaxed hover:text-white transition-colors cursor-text" title={item.notes}>
+                                        {item.notes || '-'}
+                                    </div>
+                                </td>
 
-                          {/* 3. Product Info */}
-                          <div className="flex items-start gap-4">
-                              <div className="w-12 h-12 bg-slate-800 rounded-lg border border-white/10 flex items-center justify-center shrink-0 overflow-hidden relative">
-                                  {item.images && item.images.length > 0 ? (
-                                      <img src={item.images[0]} alt={item.name} className="w-full h-full object-cover" />
-                                  ) : item.image ? (
-                                      <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
-                                  ) : (
-                                      <ImageIcon className="w-6 h-6 text-slate-500" />
-                                  )}
-                                  {item.images && item.images.length > 1 && (
-                                      <div className="absolute bottom-0 right-0 bg-black/60 text-[8px] px-1 text-white rounded-tl">+{item.images.length - 1}</div>
-                                  )}
-                              </div>
-                              <div className="min-w-0">
-                                  <div className="text-sm font-bold text-slate-200 truncate" title={item.name}>{item.name}</div>
-                                  <div className="text-xs text-slate-500 mt-1 flex items-center gap-1">
-                                      <Factory className="w-3.5 h-3.5" />
-                                      <span className="truncate">{item.supplier || '未指定供应商'}</span>
-                                  </div>
-                                  {item.lingXingId && (
-                                      <div className="text-xs font-bold text-indigo-300 font-mono mt-1 bg-indigo-900/30 px-1.5 py-0.5 rounded w-fit border border-indigo-500/30">
-                                          LX: {item.lingXingId}
-                                      </div>
-                                  )}
-                              </div>
-                          </div>
+                                {/* Action */}
+                                <td className="px-4 py-4 align-top text-right">
+                                    <div className="flex flex-col gap-2 items-end opacity-40 group-hover:opacity-100 transition-opacity">
+                                        <button onClick={() => setEditingItem(item)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="编辑">
+                                            <Edit2 className="w-4 h-4"/>
+                                        </button>
+                                        <button onClick={() => handleDelete(item.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-white/10 rounded transition-colors" title="删除">
+                                            <Trash2 className="w-4 h-4"/>
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
 
-                          {/* 4. Logistics */}
-                          <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                  {item.logistics?.method === 'Sea' ? <Ship className="w-4 h-4 text-blue-400"/> : <Plane className="w-4 h-4 text-sky-400"/>}
-                                  <span className="text-sm font-bold text-slate-300">{item.logistics?.method}</span>
-                              </div>
-                              {item.logistics?.trackingNo ? (
-                                  <a 
-                                    href={`https://t.17track.net/en#nums=${item.logistics.trackingNo}`} 
-                                    target="_blank" 
-                                    rel="noreferrer"
-                                    onClick={e => e.stopPropagation()}
-                                    className="text-xs text-blue-400 hover:text-blue-300 hover:underline font-mono flex items-center gap-1"
-                                  >
-                                      {item.logistics.trackingNo} <ExternalLink className="w-3 h-3"/>
-                                  </a>
-                              ) : (
-                                  <span className="text-xs text-slate-600">-</span>
-                              )}
-                              <div className="text-xs text-slate-500 mt-1">{item.totalWeight?.toFixed(1)}kg / {item.boxes}box</div>
-                          </div>
-
-                          {/* 5. Capital */}
-                          <div>
-                              <div className="text-sm font-bold text-emerald-400 font-mono">¥{item.totalInvestment.toLocaleString()}</div>
-                              <div className="text-xs text-slate-500 mt-1">货值: ¥{item.goodsCost.toLocaleString()}</div>
-                              <div className="text-xs text-slate-500">
-                                  运费: ¥{item.freightCost.toLocaleString()} 
-                                  {item.logistics?.billingWeight ? <span className="text-[9px] text-indigo-400 ml-1">(Manual)</span> : null}
-                              </div>
-                          </div>
-
-                          {/* 6. Stock */}
-                          <div>
-                              <div className="text-base font-bold text-white font-mono">{item.stock} <span className="text-xs text-slate-500 font-sans font-normal">件</span></div>
-                              <div className={`text-xs font-bold mt-1 ${item.daysRemaining < 30 ? 'text-red-400' : 'text-emerald-500'}`}>
-                                  可售: {item.daysRemaining} 天
-                              </div>
-                              <div className="w-full bg-slate-800 h-1.5 mt-2 rounded-full overflow-hidden">
-                                  <div className={`h-full ${item.daysRemaining < 20 ? 'bg-red-500' : 'bg-emerald-500'}`} style={{width: `${Math.min(100, (item.daysRemaining/60)*100)}%`}}></div>
-                              </div>
-                          </div>
-
-                          {/* 7. Notes (New Column) */}
-                          <div className="text-xs text-slate-400 break-words pr-2 relative group/note">
-                              <div className="line-clamp-2 hover:line-clamp-none transition-all cursor-default relative">
-                                  {item.notes ? (
-                                      <div className="flex items-start gap-1">
-                                          <StickyNote className="w-3 h-3 text-slate-600 mt-0.5 shrink-0" />
-                                          <span>{item.notes}</span>
-                                      </div>
-                                  ) : (
-                                      <span className="text-slate-700 italic text-[10px]">-</span>
-                                  )}
-                              </div>
-                          </div>
-
-                          {/* 8. Sales Performance */}
-                          <div className="text-right">
-                              <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString(undefined, {maximumFractionDigits:0})} <span className="text-xs text-slate-500">/30天</span></div>
-                              <div className={`text-xs font-bold mt-1 flex items-center justify-end gap-1 ${item.growth >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                  {item.growth >= 0 ? <TrendingUp className="w-3.5 h-3.5"/> : <TrendingUp className="w-3.5 h-3.5 rotate-180"/>}
-                                  {Math.abs(item.growth).toFixed(1)}%
-                              </div>
-                              <div className="text-xs text-slate-500 mt-1">日销: {item.dailyBurnRate} 件</div>
-                          </div>
-
-                          {/* 9. Actions */}
-                          <div className="flex justify-center">
-                              <button 
-                                onClick={(e) => handleEditClick(item, e)}
-                                className="p-2 hover:bg-indigo-500/20 text-slate-500 hover:text-indigo-400 rounded-lg transition-colors"
-                                title="编辑 SKU"
-                              >
-                                  <Edit2 className="w-4 h-4" />
-                              </button>
-                              <button 
-                                onClick={(e) => handleDeleteSKU(item.id, e)}
-                                className="p-2 hover:bg-red-500/20 text-slate-500 hover:text-red-400 rounded-lg transition-colors ml-1"
-                                title="删除 SKU"
-                              >
-                                  <Trash2 className="w-4 h-4" />
-                              </button>
-                          </div>
-
-                      </div>
-                  ))}
-              </div>
-          </div>
-      </div>
-    </div>
-  );
+            {editingItem && (
+                <EditModal 
+                    product={editingItem} 
+                    onClose={() => setEditingItem(null)} 
+                    onSave={handleSaveProduct}
+                />
+            )}
+        </div>
+    );
 };
 
 export default Inventory;
