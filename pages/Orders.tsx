@@ -1,622 +1,361 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { FileText, Truck, CheckCircle, XCircle, Clock, ShoppingCart, X, Package, MapPin, CreditCard, ArrowRight, LayoutGrid, List, MoreHorizontal, Box, GripVertical, DollarSign, Calculator, Info, Zap, Plus, Trash2, PlayCircle, Search, Edit2, Save, Filter, Loader2, ExternalLink } from 'lucide-react';
-import { Order, Product, AutomationRule, OrderLineItem } from '../types';
+import { 
+  FileText, Truck, CheckCircle, XCircle, Clock, ShoppingCart, X, Package, 
+  MapPin, CreditCard, ArrowRight, LayoutGrid, List, MoreHorizontal, Box, 
+  GripVertical, DollarSign, Calculator, Info, Zap, Plus, Trash2, PlayCircle, 
+  Search, Edit2, Save, Filter, Loader2, ExternalLink, Calendar
+} from 'lucide-react';
+import { Order, Product, OrderLineItem } from '../types';
 import { useTanxing } from '../context/TanxingContext';
-import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-
-const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
-    if (!trackingNo) return '#';
-    const c = carrier.toLowerCase();
-    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
-    if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
-    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
-    if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
-    if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
-    return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
-};
+import { BarChart, Bar, Cell, ResponsiveContainer, Tooltip, XAxis } from 'recharts';
 
 const Orders: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
-  const [viewMode, setViewMode] = useState<'list' | 'kanban'>('kanban');
+  const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string>('All');
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
-  const [activeTab, setActiveTab] = useState<'details' | 'profit'>('details');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('All');
-  const [isSaving, setIsSaving] = useState(false);
-  
-  // Automation Modal State
-  const [showRulesModal, setShowRulesModal] = useState(false);
-  const [rules, setRules] = useState<AutomationRule[]>([
-      { id: 'R1', name: '自动标记 VIP', active: true, trigger: 'Order Paid', conditions: [{ field: 'Total', operator: '>', value: 500 }], action: { type: 'Add Tag', value: 'VIP' }, executions: 12 },
-      { id: 'R2', name: '高风险预警', active: true, trigger: 'Order Created', conditions: [{ field: 'Country', operator: '==', value: 'Nigeria' }], action: { type: 'Add Tag', value: 'High Risk' }, executions: 3 }
-  ]);
+  const [showAddModal, setShowAddModal] = useState(false);
 
-  // Shipping Modal State
-  const [showShipModal, setShowShipModal] = useState(false);
-  const [shippingOrder, setShippingOrder] = useState<Order | null>(null);
-  const [shipForm, setShipForm] = useState({ carrier: 'DHL', tracking: '' });
-
-  // Add/Edit Order Modal State
-  const [showOrderModal, setShowOrderModal] = useState(false);
-  const [orderForm, setOrderForm] = useState<Partial<Order>>({
+  // New Order State
+  const [newOrder, setNewOrder] = useState<Partial<Order>>({
       customerName: '',
       status: 'pending',
-      date: new Date().toISOString().split('T')[0],
-      lineItems: []
+      total: 0,
+      itemsCount: 0,
+      date: new Date().toISOString().split('T')[0]
   });
-  const [isEditing, setIsEditing] = useState(false);
 
-  // Profit Adjustments (Local override for simulation)
-  const [freightAdjustment, setFreightAdjustment] = useState(0);
-  const [feeAdjustment, setFeeAdjustment] = useState(0);
-
-  // Drag & Drop State
-  const [draggedOrderId, setDraggedOrderId] = useState<string | null>(null);
-
-  // Filter out deleted orders and apply search
-  const activeOrders = useMemo(() => {
-      return state.orders.filter(o => {
-          if (o.deletedAt) return false;
-          if (filterStatus !== 'All' && o.status !== filterStatus) return false;
-          const searchLower = searchQuery.toLowerCase();
-          return (
-              o.id.toLowerCase().includes(searchLower) ||
-              o.customerName.toLowerCase().includes(searchLower) ||
-              o.trackingNumber?.toLowerCase().includes(searchLower)
-          );
+  const filteredOrders = useMemo(() => {
+      return state.orders.filter(order => {
+          if (order.deletedAt) return false;
+          const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesStatus = statusFilter === 'All' || order.status === statusFilter;
+          return matchesSearch && matchesStatus;
       });
-  }, [state.orders, searchQuery, filterStatus]);
+  }, [state.orders, searchTerm, statusFilter]);
 
-  // --- Profit Calculation Logic ---
-  const orderProfit = useMemo(() => {
-      if (!selectedOrder) return null;
-      let totalCost = 0;
-      let totalFees = 0;
-      let totalFreight = 0;
-      
-      if (selectedOrder.lineItems && selectedOrder.lineItems.length > 0) {
-          selectedOrder.lineItems.forEach(item => {
-              const product = state.products.find(p => p.id === item.productId);
-              if (product) {
-                  const itemCost = (product.costPrice || 0) / 7.2; 
-                  const itemFees = (item.price * ((product.economics?.platformFeePercent || 0) + (product.economics?.creatorFeePercent || 0)) / 100) + (product.economics?.fixedCost || 0);
-                  const itemFreight = (product.logistics?.unitFreightCost || 0) + (product.economics?.lastLegShipping || 0);
-                  
-                  totalCost += itemCost * item.quantity;
-                  totalFees += itemFees * item.quantity;
-                  totalFreight += itemFreight * item.quantity;
-              }
-          });
-      } else {
-          totalCost = selectedOrder.total * 0.3;
-          totalFees = selectedOrder.total * 0.15;
-          totalFreight = 5 * selectedOrder.itemsCount;
-      }
-
-      totalFreight += freightAdjustment;
-      totalFees += feeAdjustment;
-
-      const netProfit = selectedOrder.total - totalCost - totalFees - totalFreight;
-      const margin = selectedOrder.total > 0 ? (netProfit / selectedOrder.total) * 100 : 0;
-
-      const waterfallData = [
-          { name: 'Revenue', amount: selectedOrder.total, fill: '#10b981' }, 
-          { name: 'COGS', amount: -totalCost, fill: '#ef4444' }, 
-          { name: 'Fees', amount: -totalFees, fill: '#f59e0b' }, 
-          { name: 'Freight', amount: -totalFreight, fill: '#3b82f6' }, 
-          { name: 'Net Profit', amount: netProfit, fill: netProfit > 0 ? '#10b981' : '#ef4444', isTotal: true }
-      ];
-
-      let currentStack = 0;
-      const chartData = waterfallData.map((d, i) => {
-          if (d.isTotal) {
-              return { ...d, start: 0, end: d.amount, value: d.amount };
-          }
-          const prev = currentStack;
-          currentStack += d.amount;
-          return { 
-              ...d, 
-              start: d.amount >= 0 ? prev : prev + d.amount, 
-              end: d.amount >= 0 ? prev + d.amount : prev,   
-              value: d.amount 
-          };
-      });
-
-      return { totalCost, totalFees, totalFreight, netProfit, margin, chartData };
-  }, [selectedOrder, state.products, freightAdjustment, feeAdjustment]);
+  const stats = useMemo(() => {
+      const total = filteredOrders.length;
+      const revenue = filteredOrders.reduce((acc, o) => acc + o.total, 0);
+      const pending = filteredOrders.filter(o => o.status === 'pending').length;
+      return { total, revenue, pending };
+  }, [filteredOrders]);
 
   // --- Handlers ---
-  const handleOpenOrder = (order: Order) => {
-    setSelectedOrder(order);
-    setFreightAdjustment(0);
-    setFeeAdjustment(0);
-    setActiveTab('details');
-  };
 
-  const handleCloseOrder = () => {
-    setSelectedOrder(null);
-  };
-
-  const handleDeleteOrder = (orderId: string) => {
-      if (confirm('确定要删除此订单吗？它将被移至回收站。')) {
-          dispatch({ type: 'DELETE_ORDER', payload: orderId });
-          showToast('订单已移至回收站', 'info');
-          if (selectedOrder?.id === orderId) {
-              setSelectedOrder(null);
-          }
+  const handleDeleteOrder = (id: string, e?: React.MouseEvent) => {
+      if (e) e.stopPropagation();
+      if (confirm('确定要将此订单移入回收站吗？')) {
+          dispatch({ type: 'DELETE_ORDER', payload: id });
+          showToast('订单已删除', 'info');
+          if (selectedOrder?.id === id) setSelectedOrder(null);
       }
   };
 
-  const updateStatus = (orderId: string, newStatus: Order['status']) => {
-      if (newStatus === 'shipped') {
-          const order = state.orders.find(o => o.id === orderId);
-          if (order) {
-              setShippingOrder(order);
-              setShipForm({ carrier: 'DHL', tracking: '' });
-              setShowShipModal(true);
-          }
-          return;
-      }
-      dispatch({ type: 'UPDATE_ORDER_STATUS', payload: { orderId, status: newStatus } });
-      showToast(`订单状态已更新: ${newStatus.toUpperCase()}`, 'success');
+  const handleUpdateStatus = (id: string, status: Order['status'], e?: React.MouseEvent) => {
+      if (e) e.stopPropagation();
+      dispatch({ type: 'UPDATE_ORDER_STATUS', payload: { orderId: id, status } });
+      showToast(`订单状态已更新为 ${status}`, 'success');
   };
 
-  const handleMarkPaid = (orderId: string) => {
-      dispatch({ type: 'PAY_ORDER', payload: orderId });
-      showToast('订单已标记为支付，收入已记账', 'success');
-      if (selectedOrder && selectedOrder.id === orderId) {
-          setSelectedOrder({ ...selectedOrder, paymentStatus: 'paid' });
-      }
-  };
-
-  const initiateShip = (order: Order) => {
-      setShippingOrder(order);
-      setShipForm({ carrier: 'DHL', tracking: '' });
-      setShowShipModal(true);
-  };
-
-  const confirmShip = () => {
-      if (!shippingOrder || !shipForm.tracking) {
-          showToast('请输入运单号', 'warning');
-          return;
-      }
-      dispatch({ 
-          type: 'SHIP_ORDER', 
-          payload: { 
-              orderId: shippingOrder.id, 
-              shippingMethod: shipForm.carrier, 
-              trackingNumber: shipForm.tracking 
-          } 
-      });
-      showToast('订单已发货，库存已自动扣减', 'success');
-      setShowShipModal(false);
-      setShippingOrder(null);
-  };
-
-  // --- Order Form Handlers ---
-  const handleOpenCreate = () => {
-      setOrderForm({
-          customerName: '',
-          status: 'pending',
-          date: new Date().toISOString().split('T')[0],
-          lineItems: [],
-          total: 0
-      });
-      setIsEditing(false);
-      setShowOrderModal(true);
-  };
-
-  const handleOpenEdit = (order: Order) => {
-      setOrderForm(JSON.parse(JSON.stringify(order))); 
-      setIsEditing(true);
-      setShowOrderModal(true);
-  };
-
-  const handleAddItem = (productId: string) => {
-      const product = state.products.find(p => p.id === productId);
-      if (!product) return;
-      const newItem: OrderLineItem = {
-          productId: product.id,
-          sku: product.sku,
-          quantity: 1,
-          price: product.price
-      };
-      const updatedItems = [...(orderForm.lineItems || []), newItem];
-      const newTotal = updatedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-      setOrderForm({ ...orderForm, lineItems: updatedItems, total: newTotal, itemsCount: updatedItems.reduce((acc, i) => acc + i.quantity, 0) });
-  };
-
-  const handleRemoveItem = (index: number) => {
-      const updatedItems = [...(orderForm.lineItems || [])];
-      updatedItems.splice(index, 1);
-      const newTotal = updatedItems.reduce((acc, item) => acc + (item.price * item.quantity), 0);
-      setOrderForm({ ...orderForm, lineItems: updatedItems, total: newTotal, itemsCount: updatedItems.reduce((acc, i) => acc + i.quantity, 0) });
-  };
-
-  const handleSaveOrder = () => {
-      if (!orderForm.customerName || !orderForm.lineItems?.length) {
-          showToast('请完善订单信息（客户名及至少一个商品）', 'warning');
-          return;
-      }
-
-      setIsSaving(true);
+  const handleSaveNewOrder = () => {
+      if (!newOrder.customerName) return showToast('请输入客户名称', 'warning');
       
-      setTimeout(() => {
-          if (isEditing && orderForm.id) {
-              dispatch({ type: 'UPDATE_ORDER', payload: orderForm as Order });
-              showToast('订单更新成功', 'success');
-              if (selectedOrder?.id === orderForm.id) setSelectedOrder(orderForm as Order);
-          } else {
-              const newOrder: Order = {
-                  ...orderForm as Order,
-                  id: `PO-${Date.now().toString().slice(-6)}`,
-                  status: orderForm.status || 'pending',
-                  itemsCount: orderForm.lineItems!.reduce((acc, i) => acc + i.quantity, 0)
-              };
-              dispatch({ type: 'ADD_ORDER', payload: newOrder });
-              showToast('订单创建成功', 'success');
-          }
-          setIsSaving(false);
-          setShowOrderModal(false);
-      }, 600);
+      const order: Order = {
+          id: `PO-${Date.now()}`,
+          customerName: newOrder.customerName!,
+          date: newOrder.date || new Date().toISOString().split('T')[0],
+          total: Number(newOrder.total) || 0,
+          status: 'pending',
+          itemsCount: Number(newOrder.itemsCount) || 1,
+          lineItems: [],
+          paymentStatus: 'unpaid'
+      };
+      
+      dispatch({ type: 'ADD_ORDER', payload: order });
+      showToast('新订单已创建', 'success');
+      setShowAddModal(false);
+      setNewOrder({ customerName: '', status: 'pending', total: 0, itemsCount: 0, date: new Date().toISOString().split('T')[0] });
   };
 
-  // --- Automation Logic ---
-  const handleRunRule = (ruleId: string) => {
-      const rule = rules.find(r => r.id === ruleId);
-      if (!rule) return;
+  // --- Renderers ---
 
-      let matchedCount = 0;
-      state.orders.forEach(o => {
-          if (rule.conditions[0].field === 'Total' && o.total > rule.conditions[0].value) {
-              if (!o.automationTags?.includes(rule.action.value)) {
-                  matchedCount++;
-                  const updatedOrder = { ...o, automationTags: [...(o.automationTags || []), rule.action.value] };
-                  dispatch({ type: 'UPDATE_ORDER', payload: updatedOrder });
-              }
-          }
-      });
-
-      setRules(prev => prev.map(r => r.id === ruleId ? { ...r, executions: r.executions + matchedCount } : r));
-      showToast(`规则执行完毕: ${matchedCount} 个订单被标记为 ${rule.action.value}`, 'success');
-  };
-
-  // --- Drag & Drop ---
-  const onDragStart = (e: React.DragEvent, orderId: string) => {
-      setDraggedOrderId(orderId);
-      e.dataTransfer.effectAllowed = 'move';
-  };
-
-  const onDragOver = (e: React.DragEvent) => {
-      e.preventDefault();
-  };
-
-  const onDrop = (e: React.DragEvent, targetStatus: Order['status']) => {
-      e.preventDefault();
-      if (draggedOrderId) {
-          const order = state.orders.find(o => o.id === draggedOrderId);
-          if (order && order.status !== targetStatus) {
-              updateStatus(draggedOrderId, targetStatus);
-          }
-          setDraggedOrderId(null);
+  const getStatusColor = (status: string) => {
+      switch (status) {
+          case 'pending': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+          case 'processing': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+          case 'shipped': return 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20';
+          case 'delivered': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+          case 'cancelled': return 'bg-red-500/10 text-red-400 border-red-500/20';
+          default: return 'bg-slate-700 text-slate-400';
       }
   };
 
-  const columns: { id: Order['status'], label: string, color: string, border: string }[] = [
-      { id: 'pending', label: '待处理 (Pending)', color: 'bg-amber-500/10 text-amber-500', border: 'border-amber-500/30' },
-      { id: 'processing', label: '拣货中 (Processing)', color: 'bg-blue-500/10 text-blue-500', border: 'border-blue-500/30' },
-      { id: 'shipped', label: '已发货 (Shipped)', color: 'bg-indigo-500/10 text-indigo-500', border: 'border-indigo-500/30' },
-      { id: 'delivered', label: '已送达 (Delivered)', color: 'bg-emerald-500/10 text-emerald-500', border: 'border-emerald-500/30' }
-  ];
+  const renderKanban = () => {
+      const columns = ['pending', 'processing', 'shipped', 'delivered'];
+      return (
+          <div className="flex gap-4 h-full overflow-x-auto pb-4">
+              {columns.map(status => (
+                  <div key={status} className="flex-1 min-w-[280px] bg-white/5 border border-white/5 rounded-xl flex flex-col">
+                      <div className={`p-3 border-b border-white/5 font-bold uppercase text-xs flex justify-between items-center ${getStatusColor(status).split(' ')[0]}`}>
+                          <span>{status}</span>
+                          <span className="bg-black/20 px-2 py-0.5 rounded text-[10px]">{filteredOrders.filter(o => o.status === status).length}</span>
+                      </div>
+                      <div className="flex-1 p-2 space-y-2 overflow-y-auto">
+                          {filteredOrders.filter(o => o.status === status).map(order => (
+                              <div 
+                                  key={order.id} 
+                                  onClick={() => setSelectedOrder(order)}
+                                  className="bg-black/40 border border-white/5 p-3 rounded-lg hover:border-indigo-500/50 hover:bg-white/10 transition-all cursor-pointer group relative shadow-sm"
+                              >
+                                  <div className="flex justify-between items-start mb-2">
+                                      <span className="font-mono text-xs font-bold text-slate-300">{order.id}</span>
+                                      <span className="font-mono text-xs font-bold text-white">¥{order.total.toLocaleString()}</span>
+                                  </div>
+                                  <div className="text-sm font-bold text-white mb-1 truncate">{order.customerName}</div>
+                                  <div className="text-[10px] text-slate-500 flex items-center justify-between">
+                                      <span>{order.itemsCount} Items</span>
+                                      <span>{order.date}</span>
+                                  </div>
+                                  
+                                  {/* Hover Actions */}
+                                  <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                      <button 
+                                          onClick={(e) => handleDeleteOrder(order.id, e)}
+                                          className="p-1.5 bg-black/60 text-slate-400 hover:text-red-400 rounded hover:bg-slate-800 transition-colors"
+                                          title="删除"
+                                      >
+                                          <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                  </div>
+                                  
+                                  {/* Quick Actions Footer */}
+                                  <div className="mt-3 pt-2 border-t border-white/5 flex gap-2 opacity-50 group-hover:opacity-100 transition-opacity">
+                                      {status === 'pending' && (
+                                          <button onClick={(e) => handleUpdateStatus(order.id, 'processing', e)} className="flex-1 py-1 bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white rounded text-[10px] transition-colors">处理</button>
+                                      )}
+                                      {status === 'processing' && (
+                                          <button onClick={(e) => handleUpdateStatus(order.id, 'shipped', e)} className="flex-1 py-1 bg-indigo-600/20 text-indigo-400 hover:bg-indigo-600 hover:text-white rounded text-[10px] transition-colors">发货</button>
+                                      )}
+                                  </div>
+                              </div>
+                          ))}
+                      </div>
+                  </div>
+              ))}
+          </div>
+      );
+  };
+
+  const renderList = () => (
+      <div className="bg-white/5 border border-white/5 rounded-xl overflow-hidden flex-1">
+          <table className="w-full text-left text-sm">
+              <thead className="bg-black/20 text-slate-400 font-medium border-b border-white/5">
+                  <tr>
+                      <th className="p-4">订单号</th>
+                      <th className="p-4">客户</th>
+                      <th className="p-4">日期</th>
+                      <th className="p-4">状态</th>
+                      <th className="p-4 text-right">金额</th>
+                      <th className="p-4 text-center">操作</th>
+                  </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                  {filteredOrders.map(order => (
+                      <tr key={order.id} className="hover:bg-white/5 cursor-pointer group" onClick={() => setSelectedOrder(order)}>
+                          <td className="p-4 font-mono text-slate-300">{order.id}</td>
+                          <td className="p-4 text-white font-bold">{order.customerName}</td>
+                          <td className="p-4 text-slate-500">{order.date}</td>
+                          <td className="p-4"><span className={`px-2 py-1 rounded text-xs border ${getStatusColor(order.status)}`}>{order.status}</span></td>
+                          <td className="p-4 text-right font-mono text-white">¥{order.total.toLocaleString()}</td>
+                          <td className="p-4 text-center">
+                              <button 
+                                  onClick={(e) => handleDeleteOrder(order.id, e)}
+                                  className="p-2 text-slate-500 hover:text-red-400 hover:bg-white/10 rounded transition-colors"
+                              >
+                                  <Trash2 className="w-4 h-4" />
+                              </button>
+                          </td>
+                      </tr>
+                  ))}
+              </tbody>
+          </table>
+      </div>
+  );
 
   return (
-    <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm overflow-hidden flex flex-col h-[calc(100vh-8rem)] relative">
+    <div className="flex flex-col h-[calc(100vh-6rem)] space-y-4">
       {/* Header */}
-      <div className="p-4 border-b border-white/10 flex flex-col md:flex-row justify-between items-center bg-white/5 gap-4">
-        <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-purple-500" />
-                订单中心
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">全球订单履约看板 (Kanban Fulfillment)</p>
-        </div>
-        <div className="flex gap-3 w-full md:w-auto">
-            {/* Search & Filter */}
-            <div className="flex items-center gap-2 bg-black/40 border border-white/10 rounded-lg px-2 flex-1 md:flex-none">
-                <Search className="w-4 h-4 text-slate-500" />
-                <input 
-                    type="text" 
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="搜索订单/客户..."
-                    className="bg-transparent border-none outline-none text-xs text-white py-1.5 w-full md:w-40"
-                />
-            </div>
-            <select 
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="bg-black/40 border border-white/10 text-white text-xs rounded-lg px-2 py-1.5 outline-none"
-            >
-                <option value="All">全部状态</option>
-                <option value="pending">待处理</option>
-                <option value="processing">处理中</option>
-                <option value="shipped">已发货</option>
-                <option value="delivered">已送达</option>
-            </select>
-
-            <div className="h-6 w-px bg-white/10 mx-1"></div>
-
-            <button 
-                onClick={() => setShowRulesModal(true)}
-                className="px-3 py-1.5 bg-black/40 hover:bg-black/60 text-indigo-300 border border-white/10 rounded-lg text-xs font-bold flex items-center gap-2 transition-all"
-            >
-                <Zap className="w-3.5 h-3.5 fill-current" /> 规则
-            </button>
-            <button 
-                onClick={handleOpenCreate}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 transition-all shadow-lg"
-            >
-                <Plus className="w-3.5 h-3.5" /> 新建
-            </button>
-            <div className="flex bg-black/40 p-1 rounded-lg border border-white/10">
-                <button onClick={() => setViewMode('list')} className={`p-1.5 rounded transition-colors ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><List className="w-4 h-4" /></button>
-                <button onClick={() => setViewMode('kanban')} className={`p-1.5 rounded transition-colors ${viewMode === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><LayoutGrid className="w-4 h-4" /></button>
-            </div>
-        </div>
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-black/20 p-4 rounded-xl border border-white/10 shadow-sm backdrop-blur-md">
+          <div>
+              <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                  <ShoppingCart className="w-6 h-6 text-indigo-500" />
+                  订单履约 (Order Fulfillment)
+              </h2>
+              <div className="flex gap-4 mt-2 text-xs text-slate-400">
+                  <span>总订单: <span className="text-white font-bold">{stats.total}</span></span>
+                  <span className="w-px h-3 bg-white/10"></span>
+                  <span>待处理: <span className="text-amber-400 font-bold">{stats.pending}</span></span>
+                  <span className="w-px h-3 bg-white/10"></span>
+                  <span>总营收: <span className="text-emerald-400 font-bold">¥{stats.revenue.toLocaleString()}</span></span>
+              </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-3">
+              <div className="relative">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
+                  <input 
+                      type="text" 
+                      placeholder="搜索订单..." 
+                      value={searchTerm}
+                      onChange={e => setSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-indigo-500 w-48"
+                  />
+              </div>
+              <div className="flex bg-black/40 p-1 rounded-lg border border-white/10">
+                  <button onClick={() => setViewMode('kanban')} className={`p-1.5 rounded ${viewMode === 'kanban' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><LayoutGrid className="w-4 h-4"/></button>
+                  <button onClick={() => setViewMode('list')} className={`p-1.5 rounded ${viewMode === 'list' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}><List className="w-4 h-4"/></button>
+              </div>
+              <button 
+                  onClick={() => setShowAddModal(true)}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg"
+              >
+                  <Plus className="w-4 h-4" /> 录入订单
+              </button>
+          </div>
       </div>
-      
-      {/* ... (View Modes remain the same) ... */}
-      {viewMode === 'kanban' && (
-          <div className="flex-1 overflow-x-auto overflow-y-hidden p-4">
-              <div className="flex gap-4 h-full min-w-[1000px]">
-                  {columns.map(col => (
-                      <div key={col.id} className="flex-1 flex flex-col bg-white/5 rounded-xl border border-white/5 min-w-[280px]" onDragOver={onDragOver} onDrop={(e) => onDrop(e, col.id)}>
-                          <div className={`p-3 border-b ${col.border} bg-white/5 rounded-t-xl flex justify-between items-center`}>
-                              <div className="flex items-center gap-2"><div className={`w-2 h-2 rounded-full ${col.color.replace('bg-', 'bg-').replace('/10', '')}`}></div><span className="font-bold text-sm text-slate-300">{col.label}</span></div>
-                              <span className={`text-xs px-2 py-0.5 rounded ${col.color}`}>{activeOrders.filter(o => o.status === col.id).length}</span>
-                          </div>
-                          <div className="flex-1 overflow-y-auto p-3 space-y-3 scrollbar-thin scrollbar-thumb-white/10">
-                              {activeOrders.filter(o => o.status === col.id).map(order => (
-                                  <div key={order.id} draggable onDragStart={(e) => onDragStart(e, order.id)} onClick={() => handleOpenOrder(order)} className={`ios-glass-card p-3 cursor-grab active:cursor-grabbing hover:border-indigo-500/50 hover:bg-white/10 transition-all group relative ${draggedOrderId === order.id ? 'opacity-50 border-dashed border-slate-600' : ''}`}>
-                                      <div className="flex justify-between items-start mb-2"><span className="text-[10px] font-mono font-bold text-slate-500 flex items-center gap-1"><GripVertical className="w-3 h-3 text-slate-700" /> {order.id}</span><span className="text-[10px] text-slate-500">{order.date}</span></div>
-                                      <div className="text-sm text-slate-200 font-bold mb-1 truncate">{order.customerName}</div>
-                                      
-                                      {/* Tags Display */}
-                                      {order.automationTags && order.automationTags.length > 0 && (
-                                          <div className="flex flex-wrap gap-1 mb-2">
-                                              {order.automationTags.map(tag => (
-                                                  <span key={tag} className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 rounded border border-purple-500/30">{tag}</span>
-                                              ))}
-                                          </div>
-                                      )}
 
-                                      <div className="flex justify-between items-end mt-3 border-t border-white/5 pt-2">
-                                          <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {order.itemsCount} Items</div>
-                                          <div className="font-bold text-emerald-400 text-sm font-mono">¥{order.total.toLocaleString()}</div>
-                                      </div>
-                                      <div className="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-                                          <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(order); }} className="p-1.5 bg-slate-700 hover:bg-slate-600 text-white rounded shadow-lg" title="编辑"><Edit2 className="w-3 h-3" /></button>
-                                          {order.status === 'processing' && <button onClick={(e) => { e.stopPropagation(); initiateShip(order); }} className="p-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded shadow-lg" title="发货"><Truck className="w-3 h-3" /></button>}
-                                          {order.status === 'pending' && <button onClick={(e) => { e.stopPropagation(); updateStatus(order.id, 'processing'); }} className="p-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded shadow-lg" title="开始处理"><ArrowRight className="w-3 h-3" /></button>}
-                                      </div>
-                                  </div>
-                              ))}
+      {/* Main Content */}
+      <div className="flex-1 min-h-0 overflow-hidden">
+          {viewMode === 'kanban' ? renderKanban() : renderList()}
+      </div>
+
+      {/* Detail Modal */}
+      {selectedOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setSelectedOrder(null)}>
+              <div className="ios-glass-panel w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
+                  <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                      <div>
+                          <h3 className="text-lg font-bold text-white flex items-center gap-2">
+                              订单详情 #{selectedOrder.id}
+                              <span className={`text-[10px] px-2 py-0.5 rounded border ${getStatusColor(selectedOrder.status)}`}>{selectedOrder.status}</span>
+                          </h3>
+                          <div className="text-xs text-slate-500 mt-1 flex gap-2">
+                              <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> {selectedOrder.date}</span>
+                              <span>•</span>
+                              <span className="text-white">{selectedOrder.customerName}</span>
                           </div>
                       </div>
-                  ))}
+                      
+                      {/* Modal Actions */}
+                      <div className="flex gap-2">
+                          <button 
+                              onClick={() => handleDeleteOrder(selectedOrder.id)} 
+                              className="px-3 py-1.5 bg-red-500/10 border border-red-500/20 text-red-400 hover:bg-red-500 hover:text-white rounded text-xs flex items-center gap-2 transition-all"
+                          >
+                              <Trash2 className="w-3.5 h-3.5" /> 删除订单
+                          </button>
+                          <button onClick={() => setSelectedOrder(null)} className="p-1.5 hover:bg-white/10 rounded text-slate-400 hover:text-white transition-colors">
+                              <X className="w-5 h-5" />
+                          </button>
+                      </div>
+                  </div>
+
+                  <div className="p-6 grid grid-cols-3 gap-6 bg-black/20">
+                      <div className="col-span-2 space-y-6">
+                          <div className="space-y-3">
+                              <h4 className="text-xs font-bold text-slate-500 uppercase">订单商品 (Line Items)</h4>
+                              {selectedOrder.lineItems?.length ? (
+                                  selectedOrder.lineItems.map((item, idx) => (
+                                      <div key={idx} className="flex justify-between items-center p-3 bg-white/5 border border-white/5 rounded-lg">
+                                          <div className="flex items-center gap-3">
+                                              <div className="w-8 h-8 bg-indigo-500/20 rounded flex items-center justify-center text-indigo-400"><Package className="w-4 h-4"/></div>
+                                              <div>
+                                                  <div className="text-sm font-bold text-white">{item.sku}</div>
+                                                  <div className="text-[10px] text-slate-500">ID: {item.productId}</div>
+                                              </div>
+                                          </div>
+                                          <div className="text-right">
+                                              <div className="text-sm text-white">x{item.quantity}</div>
+                                              <div className="text-xs text-slate-400">¥{item.price}</div>
+                                          </div>
+                                      </div>
+                                  ))
+                              ) : (
+                                  <div className="p-4 text-center text-slate-500 text-xs italic bg-white/5 rounded-lg">无商品明细数据</div>
+                              )}
+                          </div>
+                      </div>
+
+                      <div className="col-span-1 space-y-6 border-l border-white/10 pl-6">
+                          <div>
+                              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">支付信息</h4>
+                              <div className="space-y-2">
+                                  <div className="flex justify-between text-sm">
+                                      <span className="text-slate-400">商品总额</span>
+                                      <span className="text-white">¥{selectedOrder.total}</span>
+                                  </div>
+                                  <div className="flex justify-between text-sm">
+                                      <span className="text-slate-400">运费</span>
+                                      <span className="text-white">¥0.00</span>
+                                  </div>
+                                  <div className="h-px bg-white/10 my-2"></div>
+                                  <div className="flex justify-between text-base font-bold">
+                                      <span className="text-white">实付金额</span>
+                                      <span className="text-emerald-400">¥{selectedOrder.total}</span>
+                                  </div>
+                              </div>
+                          </div>
+
+                          <div>
+                              <h4 className="text-xs font-bold text-slate-500 uppercase mb-2">物流信息</h4>
+                              {selectedOrder.trackingNumber ? (
+                                  <div className="bg-blue-500/10 border border-blue-500/20 p-3 rounded-lg">
+                                      <div className="text-xs text-blue-300 font-bold mb-1">{selectedOrder.shippingMethod}</div>
+                                      <div className="text-sm text-white font-mono flex items-center gap-2">
+                                          {selectedOrder.trackingNumber}
+                                          <ExternalLink className="w-3 h-3 text-slate-500 cursor-pointer hover:text-white" />
+                                      </div>
+                                  </div>
+                              ) : (
+                                  <div className="text-xs text-slate-500 italic">暂无物流单号</div>
+                              )}
+                          </div>
+                      </div>
+                  </div>
               </div>
           </div>
       )}
 
-      {/* --- LIST VIEW --- */}
-      {viewMode === 'list' && (
-        <div className="flex-1 overflow-auto">
-            <table className="w-full text-left">
-            <thead className="bg-white/5 border-b border-white/10 sticky top-0 backdrop-blur-sm z-10">
-                <tr><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">订单号</th><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">渠道 / 客户</th><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">标签</th><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">日期</th><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">金额</th><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase">状态</th><th className="px-6 py-3 text-xs font-semibold text-slate-500 uppercase text-right">操作</th></tr>
-            </thead>
-            <tbody className="divide-y divide-white/5">
-                {activeOrders.map((order) => (
-                <tr key={order.id} className="hover:bg-white/5 transition-colors group cursor-pointer" onClick={() => handleOpenOrder(order)}>
-                    <td className="px-6 py-4"><div className="flex items-center space-x-2"><FileText className="w-4 h-4 text-slate-600 group-hover:text-indigo-400 transition-colors" /><span className="font-medium text-slate-300 font-mono text-sm">{order.id}</span></div></td>
-                    <td className="px-6 py-4"><span className="text-sm text-white font-medium">{order.customerName}</span></td>
-                    <td className="px-6 py-4">
-                        <div className="flex gap-1">
-                            {order.automationTags?.map(tag => <span key={tag} className="text-[10px] bg-white/10 px-1.5 py-0.5 rounded text-slate-300">{tag}</span>)}
-                        </div>
-                    </td>
-                    <td className="px-6 py-4 text-sm text-slate-500 font-mono text-xs">{order.date}</td>
-                    <td className="px-6 py-4 font-bold text-slate-200 font-mono">¥{order.total.toLocaleString()}</td>
-                    <td className="px-6 py-4"><span className={`text-xs font-medium px-2 py-0.5 rounded border ${order.status === 'pending' ? 'bg-amber-500/10 text-amber-500 border-amber-500/20' : order.status === 'processing' ? 'bg-blue-500/10 text-blue-500 border-blue-500/20' : order.status === 'shipped' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20'}`}>{order.status.toUpperCase()}</span></td>
-                    <td className="px-6 py-4 text-right">
-                        <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={(e) => { e.stopPropagation(); handleOpenEdit(order); }} className="p-1.5 text-slate-500 hover:text-white bg-white/5 hover:bg-slate-700 rounded transition-all" title="编辑"><Edit2 className="w-4 h-4" /></button>
-                            <button onClick={(e) => { e.stopPropagation(); handleDeleteOrder(order.id); }} className="p-1.5 text-slate-500 hover:text-red-400 hover:bg-white/5 rounded transition-colors" title="删除"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                    </td>
-                </tr>
-                ))}
-            </tbody>
-            </table>
-        </div>
-      )}
-
-      {selectedOrder && !showShipModal && !showOrderModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 backdrop-blur-sm bg-black/60" onClick={handleCloseOrder}>
-             <div className="ios-glass-panel w-full max-w-3xl rounded-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
-                <div className="px-6 py-4 border-b border-white/10 bg-white/5 flex justify-between items-center">
-                    <div>
-                        <h3 className="text-lg font-bold text-white flex items-center gap-2"><FileText className="w-5 h-5 text-purple-500" /> 订单详情</h3>
-                        <p className="text-xs text-slate-500 font-mono mt-0.5">{selectedOrder.id}</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <button onClick={() => setActiveTab('details')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors ${activeTab === 'details' ? 'bg-white/10 text-white' : 'text-slate-500 hover:text-white'}`}>基础信息</button>
-                        <button onClick={() => setActiveTab('profit')} className={`px-4 py-2 text-xs font-bold rounded-lg transition-colors flex items-center gap-1 ${activeTab === 'profit' ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-600/30' : 'text-slate-500 hover:text-white'}`}><Calculator className="w-3 h-3" /> 利润透视</button>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button onClick={() => { setShowOrderModal(false); handleOpenEdit(selectedOrder); }} className="p-2 text-slate-500 hover:text-white transition-colors" title="编辑"><Edit2 className="w-5 h-5" /></button>
-                        <button onClick={handleCloseOrder} className="p-2 text-slate-500 hover:text-white"><X className="w-5 h-5" /></button>
-                    </div>
-                </div>
-
-                <div className="p-6 overflow-y-auto bg-black/20">
-                    {/* DETAIL TAB */}
-                    {activeTab === 'details' && (
-                        <div className="space-y-6">
-                            <div className="flex items-center justify-between px-4 py-3 bg-white/5 rounded-lg border border-white/10">
-                                 <div className="flex items-center gap-2">
-                                     <div className={`w-2 h-2 rounded-full ${selectedOrder.status === 'delivered' ? 'bg-emerald-500' : selectedOrder.status === 'cancelled' ? 'bg-red-500' : 'bg-blue-500 animate-pulse'}`}></div>
-                                     <span className="text-sm font-medium text-white capitalize">{selectedOrder.status}</span>
-                                 </div>
-                                 <div className="flex items-center gap-3">
-                                     {selectedOrder.trackingNumber && (
-                                         <a 
-                                            href={getTrackingUrl(selectedOrder.shippingMethod, selectedOrder.trackingNumber)}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="flex items-center gap-2 text-xs text-indigo-400 bg-indigo-500/10 px-2 py-1 rounded hover:bg-indigo-500/20 hover:text-white transition-colors border border-indigo-500/20 hover:border-indigo-500/40"
-                                         >
-                                             <Truck className="w-3 h-3"/> 
-                                             {selectedOrder.shippingMethod}: {selectedOrder.trackingNumber}
-                                             <ExternalLink className="w-3 h-3 opacity-50" />
-                                         </a>
-                                     )}
-                                     {selectedOrder.paymentStatus !== 'paid' && selectedOrder.status !== 'cancelled' && (
-                                         <button 
-                                            onClick={() => handleMarkPaid(selectedOrder.id)}
-                                            className="text-xs bg-emerald-600 px-3 py-1 rounded text-white hover:bg-emerald-500 transition-colors shadow-lg"
-                                         >
-                                             标记已支付
-                                         </button>
-                                     )}
-                                 </div>
-                            </div>
-                            {/* ... Rest of Order Details ... */}
-                            <div className="grid grid-cols-2 gap-6">
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">客户信息</h4>
-                                    <div className="text-sm text-white">{selectedOrder.customerName}</div>
-                                    <div className={`text-xs mt-1 font-bold ${selectedOrder.paymentStatus === 'paid' ? 'text-emerald-400' : 'text-amber-400'}`}>Payment: {selectedOrder.paymentStatus || 'unpaid'}</div>
-                                </div>
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">时间与标签</h4>
-                                    <div className="text-sm text-white">{selectedOrder.date}</div>
-                                    <div className="flex gap-1 mt-1 flex-wrap">
-                                        {selectedOrder.automationTags?.map(t => <span key={t} className="text-[10px] bg-slate-700 px-1.5 rounded text-slate-300">{t}</span>)}
-                                    </div>
-                                </div>
-                            </div>
-
-                            {selectedOrder.lineItems && selectedOrder.lineItems.length > 0 && (
-                                <div>
-                                    <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">订单商品</h4>
-                                    <div className="space-y-2">
-                                        {selectedOrder.lineItems.map((item, idx) => (
-                                            <div key={idx} className="flex justify-between items-center p-2 border-b border-white/5">
-                                                <div className="text-sm text-slate-300">{item.sku}</div>
-                                                <div className="text-xs text-slate-500">x{item.quantity} · ${item.price}</div>
-                                            </div>
-                                        ))}
-                                    </div>
-                                    <div className="text-right mt-2 font-bold text-white">Total: ${selectedOrder.total}</div>
-                                </div>
-                            )}
-                        </div>
-                    )}
-
-                    {/* PROFIT TAB - WATERFALL */}
-                    {activeTab === 'profit' && orderProfit && (
-                        <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
-                            {/* ... Profit tab content ... */}
-                            <div className="ios-glass-card p-5 flex items-center justify-between">
-                                <div>
-                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">预估净利润 (Net Profit)</div>
-                                    <div className={`text-3xl font-mono font-bold ${orderProfit.netProfit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                        ${orderProfit.netProfit.toFixed(2)}
-                                    </div>
-                                </div>
-                                <div className="text-right">
-                                    <div className="text-xs text-slate-500 uppercase font-bold mb-1">利润率 (Margin)</div>
-                                    <div className={`text-xl font-bold ${orderProfit.margin > 15 ? 'text-blue-400' : orderProfit.margin > 0 ? 'text-orange-400' : 'text-red-400'}`}>
-                                        {orderProfit.margin.toFixed(1)}%
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 bg-white/5 p-4 rounded-xl border border-white/5">
-                                <div>
-                                    <label className="text-[10px] text-slate-400 block mb-1">运费修正 (Adjustment)</label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-slate-500 text-xs">+$</span>
-                                        <input type="number" value={freightAdjustment} onChange={(e) => setFreightAdjustment(parseFloat(e.target.value) || 0)} className="bg-black/40 border border-white/10 rounded w-full p-1 text-sm text-white focus:border-indigo-500 outline-none" />
-                                    </div>
-                                </div>
-                                <div>
-                                    <label className="text-[10px] text-slate-400 block mb-1">杂费修正 (Fees)</label>
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-slate-500 text-xs">+$</span>
-                                        <input type="number" value={feeAdjustment} onChange={(e) => setFeeAdjustment(parseFloat(e.target.value) || 0)} className="bg-black/40 border border-white/10 rounded w-full p-1 text-sm text-white focus:border-indigo-500 outline-none" />
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="ios-glass-card p-4 h-64 relative">
-                                <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <DollarSign className="w-3 h-3" /> 利润瀑布流 (Profit Waterfall)
-                                </h4>
-                                <ResponsiveContainer width="100%" height="100%">
-                                    <BarChart data={orderProfit.chartData}>
-                                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
-                                        <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#64748b', fontSize: 10}} />
-                                        <YAxis hide />
-                                        <RechartsTooltip 
-                                            cursor={{fill: 'rgba(255,255,255,0.05)'}}
-                                            content={({ active, payload }) => {
-                                                if (active && payload && payload.length) {
-                                                    const data = payload[0].payload;
-                                                    return (
-                                                        <div className="bg-black/90 border border-white/10 p-2 rounded text-xs text-white">
-                                                            <p className="font-bold">{data.name}</p>
-                                                            <p>{data.value.toFixed(2)}</p>
-                                                        </div>
-                                                    );
-                                                }
-                                                return null;
-                                            }}
-                                        />
-                                        <ReferenceLine y={0} stroke="#475569" />
-                                        <Bar dataKey="value" stackId="a" fill="transparent" /> 
-                                        <Bar dataKey="start" stackId="b" fill="transparent" />
-                                        <Bar dataKey="amount" stackId="b">
-                                            {orderProfit.chartData.map((entry, index) => (
-                                                <Cell key={`cell-${index}`} fill={entry.fill} />
-                                            ))}
-                                        </Bar>
-                                    </BarChart>
-                                </ResponsiveContainer>
-                            </div>
-                        </div>
-                    )}
-                </div>
-             </div>
-        </div>
-      )}
-
-      {/* Shipping Modal */}
-      {showShipModal && shippingOrder && (
-          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowShipModal(false)}>
-              <div className="ios-glass-panel w-full max-w-sm rounded-2xl shadow-2xl p-6 animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-                  <h3 className="text-lg font-bold text-white mb-4 flex items-center gap-2"><Truck className="w-5 h-5 text-indigo-500" /> 确认发货</h3>
+      {/* Add Order Modal */}
+      {showAddModal && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={() => setShowAddModal(false)}>
+              <div className="ios-glass-panel w-full max-w-md rounded-2xl shadow-2xl p-6 animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
+                  <h3 className="text-lg font-bold text-white mb-4">录入新订单</h3>
                   <div className="space-y-4">
-                      <div className="space-y-1"><label className="text-xs text-slate-400">物流承运商</label><select value={shipForm.carrier} onChange={e => setShipForm({...shipForm, carrier: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"><option value="DHL">DHL Express</option><option value="FedEx">FedEx</option><option value="UPS">UPS</option><option value="USPS">USPS</option><option value="Other">其他</option></select></div>
-                      <div className="space-y-1"><label className="text-xs text-slate-400">运单号 *</label><input type="text" value={shipForm.tracking} onChange={e => setShipForm({...shipForm, tracking: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white focus:border-indigo-500 outline-none font-mono uppercase" placeholder="e.g. 1Z999..." /></div>
+                      <div>
+                          <label className="text-xs text-slate-400 mb-1 block">客户名称</label>
+                          <input type="text" value={newOrder.customerName} onChange={e => setNewOrder({...newOrder, customerName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div>
+                              <label className="text-xs text-slate-400 mb-1 block">订单金额 (¥)</label>
+                              <input type="number" value={newOrder.total} onChange={e => setNewOrder({...newOrder, total: parseFloat(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                          </div>
+                          <div>
+                              <label className="text-xs text-slate-400 mb-1 block">商品数量</label>
+                              <input type="number" value={newOrder.itemsCount} onChange={e => setNewOrder({...newOrder, itemsCount: parseInt(e.target.value)})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                          </div>
+                      </div>
+                      <div>
+                          <label className="text-xs text-slate-400 mb-1 block">订单日期</label>
+                          <input type="date" value={newOrder.date} onChange={e => setNewOrder({...newOrder, date: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded p-2 text-sm text-white focus:border-indigo-500 outline-none" />
+                      </div>
+                      <button onClick={handleSaveNewOrder} className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-sm font-bold mt-2 shadow-lg">确认录入</button>
                   </div>
-                  <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-lg text-xs text-blue-300 mt-2">
-                      <Info className="w-3 h-3 inline mr-1" />
-                      确认发货后，系统将自动扣减对应 SKU 的库存。
-                  </div>
-                  <div className="flex gap-3 mt-6"><button onClick={() => setShowShipModal(false)} className="flex-1 py-2 bg-white/5 hover:bg-white/10 text-white rounded-lg text-sm transition-colors">取消</button><button onClick={confirmShip} className="flex-1 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-sm font-bold shadow-lg">确认发货</button></div>
               </div>
           </div>
       )}
