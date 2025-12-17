@@ -1,23 +1,17 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { createPortal } from 'react-dom';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   BarChart, Bar, AreaChart, Area, PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis,
-  ComposedChart, ReferenceLine, Legend, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis
+  ComposedChart, Legend, Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ReferenceLine
 } from 'recharts';
 import { 
-  DollarSign, Activity, Truck, Calculator, RefreshCw, 
-  BrainCircuit, Loader2, Sparkles, X, Megaphone,
-  Video, Play, Map as MapIcon, Globe,
-  Wallet, Search, ArrowRight, Target, ShoppingBag, TrendingUp,
-  Filter, Calendar, Layers, BarChart4, PieChart as PieIcon,
-  MousePointerClick, Zap, Cpu, Sliders, Trophy, AlertTriangle, ArrowUpRight, ArrowDownRight
+  DollarSign, Activity, Truck, Wallet, Megaphone,
+  BrainCircuit, ArrowUpRight, ArrowDownRight, Target, BarChart4, PieChart as PieIcon,
+  X, Globe, Sparkles
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI } from "@google/genai";
-import { Product } from '../types';
-import { WAREHOUSES } from '../constants';
 
 // --- VISUAL CONSTANTS ---
 const COLORS = {
@@ -73,8 +67,8 @@ const KPIBox = ({ title, value, subValue, trend, icon: Icon, color }: any) => (
 );
 
 const Analytics: React.FC = () => {
-  const { state, showToast } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'finance' | 'supply' | 'ads' | 'market'>('finance');
+  const { state } = useTanxing();
+  const [activeTab, setActiveTab] = useState<'finance' | 'supply'>('finance');
   const [timeRange, setTimeRange] = useState<'7d' | '30d' | '90d'>('30d');
   
   const [isAiThinking, setIsAiThinking] = useState(false);
@@ -101,38 +95,82 @@ const Analytics: React.FC = () => {
       }
   };
 
-  // --- 1. FINANCE VIEW (Deep Dive) ---
+  // --- 1. FINANCE VIEW (Real Aggregation) ---
   const FinanceView = () => {
+      // Aggregate State Transactions by Date
       const plData = useMemo(() => {
           const days = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
-          return Array.from({ length: days }, (_, i) => {
-              const revenue = Math.floor(Math.random() * 5000) + 3000 + (i * 50);
-              const cogs = revenue * 0.32;
-              const ads = revenue * 0.28;
-              const net = revenue - cogs - ads;
+          const today = new Date();
+          const aggregated: Record<string, { Revenue: number, COGS: number, Ads: number, NetProfit: number }> = {};
+
+          // Initialize dates
+          for (let i = days - 1; i >= 0; i--) {
+              const d = new Date(today);
+              d.setDate(d.getDate() - i);
+              const dateStr = d.toISOString().split('T')[0];
+              aggregated[dateStr] = { Revenue: 0, COGS: 0, Ads: 0, NetProfit: 0 };
+          }
+
+          // Sum transactions
+          state.transactions.forEach(tx => {
+              if (aggregated[tx.date]) {
+                  const amount = tx.currency === 'CNY' ? tx.amount / 7.2 : tx.amount; // Normalize to USD
+                  if (tx.type === 'income') {
+                      aggregated[tx.date].Revenue += amount;
+                  } else {
+                      if (tx.category === 'COGS') aggregated[tx.date].COGS += amount;
+                      else if (tx.category === 'Marketing') aggregated[tx.date].Ads += amount;
+                      // You might want to add other expenses to calculate true Net Profit
+                  }
+              }
+          });
+
+          // Calculate Net Profit & Margin per day
+          return Object.entries(aggregated).map(([date, vals]) => {
+              const net = vals.Revenue - vals.COGS - vals.Ads;
               return {
-                  date: `D${i + 1}`,
-                  Revenue: revenue,
-                  COGS: cogs,
-                  Ads: ads,
+                  date: date.slice(5),
+                  ...vals,
                   NetProfit: net,
-                  Margin: parseFloat(((net / revenue) * 100).toFixed(1))
+                  Margin: vals.Revenue > 0 ? (net / vals.Revenue) * 100 : 0
               };
           });
-      }, [timeRange]);
+      }, [state.transactions, timeRange]);
 
       const totalRev = plData.reduce((a,b) => a+b.Revenue, 0);
       const totalNet = plData.reduce((a,b) => a+b.NetProfit, 0);
-      const avgMargin = (totalNet / totalRev) * 100;
+      const avgMargin = totalRev > 0 ? (totalNet / totalRev) * 100 : 0;
+
+      // Expense Breakdown
+      const expenseBreakdown = useMemo(() => {
+          let cogs = 0, ads = 0, logistics = 0, ops = 0;
+          state.transactions.forEach(tx => {
+              if (tx.type === 'expense') {
+                  const amount = tx.currency === 'CNY' ? tx.amount / 7.2 : tx.amount;
+                  if (tx.category === 'COGS') cogs += amount;
+                  else if (tx.category === 'Marketing') ads += amount;
+                  else if (tx.category === 'Logistics') logistics += amount;
+                  else ops += amount;
+              }
+          });
+          const total = cogs + ads + logistics + ops;
+          if (total === 0) return [];
+          return [
+              { name: '采购 (COGS)', value: cogs },
+              { name: '广告 (Ads)', value: ads },
+              { name: '物流 (Logistics)', value: logistics },
+              { name: '运营 (Ops)', value: ops }
+          ];
+      }, [state.transactions]);
 
       return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
           {/* KPI Row */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <KPIBox title="总营收 (Revenue)" value={`$${(totalRev/1000).toFixed(1)}k`} subValue="USD" trend={12.5} icon={DollarSign} color="text-cyan-400" />
-              <KPIBox title="净利润 (Net Profit)" value={`$${(totalNet/1000).toFixed(1)}k`} subValue="USD" trend={-2.4} icon={Wallet} color="text-emerald-400" />
+              <KPIBox title="总营收 (Revenue)" value={`$${(totalRev).toLocaleString(undefined, {maximumFractionDigits:0})}`} subValue="USD" trend={12.5} icon={DollarSign} color="text-cyan-400" />
+              <KPIBox title="净利润 (Net Profit)" value={`$${(totalNet).toLocaleString(undefined, {maximumFractionDigits:0})}`} subValue="USD" trend={-2.4} icon={Wallet} color="text-emerald-400" />
               <KPIBox title="利润率 (Net Margin)" value={`${avgMargin.toFixed(1)}%`} subValue="Avg" trend={5.1} icon={Activity} color="text-purple-400" />
-              <KPIBox title="营销占比 (Ad Ratio)" value="28.0%" subValue="of Rev" trend={-1.2} icon={Megaphone} color="text-pink-400" />
+              <KPIBox title="交易笔数 (Volume)" value={state.transactions.length} subValue="Count" trend={0} icon={Megaphone} color="text-pink-400" />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -144,7 +182,7 @@ const Analytics: React.FC = () => {
                           盈亏构成分析 (P&L Composition)
                       </h3>
                       <button 
-                        onClick={() => handleAiAnalysis(`Revenue $${totalRev}, Margin ${avgMargin.toFixed(1)}%. Ad spend is stable but margin is slightly declining.`)}
+                        onClick={() => handleAiAnalysis(`Revenue $${totalRev}, Margin ${avgMargin.toFixed(1)}%.`)}
                         className="text-[10px] bg-indigo-600 hover:bg-indigo-500 text-white px-3 py-1.5 rounded-lg flex items-center gap-1 shadow-lg transition-all"
                       >
                           <BrainCircuit className="w-3 h-3" /> 智能诊断
@@ -161,8 +199,8 @@ const Analytics: React.FC = () => {
                               </defs>
                               <CartesianGrid strokeDasharray="3 3" stroke={COLORS.grid} vertical={false} />
                               <XAxis dataKey="date" stroke={COLORS.text} tick={{fontSize: 10}} axisLine={false} tickLine={false} />
-                              <YAxis yAxisId="left" stroke={COLORS.text} tick={{fontSize: 10}} axisLine={false} tickLine={false} tickFormatter={(v)=>`${v/1000}k`} />
-                              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" tick={{fontSize: 10}} axisLine={false} tickLine={false} unit="%" domain={[0, 40]} />
+                              <YAxis yAxisId="left" stroke={COLORS.text} tick={{fontSize: 10}} axisLine={false} tickLine={false} tickFormatter={(v)=>`$${v}`} />
+                              <YAxis yAxisId="right" orientation="right" stroke="#f59e0b" tick={{fontSize: 10}} axisLine={false} tickLine={false} unit="%" domain={['auto', 'auto']} />
                               <Tooltip content={<CustomHUDTooltip />} cursor={{fill: 'rgba(255,255,255,0.05)'}} />
                               <Legend wrapperStyle={{fontSize: '11px', paddingTop: '10px'}} />
                               <Bar yAxisId="left" dataKey="Revenue" stackId="a" fill="#334155" barSize={12} name="营收 (Rev)" />
@@ -183,34 +221,29 @@ const Analytics: React.FC = () => {
                       <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
                               <Pie
-                                  data={[
-                                      { name: '采购 (COGS)', value: 35, color: '#3b82f6' },
-                                      { name: '广告 (Ads)', value: 28, color: '#ec4899' },
-                                      { name: '物流 (Logistics)', value: 15, color: '#06b6d4' },
-                                      { name: '运营 (Ops)', value: 10, color: '#64748b' },
-                                      { name: '净利 (Net)', value: 12, color: '#10b981' },
-                                  ]}
+                                  data={expenseBreakdown}
                                   innerRadius={60}
                                   outerRadius={80}
                                   paddingAngle={5}
                                   dataKey="value"
                                   stroke="none"
                               >
-                                  {[0,1,2,3,4].map((i) => <Cell key={i} fill={['#3b82f6', '#ec4899', '#06b6d4', '#64748b', '#10b981'][i]} />)}
+                                  {expenseBreakdown.map((entry, index) => <Cell key={index} fill={COLORS.chart[index % COLORS.chart.length]} />)}
                               </Pie>
                               <Tooltip content={<CustomHUDTooltip />} />
                           </PieChart>
                       </ResponsiveContainer>
                       <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                          <span className="text-2xl font-bold text-white">88%</span>
-                          <span className="text-[10px] text-slate-500 uppercase">Total Expense</span>
+                          <span className="text-sm font-bold text-white">Expenses</span>
                       </div>
                   </div>
                   <div className="grid grid-cols-2 gap-2 mt-4 text-[10px] text-slate-400">
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-blue-500"></div> 采购 35%</div>
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-pink-500"></div> 广告 28%</div>
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-cyan-500"></div> 物流 15%</div>
-                      <div className="flex items-center gap-1"><div className="w-2 h-2 rounded bg-emerald-500"></div> 净利 12%</div>
+                      {expenseBreakdown.map((e, i) => (
+                          <div key={i} className="flex items-center gap-1">
+                              <div className="w-2 h-2 rounded" style={{backgroundColor: COLORS.chart[i % COLORS.chart.length]}}></div> 
+                              {e.name}
+                          </div>
+                      ))}
                   </div>
               </div>
           </div>
@@ -218,24 +251,39 @@ const Analytics: React.FC = () => {
       );
   };
 
-  // --- 2. SUPPLY VIEW (Inventory Matrix) ---
+  // --- 2. SUPPLY VIEW (Real Inventory Matrix) ---
   const SupplyView = () => {
-      // Mock Data for BCG Matrix (Inventory Health)
-      const scatterData = useMemo(() => [
-          { x: 120, y: 50, z: 200, name: '滞销积压 (Dead Stock)', fill: '#ef4444' }, // High Stock, Low Sales
-          { x: 15, y: 120, z: 500, name: '爆品缺货 (Risk)', fill: '#f59e0b' }, // Low Stock, High Sales
-          { x: 30, y: 80, z: 1000, name: '健康周转 (Healthy)', fill: '#10b981' }, // Good Stock, Good Sales
-          { x: 60, y: 10, z: 100, name: '长尾商品 (Long Tail)', fill: '#64748b' }, // Med Stock, Low Sales
-          // Random points
-          { x: 45, y: 60, z: 300, name: 'SKU-A', fill: '#3b82f6' },
-          { x: 20, y: 90, z: 400, name: 'SKU-B', fill: '#3b82f6' },
-          { x: 100, y: 20, z: 150, name: 'SKU-C', fill: '#ef4444' },
-      ], []);
+      // Calculate Real BCG Matrix Data from Products State
+      const scatterData = useMemo(() => {
+          return state.products
+            .filter(p => !p.deletedAt)
+            .map(p => {
+              const velocity = p.dailyBurnRate || 0; // Y
+              const dos = velocity > 0 ? (p.stock / velocity) : 999; // X
+              const value = p.stock * (p.costPrice || 0); // Z
+              
+              let status = 'Healthy';
+              let fill = '#10b981';
+              
+              if (dos > 120 && velocity < 1) { status = '滞销 (Dead)'; fill = '#ef4444'; }
+              else if (dos < 20 && velocity > 5) { status = '缺货风险 (Risk)'; fill = '#f59e0b'; }
+              else if (dos > 90) { status = '库存积压 (Bloat)'; fill = '#64748b'; }
+
+              return {
+                  x: Math.min(dos, 150), // Cap X for visual clarity
+                  y: velocity,
+                  z: value,
+                  name: p.sku,
+                  status,
+                  fill
+              };
+          });
+      }, [state.products]);
 
       return (
       <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Map Visualization (Visual Appeal) */}
+              {/* Map Visualization (Placeholder for Global Nodes) */}
               <div className="lg:col-span-1 ios-glass-card p-0 relative overflow-hidden flex flex-col h-[450px]">
                   <div className="p-4 border-b border-white/10 bg-white/5 z-10 relative">
                       <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -244,7 +292,7 @@ const Analytics: React.FC = () => {
                   </div>
                   <div className="flex-1 relative bg-[radial-gradient(circle_at_center,#1e293b_0%,#000000_100%)]">
                       <div className="absolute inset-0 opacity-20 bg-[linear-gradient(0deg,transparent_24%,rgba(255,255,255,.05)_25%,rgba(255,255,255,.05)_26%,transparent_27%,transparent_74%,rgba(255,255,255,.05)_75%,rgba(255,255,255,.05)_76%,transparent_77%,transparent),linear-gradient(90deg,transparent_24%,rgba(255,255,255,.05)_25%,rgba(255,255,255,.05)_26%,transparent_27%,transparent_74%,rgba(255,255,255,.05)_75%,rgba(255,255,255,.05)_76%,transparent_77%,transparent)] bg-[length:50px_50px]"></div>
-                      {/* Mock Nodes */}
+                      {/* Active Nodes */}
                       <div className="absolute top-[30%] left-[20%] flex flex-col items-center group">
                           <div className="w-3 h-3 bg-blue-500 rounded-full shadow-[0_0_15px_#3b82f6] animate-pulse"></div>
                           <span className="text-[10px] mt-1 text-slate-400 bg-black/50 px-1 rounded">US-West</span>
@@ -260,7 +308,7 @@ const Analytics: React.FC = () => {
                   </div>
               </div>
 
-              {/* Inventory Health Matrix (The Core Feature) */}
+              {/* Inventory Health Matrix (Real Data) */}
               <div className="lg:col-span-2 ios-glass-card p-6 flex flex-col h-[450px]">
                   <div className="flex justify-between items-center mb-4">
                       <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
@@ -288,173 +336,14 @@ const Analytics: React.FC = () => {
                               <ZAxis type="number" dataKey="z" range={[50, 400]} name="Stock Value" />
                               <Tooltip cursor={{strokeDasharray: '3 3'}} content={<CustomHUDTooltip />} />
                               <ReferenceLine x={60} stroke="#475569" strokeDasharray="3 3" label={{ position: 'top', value: 'Avg DOS', fontSize: 10, fill: '#64748b' }} />
-                              <ReferenceLine y={50} stroke="#475569" strokeDasharray="3 3" label={{ position: 'right', value: 'Avg Sales', fontSize: 10, fill: '#64748b' }} />
-                              <Scatter name="SKUs" data={scatterData} fill="#8884d8">
+                              <ReferenceLine y={5} stroke="#475569" strokeDasharray="3 3" label={{ position: 'right', value: 'Velocity Threshold', fontSize: 10, fill: '#64748b' }} />
+                              <Scatter name="Products" data={scatterData} fill="#8884d8">
                                   {scatterData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
                               </Scatter>
                           </ScatterChart>
                       </ResponsiveContainer>
                   </div>
                   <p className="text-[10px] text-slate-500 mt-2 text-center">X轴: 库存周转天数 (Days of Supply) | Y轴: 日均销量 (Velocity) | 气泡大小: 货值</p>
-              </div>
-          </div>
-      </div>
-      );
-  };
-
-  // --- 3. ADS VIEW (Enhanced Simulator) ---
-  const AdsView = () => {
-      const [simCpc, setSimCpc] = useState(1.5);
-      const [simCvr, setSimCvr] = useState(2.5);
-      const budget = 1000;
-
-      const currentRoas = 2.2;
-      const simRoas = (budget / simCpc * (simCvr/100) * 50) / budget; // Mock formula (Revenue / Cost)
-      const roasDiff = simRoas - currentRoas;
-
-      const simChartData = [
-          { name: 'Current Strategy', roas: currentRoas, profit: 450, fill: '#334155' },
-          { name: 'Simulated', roas: simRoas, profit: simRoas * 200, fill: simRoas > currentRoas ? '#10b981' : '#ef4444' }
-      ];
-
-      return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          
-          {/* Simulator Controls */}
-          <div className="ios-glass-card p-6 flex flex-col bg-gradient-to-b from-slate-900 to-black border-indigo-500/20">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                  <Sliders className="w-4 h-4 text-indigo-400" /> 竞价敏感性分析 (Sensitivity Analysis)
-              </h3>
-              
-              <div className="space-y-8 flex-1">
-                  <div>
-                      <div className="flex justify-between text-xs text-slate-400 mb-2">
-                          <span>CPC 点击成本 ($)</span>
-                          <span className="text-white font-mono font-bold">${simCpc.toFixed(2)}</span>
-                      </div>
-                      <input type="range" min="0.5" max="3.0" step="0.1" value={simCpc} onChange={e=>setSimCpc(parseFloat(e.target.value))} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500" />
-                      <div className="flex justify-between text-[10px] text-slate-600 mt-1"><span>$0.50</span><span>$3.00</span></div>
-                  </div>
-
-                  <div>
-                      <div className="flex justify-between text-xs text-slate-400 mb-2">
-                          <span>CVR 转化率 (%)</span>
-                          <span className="text-white font-mono font-bold">{simCvr.toFixed(1)}%</span>
-                      </div>
-                      <input type="range" min="0.5" max="5.0" step="0.1" value={simCvr} onChange={e=>setSimCvr(parseFloat(e.target.value))} className="w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
-                      <div className="flex justify-between text-[10px] text-slate-600 mt-1"><span>0.5%</span><span>5.0%</span></div>
-                  </div>
-              </div>
-
-              <div className="mt-8 p-4 bg-white/5 border border-white/5 rounded-xl">
-                  <div className="text-xs text-slate-500 uppercase mb-1">Simulated ROAS</div>
-                  <div className="flex items-end gap-3">
-                      <span className={`text-4xl font-black font-mono ${simRoas >= 2 ? 'text-emerald-400' : 'text-red-400'}`}>
-                          {simRoas.toFixed(2)}
-                      </span>
-                      <span className={`text-xs mb-1.5 font-bold ${roasDiff > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {roasDiff > 0 ? '+' : ''}{roasDiff.toFixed(2)} vs Current
-                      </span>
-                  </div>
-              </div>
-          </div>
-
-          {/* Comparison Chart */}
-          <div className="ios-glass-card p-6 flex flex-col">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-4 flex items-center gap-2">
-                  <BarChart4 className="w-4 h-4 text-purple-400" /> 策略对比 (Strategy Comparison)
-              </h3>
-              <div className="flex-1 min-h-[250px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <BarChart data={simChartData} layout="vertical" margin={{left: 20, right: 30}}>
-                          <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke={COLORS.grid} />
-                          <XAxis type="number" stroke={COLORS.text} fontSize={10} domain={[0, 'auto']} />
-                          <YAxis dataKey="name" type="category" width={100} stroke={COLORS.text} fontSize={10} />
-                          <Tooltip cursor={{fill: 'rgba(255,255,255,0.05)'}} content={<CustomHUDTooltip />} />
-                          <Bar dataKey="roas" barSize={30} radius={[0, 4, 4, 0]}>
-                              {simChartData.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.fill} />)}
-                          </Bar>
-                      </BarChart>
-                  </ResponsiveContainer>
-              </div>
-              <p className="text-[10px] text-slate-500 mt-2 italic">
-                  *模拟基于 AOV $50 固定客单价。
-              </p>
-          </div>
-      </div>
-      );
-  };
-
-  // --- 4. MARKET VIEW (Radar Competitor Analysis) ---
-  const MarketView = () => {
-      const radarData = [
-          { subject: '价格竞争力 (Price)', A: 85, B: 65, fullMark: 100 },
-          { subject: '发货速度 (Speed)', A: 90, B: 70, fullMark: 100 },
-          { subject: '好评率 (Reviews)', A: 75, B: 95, fullMark: 100 },
-          { subject: '社媒声量 (Social)', A: 60, B: 85, fullMark: 100 },
-          { subject: '产品创新 (Innovation)', A: 80, B: 50, fullMark: 100 },
-          { subject: '复购率 (Retention)', A: 70, B: 75, fullMark: 100 },
-      ];
-
-      return (
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in slide-in-from-bottom-4">
-          <div className="ios-glass-card p-6 flex flex-col h-[500px]">
-              <div className="flex justify-between items-center mb-2">
-                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
-                      <Target className="w-4 h-4 text-red-400" /> 品牌竞争力雷达 (Competitive Radar)
-                  </h3>
-              </div>
-              
-              <div className="flex justify-center gap-6 text-xs mb-4">
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 bg-cyan-500/50 rounded-full border border-cyan-400"></div> <span className="text-cyan-400 font-bold">我方品牌 (My Brand)</span></div>
-                  <div className="flex items-center gap-2"><div className="w-3 h-3 bg-pink-500/50 rounded-full border border-pink-400"></div> <span className="text-pink-400 font-bold">竞品 Top 1</span></div>
-              </div>
-
-              <div className="flex-1 w-full min-h-0">
-                  <ResponsiveContainer width="100%" height="100%">
-                      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-                          <PolarGrid stroke="rgba(255,255,255,0.1)" />
-                          <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 11 }} />
-                          <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                          <Radar name="我方品牌" dataKey="A" stroke="#06b6d4" strokeWidth={2} fill="#06b6d4" fillOpacity={0.3} />
-                          <Radar name="竞品 Top 1" dataKey="B" stroke="#ec4899" strokeWidth={2} fill="#ec4899" fillOpacity={0.3} />
-                          <Tooltip contentStyle={{ backgroundColor: '#000', borderColor: '#333', fontSize: '12px' }} />
-                      </RadarChart>
-                  </ResponsiveContainer>
-              </div>
-          </div>
-
-          <div className="ios-glass-card p-6 flex flex-col h-[500px]">
-              <h3 className="text-sm font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-2">
-                  <Trophy className="w-4 h-4 text-yellow-400" /> 市场渗透率趋势 (Market Share)
-              </h3>
-              {/* Mock Area Chart for Market Share */}
-              <div className="flex-1 w-full min-h-0 relative">
-                  <div className="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">
-                      [此处展示 90天 市场份额变化曲线]
-                      <br/>
-                      (需连接 Google Trends API)
-                  </div>
-                  {/* Placeholder Visual */}
-                  <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={[{v:30},{v:35},{v:32},{v:40},{v:45},{v:42},{v:50}]} margin={{top:20}}>
-                          <defs>
-                              <linearGradient id="colorShare" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.2}/><stop offset="95%" stopColor="#f59e0b" stopOpacity={0}/></linearGradient>
-                          </defs>
-                          <Area type="monotone" dataKey="v" stroke="#f59e0b" fill="url(#colorShare)" strokeWidth={2} />
-                      </AreaChart>
-                  </ResponsiveContainer>
-              </div>
-              <div className="mt-4 p-4 bg-yellow-500/10 border border-yellow-500/20 rounded-xl">
-                  <div className="flex gap-3">
-                      <AlertTriangle className="w-5 h-5 text-yellow-500 shrink-0" />
-                      <div>
-                          <h4 className="text-xs font-bold text-yellow-500 mb-1">机会洞察</h4>
-                          <p className="text-[10px] text-slate-300 leading-relaxed">
-                              竞品在“发货速度”上评分较低 (70分)。建议在下个季度重点宣传“24h极速发货”服务，有望提升 5-8% 的转化率。
-                          </p>
-                      </div>
-                  </div>
               </div>
           </div>
       </div>
@@ -497,8 +386,6 @@ const Analytics: React.FC = () => {
                     {[
                         { id: 'finance', label: '财务深析', icon: Wallet },
                         { id: 'supply', label: '供应链智脑', icon: Truck },
-                        { id: 'ads', label: '广告沙盒', icon: Megaphone },
-                        { id: 'market', label: '竞争雷达', icon: Target },
                     ].map(tab => (
                         <button
                             key={tab.id}
@@ -530,8 +417,6 @@ const Analytics: React.FC = () => {
         <div className="flex-1 min-h-0 overflow-y-auto pr-2 custom-scrollbar">
             {activeTab === 'finance' && <FinanceView />}
             {activeTab === 'supply' && <SupplyView />}
-            {activeTab === 'ads' && <AdsView />}
-            {activeTab === 'market' && <MarketView />}
         </div>
     </div>
   );
