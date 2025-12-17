@@ -226,8 +226,13 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
     const { dispatch, showToast } = useTanxing();
     const [isSaving, setIsSaving] = useState(false);
     
-    // Initial values
-    const [boxCount, setBoxCount] = useState<number>(0); 
+    // Initial values logic: Calculate box count from existing stock
+    // This fixes the issue where box count appeared as 0 initially
+    const [boxCount, setBoxCount] = useState<number>(() => {
+        const items = product.itemsPerBox || 1;
+        const stock = product.stock || 0;
+        return Math.ceil(stock / items);
+    });
     const [stockTotal, setStockTotal] = useState(product.stock || 0);
 
     const [formData, setFormData] = useState({
@@ -289,11 +294,31 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
         }
     };
 
-    // Manual Calculation Helper
-    const calculateStockFromBoxes = () => {
-        const total = boxCount * (formData.itemsPerBox || 1);
+    // Live Calculation Handlers
+    const handleBoxCountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const count = parseInt(e.target.value) || 0;
+        setBoxCount(count);
+        // Auto-update stock total when box count changes (One-way binding)
+        // This fixes the issue of "entered value but didn't save"
+        const items = formData.itemsPerBox || 1;
+        setStockTotal(count * items);
+    };
+
+    const handleItemsPerBoxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const items = parseInt(e.target.value) || 0;
+        setFormData({ ...formData, itemsPerBox: items });
+        // Recalculate stock based on current box count
+        // We assume if you change items/box, you want to update total stock based on box count
+        if (boxCount > 0) {
+            setStockTotal(boxCount * items);
+        }
+    };
+
+    const handleStockTotalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const total = parseInt(e.target.value) || 0;
         setStockTotal(total);
-        showToast(`已更新总数为: ${total} (基于 ${boxCount} 箱 x ${formData.itemsPerBox}/箱)`, 'info');
+        // Decoupled: We do NOT auto-update boxCount here.
+        // This allows for manual override (e.g., loose items) without fighting the box calculation.
     };
 
     const totalCBM = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (formData.itemsPerBox || 1); 
@@ -483,7 +508,7 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     <input 
                                         type="number" 
                                         value={formData.itemsPerBox} 
-                                        onChange={e => setFormData({...formData, itemsPerBox: parseInt(e.target.value)})} 
+                                        onChange={handleItemsPerBoxChange} 
                                         className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100" 
                                     />
                                 </div>
@@ -493,27 +518,25 @@ const EditProductModal: React.FC<{ product: any, onClose: () => void }> = ({ pro
                                     <input 
                                         type="number" 
                                         value={boxCount || ''} 
-                                        onChange={e => setBoxCount(parseInt(e.target.value))} 
+                                        onChange={handleBoxCountChange} 
                                         className="w-full bg-black/40 border border-amber-500/20 rounded px-3 py-2 text-sm outline-none focus:border-amber-500 text-amber-100 placeholder-amber-500/30"
                                         placeholder="手工录入..."
                                     />
                                 </div>
-                                <button 
-                                    onClick={calculateStockFromBoxes}
-                                    className="mb-[1px] px-3 py-2 bg-amber-500/20 border border-amber-500/40 text-amber-300 hover:bg-amber-500 hover:text-white rounded text-xs font-bold transition-all"
-                                >
-                                    <Calculator className="w-4 h-4" />
-                                </button>
                             </div>
 
-                            <div className="bg-black/20 p-3 rounded border border-amber-500/10">
+                            <div className="bg-black/20 p-3 rounded border border-amber-500/10 relative">
                                 <label className="text-xs font-semibold text-amber-200/70 mb-1 block">当前库存总数 (Total Stock)</label>
                                 <input 
                                     type="number" 
                                     value={stockTotal} 
-                                    onChange={(e) => setStockTotal(parseInt(e.target.value) || 0)}
+                                    onChange={handleStockTotalChange}
                                     className="w-full bg-transparent border-none text-xl font-bold text-amber-100 outline-none placeholder-amber-500/30 font-mono" 
                                 />
+                                <div className="absolute right-3 top-3 text-[10px] text-amber-500/50 flex flex-col items-end">
+                                    <span>手动修改库存</span>
+                                    <span>不影响箱数</span>
+                                </div>
                             </div>
                             
                             {/* LingXing ID */}
