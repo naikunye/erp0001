@@ -31,13 +31,13 @@ interface AppState {
     isMobileMenuOpen: boolean;
 }
 
-/* Fix: Define missing action types for various page components */
 type Action =
     | { type: 'SET_THEME'; payload: AppState['theme'] }
     | { type: 'NAVIGATE'; payload: { page: Page; params?: { searchQuery?: string } } }
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'ADD_AUDIT_LOG'; payload: Omit<AuditLog, 'id' | 'timestamp'> }
+    | { type: 'CLEAR_AUDIT_LOGS' }
     | { type: 'UPDATE_PRODUCT'; payload: Product }
     | { type: 'ADD_PRODUCT'; payload: Product }
     | { type: 'DELETE_PRODUCT'; payload: string }
@@ -97,17 +97,18 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         
-        /* Fix: Product actions logic */
+        /* Logging Logic */
+        case 'ADD_AUDIT_LOG': return { ...state, auditLogs: [{ ...action.payload, id: `LOG-${Date.now()}`, timestamp: new Date().toISOString() }, ...state.auditLogs].slice(0, 500) };
+        case 'CLEAR_AUDIT_LOGS': return { ...state, auditLogs: [] };
+
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p) };
         case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products] };
         case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload) };
         
-        /* Fix: Task actions logic */
         case 'ADD_TASK': return { ...state, tasks: [action.payload, ...state.tasks] };
         case 'UPDATE_TASK': return { ...state, tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) };
         case 'DELETE_TASK': return { ...state, tasks: state.tasks.filter(t => t.id !== action.payload) };
 
-        /* Fix: Order actions logic */
         case 'ADD_ORDER': return { ...state, orders: [action.payload, ...state.orders] };
         case 'UPDATE_ORDER_STATUS': return { 
             ...state, 
@@ -115,26 +116,21 @@ const appReducer = (state: AppState, action: Action): AppState => {
         };
         case 'DELETE_ORDER': return { ...state, orders: state.orders.filter(o => o.id !== action.payload) };
 
-        /* Fix: Customer actions logic */
         case 'ADD_CUSTOMER': return { ...state, customers: [action.payload, ...state.customers] };
         case 'UPDATE_CUSTOMER': return { ...state, customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c) };
         case 'DELETE_CUSTOMER': return { ...state, customers: state.customers.filter(c => c.id !== action.payload) };
 
-        /* Fix: Shipment actions logic */
         case 'ADD_SHIPMENT': return { ...state, shipments: [action.payload, ...state.shipments] };
         case 'UPDATE_SHIPMENT': return { ...state, shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s) };
         case 'DELETE_SHIPMENT': return { ...state, shipments: state.shipments.filter(s => s.id !== action.payload) };
 
-        /* Fix: Marketing actions logic */
         case 'ADD_INFLUENCER': return { ...state, influencers: [action.payload, ...state.influencers] };
         case 'CREATE_AD_CAMPAIGN': return { ...state, adCampaigns: [action.payload, ...state.adCampaigns] };
 
-        /* Fix: Supplier actions logic */
         case 'ADD_SUPPLIER': return { ...state, suppliers: [action.payload, ...state.suppliers] };
         case 'UPDATE_SUPPLIER': return { ...state, suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s) };
         case 'DELETE_SUPPLIER': return { ...state, suppliers: state.suppliers.filter(s => s.id !== action.payload) };
 
-        /* Fix: Inbound Shipment actions logic */
         case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
 
         case 'HYDRATE_STATE': return { ...state, ...action.payload };
@@ -150,8 +146,9 @@ const TanxingContext = createContext<{
     state: AppState;
     dispatch: React.Dispatch<Action>;
     showToast: (message: string, type: Toast['type']) => void;
+    logEvent: (action: string, details: string, user?: string) => void;
     syncToCloud: () => Promise<void>;
-}>({ state: mockState, dispatch: () => null, showToast: () => null, syncToCloud: async () => {} });
+}>({ state: mockState, dispatch: () => null, showToast: () => null, logEvent: () => null, syncToCloud: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, mockState, (initial) => {
@@ -185,7 +182,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const timer = setTimeout(() => syncToCloud(), 2000);
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.orders, state.tasks, state.customers, state.shipments]);
+    }, [state.products, state.orders, state.tasks, state.customers, state.shipments, state.auditLogs]);
 
     const syncToCloud = async () => {
         if (!state.supabaseConfig.url || !state.supabaseConfig.key) return;
@@ -203,7 +200,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         suppliers: state.suppliers,
                         transactions: state.transactions,
                         adCampaigns: state.adCampaigns,
-                        influencers: state.influencers
+                        influencers: state.influencers,
+                        auditLogs: state.auditLogs
                     }
                 }
             }]);
@@ -212,9 +210,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
+    const logEvent = (action: string, details: string, user: string = 'Admin (Root)') => {
+        dispatch({ type: 'ADD_AUDIT_LOG', payload: { action, details, user } });
+    };
 
     return (
-        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud }}>
+        <TanxingContext.Provider value={{ state, dispatch, showToast, logEvent, syncToCloud }}>
             {children}
         </TanxingContext.Provider>
     );

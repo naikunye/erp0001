@@ -1,15 +1,15 @@
 
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp } from 'lucide-react';
-// Fix: Imported SESSION_ID from TanxingContext
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, History, User, Activity, FileText, Search } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, syncToCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud'>('theme');
+  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'audit'>('theme');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [logSearch, setLogSearch] = useState('');
 
   const [supabaseForm, setSupabaseForm] = useState({
       url: state.supabaseConfig.url || '',
@@ -20,12 +20,9 @@ const Settings: React.FC = () => {
   const handleSupabaseSave = async () => {
       setIsSaving(true);
       try {
-          // 简单验证
           const supabase = createClient(supabaseForm.url, supabaseForm.key);
           const { error } = await supabase.from('app_backups').select('id').limit(1);
-          
           if (error) throw error;
-
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
           showToast('云端实时引擎配置已保存', 'success');
       } catch (e: any) {
@@ -35,26 +32,88 @@ const Settings: React.FC = () => {
       }
   };
 
+  const filteredLogs = state.auditLogs.filter(log => 
+    log.action.toLowerCase().includes(logSearch.toLowerCase()) || 
+    log.details.toLowerCase().includes(logSearch.toLowerCase())
+  );
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-10">
-      <div>
-        <h2 className="text-xl font-bold text-white flex items-center gap-2">
-            <SettingsIcon className="w-6 h-6 text-slate-400" /> 系统设置 (System Settings)
-        </h2>
-        <p className="text-sm text-slate-500 mt-1">控制 UI 风格与跨端同步参数</p>
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-xl font-bold text-white flex items-center gap-2">
+              <SettingsIcon className="w-6 h-6 text-slate-400" /> 系统设置 (System Settings)
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">控制 UI 风格、跨端同步及审计日志查询</p>
+        </div>
+        {activeTab === 'audit' && (
+           <button 
+              onClick={() => dispatch({ type: 'CLEAR_AUDIT_LOGS' })}
+              className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-lg text-[10px] font-bold border border-red-500/20 transition-all"
+           >
+              清空日志
+           </button>
+        )}
       </div>
 
       <div className="flex gap-2 border-b border-white/10 mb-6">
-          {['theme', 'general', 'cloud'].map(tab => (
+          {['theme', 'general', 'cloud', 'audit'].map(tab => (
               <button 
                 key={tab}
                 onClick={() => setActiveTab(tab as any)} 
                 className={`px-6 py-3 text-sm font-medium border-b-2 transition-all capitalize ${activeTab === tab ? 'border-indigo-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
               >
-                  {tab === 'cloud' ? '云端实时同步' : tab}
+                  {tab === 'cloud' ? '同步引擎' : tab === 'audit' ? '审计日志' : tab}
               </button>
           ))}
       </div>
+
+      {activeTab === 'audit' && (
+          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
+              <div className="relative group">
+                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3 group-hover:text-white transition-colors" />
+                  <input 
+                      type="text" 
+                      placeholder="检索日志操作码或详情明细..." 
+                      value={logSearch}
+                      onChange={e => setLogSearch(e.target.value)}
+                      className="w-full pl-10 pr-4 py-2.5 bg-black/40 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 transition-all placeholder-slate-600"
+                  />
+              </div>
+
+              <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-[500px]">
+                  <div className="flex-1 overflow-y-auto p-2 scrollbar-none space-y-1">
+                      {filteredLogs.length > 0 ? filteredLogs.map((log) => (
+                          <div key={log.id} className="p-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all flex flex-col gap-3 group">
+                              <div className="flex justify-between items-start">
+                                  <div className="flex items-center gap-3">
+                                      <div className={`p-2 rounded-lg ${log.action.includes('ERROR') ? 'bg-red-500/20 text-red-400' : log.action.includes('AI') ? 'bg-indigo-500/20 text-indigo-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                                          {log.action.includes('AI') ? <Terminal className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
+                                      </div>
+                                      <div>
+                                          <div className="text-xs font-black text-white font-mono uppercase tracking-tighter">{log.action}</div>
+                                          <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-3">
+                                              <span className="flex items-center gap-1"><History className="w-3 h-3"/> {new Date(log.timestamp).toLocaleString()}</span>
+                                              <span className="flex items-center gap-1"><User className="w-3 h-3"/> {log.user}</span>
+                                          </div>
+                                      </div>
+                                  </div>
+                                  <div className="text-[9px] font-mono text-slate-700 uppercase opacity-0 group-hover:opacity-100 transition-opacity">ID: {log.id}</div>
+                              </div>
+                              <div className="bg-black/40 border border-white/5 rounded-lg p-3 text-[11px] font-mono text-slate-400 leading-relaxed break-all">
+                                  {log.details}
+                              </div>
+                          </div>
+                      )) : (
+                          <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-3">
+                              <FileText className="w-12 h-12 opacity-20" />
+                              <p className="text-sm">当前暂无符合条件的审计日志</p>
+                          </div>
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
 
       {activeTab === 'cloud' && (
           <div className="bg-black/20 rounded-xl border border-white/10 p-8 animate-in fade-in slide-in-from-bottom-2 space-y-8">
@@ -69,7 +128,7 @@ const Settings: React.FC = () => {
                               {state.supabaseConfig.url && <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full border border-emerald-500/20 animate-pulse">Running</span>}
                           </h4>
                           <p className="text-xs text-indigo-200/70 leading-relaxed">
-                              开启后，系统将自动监听云端数据库变更。任何终端（电脑、手机）的修改都将秒级同步到当前窗口，无需手动刷新。
+                              开启后，系统将自动监听云端数据库变更。任何终端（电脑、手机）的修改都将秒级同步到当前窗口。
                           </p>
                       </div>
                   </div>
@@ -119,10 +178,6 @@ const Settings: React.FC = () => {
                               {SESSION_ID}
                           </div>
                       </div>
-                      <div className="text-xs text-slate-500 text-center leading-relaxed">
-                          同一时刻只能激活一个同步源。<br/>
-                          如果多台设备同时修改，系统将以最后一次写入为准。
-                      </div>
                   </div>
               </div>
           </div>
@@ -135,7 +190,6 @@ const Settings: React.FC = () => {
                 <h3 className="font-bold text-white">Vision Glass</h3>
                 <p className="text-xs text-slate-500 mt-2">VisionOS 空间磨砂质感</p>
               </div>
-              {/* 其他主题按钮同理... */}
           </div>
       )}
     </div>
