@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon, Scissors } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon, Scissors, ArrowUpCircle } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
 
@@ -9,6 +9,7 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'data'>('theme');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isForcePushing, setIsForcePushing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [supabaseForm, setSupabaseForm] = useState({
@@ -69,16 +70,15 @@ const Settings: React.FC = () => {
                   throw new Error('归档文件不含有效的业务数据对象');
               }
 
-              // 如果文件超过 4MB，提示瘦身
               if (content.length > 4000000) {
-                  if (confirm('检测到备份文件体积过大（约 ' + (content.length / 1024 / 1024).toFixed(1) + 'MB），超出了浏览器 LocalStorage 的承载上限。是否执行“脱水导入”（剔除商品详情图片，仅保留订单和财务数据）？')) {
+                  if (confirm('检测到备份文件体积过大（约 ' + (content.length / 1024 / 1024).toFixed(1) + 'MB）。是否执行“脱水导入”（剔除图片，仅保留核心数据）以确保成功保存？')) {
                       importedState = pruneLargeData(importedState);
                   }
               }
 
-              if (confirm('⚠️ 警告：确定要覆盖当前系统内所有数据吗？')) {
+              if (confirm('⚠️ 警告：确定要覆盖当前系统内所有数据吗？导入后，请务必在“云端同步”中执行一次“强制覆盖云端”，否则旧云端数据可能会回传同步。')) {
                   dispatch({ type: 'FULL_RESTORE', payload: importedState });
-                  showToast('全量数据恢复成功', 'success');
+                  showToast('全量数据恢复成功，请检查云同步状态', 'success');
               }
           } catch (err: any) {
               showToast(`导入失败: ${err.message}`, 'error');
@@ -100,6 +100,25 @@ const Settings: React.FC = () => {
           showToast(`配置无效: ${e.message}`, 'error');
       } finally {
           setIsSaving(false);
+      }
+  };
+
+  // --- 强制云端同步逻辑 ---
+  const handleForcePush = async () => {
+      if (!state.supabaseConfig?.url || !state.supabaseConfig?.key) {
+          showToast('请先配置云端连接', 'warning');
+          return;
+      }
+      if (!confirm('确定将当前本地数据强制上传并覆盖云端吗？这将清理云端旧的历史记录快照。')) return;
+      
+      setIsForcePushing(true);
+      try {
+          await syncToCloud(true);
+          showToast('本地数据已强制覆盖云端镜像', 'success');
+      } catch (e: any) {
+          showToast(`强制同步失败: ${e.message}`, 'error');
+      } finally {
+          setIsForcePushing(false);
       }
   };
 
@@ -183,7 +202,7 @@ const Settings: React.FC = () => {
                       <div className="flex-1 bg-black/40 border border-white/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4">
                           <FileJson className="w-12 h-12 text-slate-700" />
                           <p className="text-[10px] text-slate-500 uppercase tracking-widest leading-relaxed">
-                              包含: {state.products.length} 商品, {state.orders.length} 订单, {state.customers.length} 客户
+                              包含: {state.products.length} 商品, {state.orders.length} 订单
                           </p>
                           <button 
                             onClick={handleLocalExport}
@@ -208,7 +227,7 @@ const Settings: React.FC = () => {
                       <div className="flex-1 border-2 border-dashed border-amber-500/20 bg-amber-500/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4 group hover:border-amber-500/40 transition-all">
                           <AlertOctagon className="w-12 h-12 text-amber-600/50 group-hover:text-amber-500 transition-colors" />
                           <p className="text-[10px] text-amber-200/40 uppercase tracking-widest font-bold">
-                              注意：此操作将覆盖现有数据
+                              注意：此操作将覆盖本地现有数据
                           </p>
                           <input 
                             type="file" 
@@ -230,9 +249,7 @@ const Settings: React.FC = () => {
               <div className="bg-white/2 border border-white/5 rounded-2xl p-6 flex items-start gap-4">
                   <div className="p-2 bg-slate-800 rounded-lg text-slate-400"><Scissors className="w-4 h-4" /></div>
                   <div className="text-[11px] text-slate-500 leading-relaxed">
-                      <b>解决配额超出 (Quota Exceeded) 指南：</b> 如果导入失败并提示配额超出，通常是因为备份中包含大量高清 Base64 商品图片。建议：<br/>
-                      1. 在导入时选择“瘦身”模式。 <br/>
-                      2. 尽量使用 **Supabase 云端同步** 功能，云端数据库不限制存储体积，可支持无限量订单数据。
+                      <b>重要提醒：</b> 导入旧版 JSON 后，本地状态可能尚未广播。如果发现数据又变回了云端的旧版本，请在“云端同步”选项卡中手动点击一次“<b>强制本地覆盖云端</b>”按钮。
                   </div>
               </div>
           </div>
@@ -250,13 +267,25 @@ const Settings: React.FC = () => {
                               <h4 className="text-base font-bold text-white mb-2 flex items-center gap-2">
                                   Supabase 量子同步引擎
                                   {state.connectionStatus === 'connected' && <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full border border-emerald-500/20 animate-pulse font-mono font-bold">REALTIME ACTIVE</span>}
-                                  {state.connectionStatus === 'error' && <span className="px-2.5 py-1 bg-red-500/10 text-red-400 text-[10px] rounded-full border border-red-500/20 font-mono font-bold">LINK ERROR</span>}
                               </h4>
-                              <div className="text-[10px] text-slate-500 font-mono">CLIENT ID: {SESSION_ID}</div>
+                              <div className="text-[10px] text-slate-500 font-mono tracking-tighter">NODE_ID: {SESSION_ID}</div>
                           </div>
                           <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
-                              基于 Postgres 实时订阅技术。任何修改都将瞬发广播至全球所有活跃会话，实现无缝多人协作。
+                              实时协同已激活。当多个终端同时在线时，变更将实现毫秒级双向同步。
                           </p>
+                          {state.connectionStatus === 'connected' && (
+                              <div className="mt-4 flex gap-4">
+                                  <button 
+                                    onClick={handleForcePush} 
+                                    disabled={isForcePushing}
+                                    className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-[10px] font-bold uppercase tracking-widest flex items-center gap-2 shadow-lg shadow-emerald-900/30 transition-all active:scale-95"
+                                  >
+                                      {isForcePushing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ArrowUpCircle className="w-3.5 h-3.5" />}
+                                      强制本地覆盖云端 (Force Push)
+                                  </button>
+                                  <p className="text-[9px] text-slate-600 italic flex items-center">同步异常？点击此按钮将当前本地数据强行作为“最新版本”推送到云端。</p>
+                              </div>
+                          )}
                       </div>
                   </div>
               </div>
@@ -281,7 +310,7 @@ const Settings: React.FC = () => {
                         disabled={isSaving}
                         className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-2xl text-xs font-bold shadow-xl shadow-violet-900/30 flex items-center justify-center gap-3 active:scale-95 transition-all"
                       >
-                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Link2Off className="w-5 h-5"/>}
+                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Zap className="w-5 h-5"/>}
                           连接并初始化同步矩阵
                       </button>
                   </div>
@@ -297,12 +326,8 @@ const Settings: React.FC = () => {
                               <span className="text-slate-500">上次心跳广播:</span>
                               <span className="text-white">{state.supabaseConfig?.lastSync || 'N/A'}</span>
                           </div>
-                          <div className="flex justify-between border-b border-white/5 pb-2">
-                              <span className="text-slate-500">数据上限状态:</span>
-                              <span className="text-white">本地受限 (5MB) / 云端不限</span>
-                          </div>
                           <p className="text-slate-600 leading-relaxed pt-2">
-                            <b>提示：</b> 如果您有超过 500 个 SKU 或 5000 条订单，请务必使用 Supabase 模式，否则浏览器缓存会由于溢出而无法保存新操作。
+                            <b>冲突解决：</b> 如果导入数据后云端仍然显示旧数据，说明云端的记录序列号（timestamp）更新或由于网络波动，本地变更未被云端接受。使用顶部的“<b>强制覆盖</b>”按钮可一键清除冲突。
                           </p>
                       </div>
                   </div>

@@ -5,7 +5,8 @@ import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplie
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
 const DB_KEY = 'TANXING_DB_V4';
-export const SESSION_ID = Math.random().toString(36).substring(7);
+// 动态生成的 Session ID，用于区分当前活跃终端
+export let SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'paper-minimal';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
@@ -123,6 +124,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
         case 'HYDRATE_STATE': return { ...state, ...action.payload };
         case 'FULL_RESTORE': 
+            // 关键：恢复数据时刷新 SESSION_ID，防止与云端旧记录冲突
+            SESSION_ID = Math.random().toString(36).substring(7);
             return { 
                 ...mockState, 
                 ...action.payload, 
@@ -133,6 +136,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
                 navParams: action.payload?.navParams || {},
                 toasts: [], 
                 exportTasks: [],
+                // 恢复后强制处于离线模式，等待用户确认后再同步
                 connectionStatus: 'disconnected' 
             };
         case 'SET_SUPABASE_CONFIG': return { ...state, supabaseConfig: { ...state.supabaseConfig, ...action.payload } };
@@ -147,7 +151,7 @@ const TanxingContext = createContext<{
     state: AppState;
     dispatch: React.Dispatch<Action>;
     showToast: (message: string, type: Toast['type']) => void;
-    syncToCloud: () => Promise<void>;
+    syncToCloud: (isForce?: boolean) => Promise<void>;
 }>({ state: mockState, dispatch: () => null, showToast: () => null, syncToCloud: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -192,6 +196,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     table: 'app_backups' 
                 }, (payload) => {
                     const incoming = payload.new;
+                    // 只有当来源 Session ID 不同时才接收数据，防止自我循环覆盖
                     if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
                         const incomingPayload = incoming.data.payload;
                         const payloadString = JSON.stringify(incomingPayload);
@@ -218,14 +223,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, state.supabaseConfig?.isRealTime]);
 
-    // --- 自动持久化 (增强安全捕获) ---
+    // --- 自动持久化与触发同步 ---
     useEffect(() => {
         try {
             localStorage.setItem(DB_KEY, JSON.stringify({ ...state, toasts: [], exportTasks: [] }));
         } catch (e: any) {
-            // 如果存储空间已满，不再强制写入，防止报错中断渲染
             if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-                console.warn("Storage Quota Exceeded. Data is now running in RAM mode only.");
+                console.warn("Storage Quota Exceeded.");
             }
         }
         
@@ -236,13 +240,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
+        // 仅在已连接且配置实时同步时，在变更 3 秒后尝试推送到云端
         if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime) {
             const timer = setTimeout(() => syncToCloud(), 3000); 
             return () => clearTimeout(timer);
         }
     }, [state.products, state.orders, state.tasks, state.customers, state.shipments, state.theme, state.connectionStatus]);
 
-    const syncToCloud = async () => {
+    const syncToCloud = async (isForce: boolean = false) => {
         if (!state.supabaseConfig?.url || !state.supabaseConfig?.key) return;
         
         const payloadToSync = {
@@ -259,14 +264,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
 
         const payloadString = JSON.stringify(payloadToSync);
-        if (payloadString === lastSyncDataRef.current) return; 
+        // 如果数据没变且非强制更新，则跳过
+        if (!isForce && payloadString === lastSyncDataRef.current) return; 
 
         try {
             const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
             const { error } = await supabase.from('app_backups').insert([{
                 data: {
-                    source_session: SESSION_ID,
-                    payload: payloadToSync
+                    source_session: SESSION_ID, // 标记当前发送者
+                    payload: payloadToSync,
+                    timestamp: new Date().toISOString()
                 }
             }]);
             
