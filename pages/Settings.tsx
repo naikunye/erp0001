@@ -19,7 +19,6 @@ const Settings: React.FC = () => {
       isRealTime: true
   });
 
-  // 确保表单数据与全局状态实时同步，特别是刷新后
   useEffect(() => {
     if (state.supabaseConfig) {
         setSupabaseForm({
@@ -28,7 +27,7 @@ const Settings: React.FC = () => {
             isRealTime: state.supabaseConfig.isRealTime ?? true
         });
     }
-  }, [state.supabaseConfig]);
+  }, [state.supabaseConfig.url, state.supabaseConfig.key]);
 
   const handleNukeSystem = () => {
       if (confirm('🆘 终极警告：这将彻底清除浏览器中的本地数据和连接配置。确定继续？')) {
@@ -52,9 +51,8 @@ const Settings: React.FC = () => {
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
           showToast('云端协议已激活并持久化', 'success');
           
-          // 保存后立即尝试拉取，如果没有数据则强制推送一次当前的（防止新环境空空如也）
-          await pullFromCloud();
-          setTimeout(() => syncToCloud(true), 1000);
+          // 保存配置后立即执行一次拉取尝试
+          setTimeout(() => pullFromCloud(), 500);
       } catch (e: any) {
           showToast(`鉴权失败: ${e.message}`, 'error');
       } finally {
@@ -66,7 +64,6 @@ const Settings: React.FC = () => {
       setIsPulling(true);
       try {
           await pullFromCloud();
-          showToast('云端镜像同步成功', 'success');
       } catch (e: any) {
           showToast(`同步失败: ${e.message}`, 'error');
       } finally {
@@ -78,7 +75,7 @@ const Settings: React.FC = () => {
       setIsForcePushing(true);
       try {
           await syncToCloud(true);
-          showToast('本地数据已强制覆盖云端', 'success');
+          showToast('本地数据已强制同步至云端', 'success');
       } catch (e: any) {
           showToast(`推送失败: ${e.message}`, 'error');
       } finally {
@@ -90,20 +87,28 @@ const Settings: React.FC = () => {
     const file = event.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onload = (e) => {
+    reader.onload = async (e) => {
         try {
             const content = e.target?.result as string;
             let importedState = JSON.parse(content);
-            if (confirm('确定要恢复此归档吗？这将立即同步到云端。')) {
+            
+            // 校验导入的数据是否包含基本数组结构
+            if (!importedState.products && !importedState.orders) {
+                throw new Error("JSON 结构不符合 Tanxing 标准协议");
+            }
+
+            if (confirm('确定要恢复此本地镜像吗？系统将立即载入并准备推送至云端。')) {
                 dispatch({ type: 'FULL_RESTORE', payload: importedState });
-                showToast('本地快照已载入', 'success');
-                setTimeout(() => syncToCloud(true), 1000);
+                showToast('本地镜像已成功载入', 'success');
+                // 延迟强制推送，确保状态机已完成重写
+                setTimeout(() => syncToCloud(true), 1500);
             }
         } catch (err: any) {
-            showToast(`无效的归档文件: ${err.message}`, 'error');
+            showToast(`镜像文件解析失败: ${err.message}`, 'error');
         }
     };
     reader.readAsText(file);
+    event.target.value = ''; // 清除选择
 };
 
   return (
@@ -113,17 +118,17 @@ const Settings: React.FC = () => {
           <h2 className="text-2xl font-bold text-white flex items-center gap-3">
               <SettingsIcon className="w-7 h-7 text-violet-500" /> 全球同步控制矩阵
           </h2>
-          <p className="text-sm text-slate-500 mt-2 font-mono tracking-widest uppercase italic">Encryption & Persistence V8.0</p>
+          <p className="text-sm text-slate-500 mt-2 font-mono tracking-widest uppercase italic">Neural Persistent V10.0</p>
         </div>
         <div className="flex gap-3">
-            <button onClick={handleNukeSystem} className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 rounded-xl text-xs font-bold hover:bg-red-600 hover:text-white transition-all">全系统注销</button>
+            <button onClick={handleNukeSystem} className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 rounded-xl text-xs font-bold hover:bg-red-600 hover:text-white transition-all">重置本地核心</button>
         </div>
       </div>
 
       <div className="flex gap-4 border-b border-white/5 mb-8">
           {[
             { id: 'cloud', label: '云端同步', icon: Cloud },
-            { id: 'data', label: '离线归档', icon: Database }
+            { id: 'data', label: '本地镜像', icon: Database }
           ].map(tab => (
               <button key={tab.id} onClick={() => setActiveTab(tab.id as any)} className={`px-6 py-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 uppercase tracking-widest ${activeTab === tab.id ? 'border-violet-500 text-white' : 'border-transparent text-slate-600 hover:text-slate-400'}`}>
                   <tab.icon className="w-4 h-4" /> {tab.label}
@@ -140,9 +145,9 @@ const Settings: React.FC = () => {
                             <Wifi className="w-8 h-8" />
                         </div>
                         <div>
-                            <h4 className="text-white font-bold flex items-center gap-2">核心连接状态 (Realtime)</h4>
-                            <p className="text-xs text-slate-500 mt-1 uppercase tracking-tight">矩阵状态: <span className={state.connectionStatus === 'connected' ? 'text-emerald-400 font-black' : 'text-amber-500'}>{state.connectionStatus}</span></p>
-                            <p className="text-[10px] text-slate-600 font-mono mt-1 uppercase">Terminal ID: {SESSION_ID}</p>
+                            <h4 className="text-white font-bold flex items-center gap-2">核心连接状态 (Socket)</h4>
+                            <p className="text-xs text-slate-500 mt-1 uppercase tracking-tight">状态: <span className={state.connectionStatus === 'connected' ? 'text-emerald-400 font-black' : 'text-amber-500'}>{state.connectionStatus}</span></p>
+                            <p className="text-[10px] text-slate-600 font-mono mt-1 uppercase italic">ID: {SESSION_ID}</p>
                         </div>
                       </div>
                       <div className="flex gap-3">
@@ -159,37 +164,37 @@ const Settings: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                   <div className="space-y-6">
                       <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Supabase URL (Uplink)</label>
+                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Supabase URL</label>
                           <input type="text" value={supabaseForm.url} onChange={e => setSupabaseForm({...supabaseForm, url: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl p-4 text-sm text-white font-mono focus:border-violet-500 outline-none" placeholder="https://xxx.supabase.co" />
                       </div>
                       <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Access Secret Key</label>
+                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Secret Key</label>
                           <div className="relative">
                               <input type={showKey ? "text" : "password"} value={supabaseForm.key} onChange={e => setSupabaseForm({...supabaseForm, key: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl p-4 text-sm text-white font-mono focus:border-violet-500 outline-none" />
                               <button onClick={() => setShowKey(!showKey)} className="absolute right-4 top-4 text-slate-600">{showKey ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
                           </div>
                       </div>
                       <button onClick={handleSupabaseSave} disabled={isSaving} className="w-full py-5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white rounded-2xl font-bold shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
-                          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Shield className="w-6 h-6" />} 建立加密上行链路
+                          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Shield className="w-6 h-6" />} 保存并激活同步
                       </button>
                   </div>
-                  <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
+                  <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-5">
                       <div className="flex items-center gap-3">
                           <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400"><Shield className="w-5 h-5"/></div>
-                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">多终端同步协议</h5>
+                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">同步协议 V10.0</h5>
                       </div>
-                      <div className="space-y-5">
+                      <div className="space-y-4">
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
-                              <span className="text-violet-500 font-black">01</span>
-                              <span>配置已隔离存储。即使浏览器清除普通缓存，连接参数依然会尝试从安全区域恢复。</span>
+                              <span className="text-violet-500 font-black">1.</span>
+                              <span>配置持久化：URL 和 Key 已加密保存至独立存储区，刷新页面自动重连。</span>
                           </p>
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
-                              <span className="text-violet-500 font-black">02</span>
-                              <span>启动优先级：云端镜像 &gt; 本地镜像 &gt; 模拟数据。刷新页面时将强制执行云端检索。</span>
+                              <span className="text-violet-500 font-black">2.</span>
+                              <span>数据幂等性：系统通过 MD5 指纹校验数据，仅在确实发生变更时才执行上行广播，节省流量。</span>
                           </p>
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
-                              <span className="text-violet-500 font-black">03</span>
-                              <span>检测到任何本地数据变更（SKU更新、订单新增），系统将在 3 秒内自动执行增量广播。</span>
+                              <span className="text-violet-500 font-black">3.</span>
+                              <span> Demo 锁：配置云端后，系统将强制切换为生产模式，禁止自动加载模拟数据。</span>
                           </p>
                       </div>
                   </div>
@@ -202,24 +207,24 @@ const Settings: React.FC = () => {
               <div className="space-y-6">
                   <div className="flex items-center gap-3">
                     <Download className="w-6 h-6 text-blue-400" />
-                    <h4 className="text-white font-bold">导出 JSON 归档</h4>
+                    <h4 className="text-white font-bold">导出 JSON 备份</h4>
                   </div>
-                  <p className="text-xs text-slate-500 font-mono">生成当前系统完整快照。用于备份或在不同账号间迁移数据。</p>
+                  <p className="text-xs text-slate-500 font-mono">生成系统完整快照。建议每周导出一次并妥善保存。</p>
                   <button onClick={() => {
                       const dataStr = JSON.stringify(state);
                       const blob = new Blob([dataStr], {type: "application/json"});
                       const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url; a.download = `tanxing_snapshot_${new Date().toISOString().slice(0,10)}.json`; a.click();
-                  }} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 flex items-center gap-2 font-mono uppercase tracking-widest"><Download className="w-4 h-4"/> Get Export</button>
+                      const a = document.createElement('a'); a.href = url; a.download = `tanxing_v10_${new Date().toISOString().slice(0,10)}.json`; a.click();
+                  }} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 flex items-center gap-2 font-mono uppercase tracking-widest"><Download className="w-4 h-4"/> 立即导出</button>
               </div>
               <div className="space-y-6">
                   <div className="flex items-center gap-3">
                     <Upload className="w-6 h-6 text-amber-400" />
                     <h4 className="text-white font-bold">恢复数据镜像</h4>
                   </div>
-                  <p className="text-xs text-slate-500 font-mono">从 JSON 文件恢复。注意：此操作将覆盖所有本地与云端记录！</p>
+                  <p className="text-xs text-slate-500 font-mono">从本地文件恢复。系统将自动识别历史数据并与当前配置合并。</p>
                   <input type="file" ref={fileInputRef} className="hidden" onChange={handleLocalImport} accept=".json" />
-                  <button onClick={() => fileInputRef.current?.click()} className="px-8 py-3 bg-white text-black hover:bg-slate-100 rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 flex items-center gap-2 font-mono uppercase tracking-widest"><Upload className="w-4 h-4"/> Select File</button>
+                  <button onClick={() => fileInputRef.current?.click()} className="px-8 py-3 bg-white text-black hover:bg-slate-100 rounded-xl text-xs font-bold shadow-lg transition-all active:scale-95 flex items-center gap-2 font-mono uppercase tracking-widest"><Upload className="w-4 h-4"/> 选择镜像文件</button>
               </div>
           </div>
       )}
