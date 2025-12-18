@@ -123,11 +123,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
         case 'HYDRATE_STATE': return { ...state, ...action.payload };
         case 'FULL_RESTORE': 
-            // 极强鲁棒性的全量数据恢复逻辑：先解构 mockState 确保所有 key 存在
             return { 
                 ...mockState, 
                 ...action.payload, 
-                // 特别加固子对象，防止 payload 中 supabaseConfig 为 null 或 undefined
                 supabaseConfig: { 
                     ...mockState.supabaseConfig, 
                     ...(action.payload?.supabaseConfig || {}) 
@@ -158,7 +156,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const saved = localStorage.getItem(DB_KEY);
             if (!saved) return initial;
             const parsed = JSON.parse(saved);
-            // 增强型初始化：合并默认值以防本地缓存版本过旧
             return { 
                 ...initial, 
                 ...parsed, 
@@ -175,7 +172,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // --- 核心实时订阅逻辑 ---
     useEffect(() => {
-        // 安全读取配置，使用可选链
         const config = state.supabaseConfig || { url: '', key: '', isRealTime: false };
         if (!config.url || !config.key || !config.isRealTime) {
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
@@ -222,9 +218,17 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, state.supabaseConfig?.isRealTime]);
 
-    // --- 自动持久化 ---
+    // --- 自动持久化 (增强安全捕获) ---
     useEffect(() => {
-        localStorage.setItem(DB_KEY, JSON.stringify({ ...state, toasts: [], exportTasks: [] }));
+        try {
+            localStorage.setItem(DB_KEY, JSON.stringify({ ...state, toasts: [], exportTasks: [] }));
+        } catch (e: any) {
+            // 如果存储空间已满，不再强制写入，防止报错中断渲染
+            if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+                console.warn("Storage Quota Exceeded. Data is now running in RAM mode only.");
+            }
+        }
+        
         document.body.className = `theme-${state.theme}`;
 
         if (isInternalUpdate.current) {

@@ -1,6 +1,6 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon, Scissors } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
 
@@ -11,14 +11,12 @@ const Settings: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 防御性表单初始化：增加可选链 ?.
   const [supabaseForm, setSupabaseForm] = useState({
       url: state.supabaseConfig?.url || '',
       key: state.supabaseConfig?.key || '',
       isRealTime: state.supabaseConfig?.isRealTime ?? true
   });
 
-  // 当外部状态更新（如导入后），同步更新本地表单
   useEffect(() => {
     setSupabaseForm({
         url: state.supabaseConfig?.url || '',
@@ -43,6 +41,18 @@ const Settings: React.FC = () => {
       }
   };
 
+  // --- 关键：数据瘦身工具 (剔除大体积 Base64 图片) ---
+  const pruneLargeData = (data: any) => {
+      const slimmed = { ...data };
+      if (slimmed.products) {
+          slimmed.products = slimmed.products.map((p: any) => {
+              const { image, images, ...rest } = p;
+              return rest;
+          });
+      }
+      return slimmed;
+  };
+
   // --- 本地数据全量上传恢复 ---
   const handleLocalImport = (event: React.ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
@@ -52,18 +62,23 @@ const Settings: React.FC = () => {
       reader.onload = (e) => {
           try {
               const content = e.target?.result as string;
-              const importedState = JSON.parse(content);
+              let importedState = JSON.parse(content);
               
-              // 贪婪检测：只要有核心列表之一，即视为有效，不符合结构的字段由 Reducer 补全
               const hasCoreData = !!(importedState.products || importedState.orders || importedState.customers);
-              
               if (!hasCoreData) {
-                  throw new Error('归档文件不含有效的业务数据对象 (products/orders/customers)');
+                  throw new Error('归档文件不含有效的业务数据对象');
               }
 
-              if (confirm('⚠️ 警告：导入操作将覆盖当前系统内所有数据且不可撤销！确定继续？')) {
+              // 如果文件超过 4MB，提示瘦身
+              if (content.length > 4000000) {
+                  if (confirm('检测到备份文件体积过大（约 ' + (content.length / 1024 / 1024).toFixed(1) + 'MB），超出了浏览器 LocalStorage 的承载上限。是否执行“脱水导入”（剔除商品详情图片，仅保留订单和财务数据）？')) {
+                      importedState = pruneLargeData(importedState);
+                  }
+              }
+
+              if (confirm('⚠️ 警告：确定要覆盖当前系统内所有数据吗？')) {
                   dispatch({ type: 'FULL_RESTORE', payload: importedState });
-                  showToast('全量数据已成功恢复，云端同步已暂时挂起', 'success');
+                  showToast('全量数据恢复成功', 'success');
               }
           } catch (err: any) {
               showToast(`导入失败: ${err.message}`, 'error');
@@ -193,7 +208,7 @@ const Settings: React.FC = () => {
                       <div className="flex-1 border-2 border-dashed border-amber-500/20 bg-amber-500/5 rounded-2xl p-6 flex flex-col items-center justify-center text-center space-y-4 group hover:border-amber-500/40 transition-all">
                           <AlertOctagon className="w-12 h-12 text-amber-600/50 group-hover:text-amber-500 transition-colors" />
                           <p className="text-[10px] text-amber-200/40 uppercase tracking-widest font-bold">
-                              注意：此操作将完全重置当前业务状态
+                              注意：此操作将覆盖现有数据
                           </p>
                           <input 
                             type="file" 
@@ -213,9 +228,11 @@ const Settings: React.FC = () => {
               </div>
 
               <div className="bg-white/2 border border-white/5 rounded-2xl p-6 flex items-start gap-4">
-                  <div className="p-2 bg-slate-800 rounded-lg text-slate-400"><Info className="w-4 h-4" /></div>
+                  <div className="p-2 bg-slate-800 rounded-lg text-slate-400"><Scissors className="w-4 h-4" /></div>
                   <div className="text-[11px] text-slate-500 leading-relaxed">
-                      <b>本地归档建议：</b> 如果您的备份文件是旧版本，系统会自动尝试补全缺失的云端配置。导入后请在“云端同步”选项卡中重新检查您的 Supabase Endpoint 路径。
+                      <b>解决配额超出 (Quota Exceeded) 指南：</b> 如果导入失败并提示配额超出，通常是因为备份中包含大量高清 Base64 商品图片。建议：<br/>
+                      1. 在导入时选择“瘦身”模式。 <br/>
+                      2. 尽量使用 **Supabase 云端同步** 功能，云端数据库不限制存储体积，可支持无限量订单数据。
                   </div>
               </div>
           </div>
@@ -281,11 +298,11 @@ const Settings: React.FC = () => {
                               <span className="text-white">{state.supabaseConfig?.lastSync || 'N/A'}</span>
                           </div>
                           <div className="flex justify-between border-b border-white/5 pb-2">
-                              <span className="text-slate-500">Postgres 实时表:</span>
-                              <span className="text-white">public.app_backups</span>
+                              <span className="text-slate-500">数据上限状态:</span>
+                              <span className="text-white">本地受限 (5MB) / 云端不限</span>
                           </div>
                           <p className="text-slate-600 leading-relaxed pt-2">
-                            <b>提示：</b> 如果状态显示为已连接但数据未更新，请检查 Supabase 控制台的 `app_backups` 表是否开启了 "Realtime" 复制开关。
+                            <b>提示：</b> 如果您有超过 500 个 SKU 或 5000 条订单，请务必使用 Supabase 模式，否则浏览器缓存会由于溢出而无法保存新操作。
                           </p>
                       </div>
                   </div>
