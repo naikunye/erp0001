@@ -123,16 +123,16 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
         case 'HYDRATE_STATE': return { ...state, ...action.payload };
         case 'FULL_RESTORE': 
-            // 关键：合并默认状态以防止缺少字段
+            // 极强鲁棒性的全量数据恢复逻辑：先解构 mockState 确保所有 key 存在
             return { 
                 ...mockState, 
                 ...action.payload, 
-                // 强制修正容易引起崩溃的子对象结构
+                // 特别加固子对象，防止 payload 中 supabaseConfig 为 null 或 undefined
                 supabaseConfig: { 
                     ...mockState.supabaseConfig, 
-                    ...(action.payload.supabaseConfig || {}) 
+                    ...(action.payload?.supabaseConfig || {}) 
                 },
-                navParams: action.payload.navParams || {},
+                navParams: action.payload?.navParams || {},
                 toasts: [], 
                 exportTasks: [],
                 connectionStatus: 'disconnected' 
@@ -156,16 +156,26 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [state, dispatch] = useReducer(appReducer, mockState, (initial) => {
         try {
             const saved = localStorage.getItem(DB_KEY);
-            return saved ? { ...initial, ...JSON.parse(saved), toasts: [], exportTasks: [], connectionStatus: 'disconnected' } : initial;
+            if (!saved) return initial;
+            const parsed = JSON.parse(saved);
+            // 增强型初始化：合并默认值以防本地缓存版本过旧
+            return { 
+                ...initial, 
+                ...parsed, 
+                supabaseConfig: { ...initial.supabaseConfig, ...(parsed.supabaseConfig || {}) },
+                toasts: [], 
+                exportTasks: [], 
+                connectionStatus: 'disconnected' 
+            };
         } catch { return initial; }
     });
 
     const isInternalUpdate = useRef(false);
     const lastSyncDataRef = useRef<string>('');
 
-    // --- 核心实时订阅逻辑 (Supabase Realtime) ---
+    // --- 核心实时订阅逻辑 ---
     useEffect(() => {
-        // 安全读取配置，防止 undefined
+        // 安全读取配置，使用可选链
         const config = state.supabaseConfig || { url: '', key: '', isRealTime: false };
         if (!config.url || !config.key || !config.isRealTime) {
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });

@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
@@ -11,25 +11,32 @@ const Settings: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // 防御性表单初始化：增加可选链 ?.
   const [supabaseForm, setSupabaseForm] = useState({
-      url: state.supabaseConfig.url || '',
-      key: state.supabaseConfig.key || '',
-      isRealTime: state.supabaseConfig.isRealTime
+      url: state.supabaseConfig?.url || '',
+      key: state.supabaseConfig?.key || '',
+      isRealTime: state.supabaseConfig?.isRealTime ?? true
   });
+
+  // 当外部状态更新（如导入后），同步更新本地表单
+  useEffect(() => {
+    setSupabaseForm({
+        url: state.supabaseConfig?.url || '',
+        key: state.supabaseConfig?.key || '',
+        isRealTime: state.supabaseConfig?.isRealTime ?? true
+    });
+  }, [state.supabaseConfig]);
 
   // --- 本地数据全量导出 ---
   const handleLocalExport = () => {
       try {
           const dataStr = JSON.stringify(state, null, 2);
           const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-          
           const exportFileDefaultName = `Tanxing_Backup_${new Date().toISOString().slice(0,10)}_${SESSION_ID}.json`;
-          
           const linkElement = document.createElement('a');
           linkElement.setAttribute('href', dataUri);
           linkElement.setAttribute('download', exportFileDefaultName);
           linkElement.click();
-          
           showToast('本地量子归档已生成', 'success');
       } catch (e) {
           showToast('导出失败，请检查浏览器权限', 'error');
@@ -47,21 +54,22 @@ const Settings: React.FC = () => {
               const content = e.target?.result as string;
               const importedState = JSON.parse(content);
               
-              // 简单格式校验
-              if (!importedState.products || !importedState.orders) {
-                  throw new Error('无效的归档文件格式');
+              // 贪婪检测：只要有核心列表之一，即视为有效，不符合结构的字段由 Reducer 补全
+              const hasCoreData = !!(importedState.products || importedState.orders || importedState.customers);
+              
+              if (!hasCoreData) {
+                  throw new Error('归档文件不含有效的业务数据对象 (products/orders/customers)');
               }
 
-              if (confirm('⚠️ 警告：导入操作将覆盖当前系统内所有数据且不可撤销！建议先导出当前备份。确定继续？')) {
+              if (confirm('⚠️ 警告：导入操作将覆盖当前系统内所有数据且不可撤销！确定继续？')) {
                   dispatch({ type: 'FULL_RESTORE', payload: importedState });
-                  showToast('全量数据已成功回滚恢复', 'success');
+                  showToast('全量数据已成功恢复，云端同步已暂时挂起', 'success');
               }
           } catch (err: any) {
-              showToast(`归档解析失败: ${err.message}`, 'error');
+              showToast(`导入失败: ${err.message}`, 'error');
           }
       };
       reader.readAsText(file);
-      // 清空 input 方便下次选择同名文件
       if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
@@ -207,7 +215,7 @@ const Settings: React.FC = () => {
               <div className="bg-white/2 border border-white/5 rounded-2xl p-6 flex items-start gap-4">
                   <div className="p-2 bg-slate-800 rounded-lg text-slate-400"><Info className="w-4 h-4" /></div>
                   <div className="text-[11px] text-slate-500 leading-relaxed">
-                      <b>本地归档建议：</b> 由于实时云端同步可能受网络波动影响，我们建议您每周五下班前手动执行一次“导出”，并将生成的 `.json` 文件妥善保存在您的私人移动硬盘或企业 NAS 中。归档文件包含所有敏感业务数据，请勿通过非加密渠道传输。
+                      <b>本地归档建议：</b> 如果您的备份文件是旧版本，系统会自动尝试补全缺失的云端配置。导入后请在“云端同步”选项卡中重新检查您的 Supabase Endpoint 路径。
                   </div>
               </div>
           </div>
@@ -270,7 +278,7 @@ const Settings: React.FC = () => {
                           </div>
                           <div className="flex justify-between border-b border-white/5 pb-2">
                               <span className="text-slate-500">上次心跳广播:</span>
-                              <span className="text-white">{state.supabaseConfig.lastSync || 'N/A'}</span>
+                              <span className="text-white">{state.supabaseConfig?.lastSync || 'N/A'}</span>
                           </div>
                           <div className="flex justify-between border-b border-white/5 pb-2">
                               <span className="text-slate-500">Postgres 实时表:</span>
