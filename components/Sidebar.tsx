@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers, Container, Factory, Calculator, ClipboardList } from 'lucide-react';
+import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers, Container, Factory, Calculator, ClipboardList, Terminal } from 'lucide-react';
 import { Page } from '../types';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -16,7 +16,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
 
   const menuItems = [
     { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
-    { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit, highlight: true },
+    { id: 'ai-command', label: 'AI 指令中心', subLabel: 'Command Center', icon: Terminal, highlight: true },
+    { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit },
     { id: 'tasks', label: '运营协同中心', subLabel: 'Operations', icon: ClipboardList },
     { id: 'inventory', label: '智能备货', subLabel: 'Inventory', icon: PackageCheck },
     { id: 'calculator', label: '智能计算中心', subLabel: 'Tools & Calc', icon: Calculator }, 
@@ -98,8 +99,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                                     <span className={`text-[9px] mt-1 font-mono tracking-wide uppercase ${isActive ? 'text-blue-300/70' : 'text-slate-600 group-hover:text-slate-500'}`}>{item.subLabel}</span>
                                 </div>
                                 
-                                {isHighlight && !isActive && (
-                                    <div className="ml-auto w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6]"></div>
+                                {isHighlight && (
+                                    <div className={`ml-auto w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_8px_#3b82f6] ${isActive ? 'bg-white' : 'bg-blue-500'}`}></div>
                                 )}
                             </button>
                         );

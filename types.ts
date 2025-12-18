@@ -1,5 +1,5 @@
 
-export type Page = 'dashboard' | 'inventory' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'calculator' | 'profile' | 'tasks';
+export type Page = 'dashboard' | 'inventory' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'calculator' | 'profile' | 'tasks' | 'ai-command';
 
 export interface User {
   id: string;
@@ -282,4 +282,25 @@ export interface Integration {
   region: string;
   status: 'connected' | 'error' | 'syncing' | 'disconnected';
   lastSync: string;
+}
+
+/**
+ * AuditLog interface for system tracking.
+ */
+export interface AuditLog {
+  id: string;
+  timestamp: string;
+  user: string;
+  action: string;
+  details: string;
+}
+
+/**
+ * ExportTask interface for long-running export jobs.
+ */
+export interface ExportTask {
+  id: string;
+  fileName: string;
+  progress: number;
+  status: 'pending' | 'processing' | 'completed' | 'failed';
 }

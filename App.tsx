@@ -15,6 +15,7 @@ import Marketing from './pages/Marketing';
 import Analytics from './pages/Analytics'; 
 import CalculatorCenter from './pages/CalculatorCenter';
 import OperationsTasks from './pages/OperationsTasks';
+import AICommandCenter from './pages/AICommandCenter';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import Suppliers from './pages/Suppliers'; 
@@ -71,6 +72,7 @@ const MainLayout: React.FC = () => {
       case 'suppliers': return '供应商管理 (Suppliers)';
       case 'profile': return '管理员配置 (Admin Profile)';
       case 'tasks': return '运营协同中心 (Operations Hub)';
+      case 'ai-command': return 'AI 指令控制台 (Quantum Command)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -91,6 +93,7 @@ const MainLayout: React.FC = () => {
       case 'suppliers': return <Suppliers />;
       case 'profile': return <Profile />;
       case 'tasks': return <OperationsTasks />;
+      case 'ai-command': return <AICommandCenter />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };
