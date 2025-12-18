@@ -68,6 +68,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
         logistics: product.logistics || { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0, targetWarehouse: '' },
         economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0, refundRatePercent: 0 },
+        boxCount: product.boxCount ?? 0, // Ensure boxCount is initialized
     });
     
     // Gallery State
@@ -175,8 +176,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
 
     // --- Dynamic Calculations for Modal ---
     const exchangeRate = 7.2;
-    const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
-    const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
+    // UPDATED: Volume now linked to manual boxCount
+    const manualBoxes = formData.boxCount || 0;
+    const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * manualBoxes;
 
     // Unit Weight Logic (Theoretical)
     const unitRealWeight = formData.unitWeight || 0;
@@ -417,8 +419,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
 
                        {/* Section 3: Packing (Right Top) */}
                        <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5 relative overflow-hidden">
+                           {/* UPDATED: Badge shows manual boxCount */}
                            <div className="absolute top-0 right-0 p-2 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-bl-lg border-b border-l border-amber-500/20 shadow-lg">
-                               {totalBoxes} 箱 | {totalVolume.toFixed(3)} CBM
+                               {manualBoxes} 箱 | {totalVolume.toFixed(3)} CBM
                            </div>
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs font-mono">3</div>
@@ -448,23 +451,19 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
 
                            <div className="grid grid-cols-2 gap-4 mb-4">
                                <div>
-                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货数量</label>
-                                   <input type="number" value={formData.itemsPerBox} onChange={e => handleChange('itemsPerBox', parseInt(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
+                                   <label className="text-[10px] text-slate-500 block mb-1 font-bold">当前库存 (总件数)</label>
+                                   <input type="number" value={formData.stock} onChange={e => handleChange('stock', parseInt(e.target.value))} className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" />
                                </div>
                                <div className="flex items-end gap-2">
-                                   <div className="text-amber-500 pb-2 font-bold">x</div>
                                    <div className="flex-1">
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货箱数 (Box)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货箱数 (Box - 手动)</label>
+                                       {/* UPDATED: Strictly manual boxCount input with NO auto-calculations */}
                                        <input 
                                             type="number" 
-                                            placeholder="自动计算" 
-                                            value={totalBoxes} 
-                                            onChange={(e) => {
-                                                const boxes = parseInt(e.target.value) || 0;
-                                                const newStock = boxes * (formData.itemsPerBox || 1);
-                                                handleChange('stock', newStock);
-                                            }}
-                                            className="w-full bg-black/40 border border-amber-900/30 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold" 
+                                            placeholder="手动填写" 
+                                            value={formData.boxCount ?? ''} 
+                                            onChange={(e) => handleChange('boxCount', parseInt(e.target.value) || 0)}
+                                            className="w-full bg-black/40 border border-amber-500/50 rounded px-3 py-2 text-sm text-amber-100 font-mono focus:border-amber-500 outline-none font-bold shadow-[0_0_10px_rgba(245,158,11,0.1)]" 
                                        />
                                    </div>
                                </div>
@@ -890,7 +889,7 @@ const Inventory: React.FC = () => {
                 totalPotentialProfit: totalPotentialProfit, // TOTAL STOCK PROFIT (USD)
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0, // MARGIN %
                 totalWeight: stock * unitRealWeight, // Real weight total
-                boxes: Math.ceil(stock / (p.itemsPerBox || 1))
+                boxes: p.boxCount || 0 // UPDATED: Link to manual boxCount
             };
         });
     }, [state.products, productStats]);
