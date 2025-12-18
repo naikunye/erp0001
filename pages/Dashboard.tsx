@@ -169,16 +169,42 @@ const Dashboard: React.FC = () => {
   }, [activeOrders, state.products]);
 
   // Logistics Cost Structure Data (Sea vs Air based on Active Products)
+  // UPDATED: Now uses the deep calculation from Inventory page for accurate sync
   const costData = useMemo(() => {
       let seaCost = 0;
       let airCost = 0;
+
       activeProducts.forEach(p => {
           const method = p.logistics?.method || 'Sea';
-          // Estimated logistics value held in stock
-          // Rate * Weight * Stock
-          const value = (p.logistics?.unitFreightCost || 0) * (p.unitWeight || 0) * p.stock; 
-          if (method === 'Sea') seaCost += value;
-          else airCost += value;
+          
+          // Replicate exact freight calculation logic from Inventory.tsx
+          const unitRealWeight = p.unitWeight || 0;
+          const dims = p.dimensions || {l:0, w:0, h:0};
+          const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
+          const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+          
+          let activeTotalBillingWeight = 0;
+          if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+              activeTotalBillingWeight = p.logistics.billingWeight;
+          } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
+              activeTotalBillingWeight = p.logistics.unitBillingWeight * p.stock;
+          } else {
+              activeTotalBillingWeight = autoUnitChargeableWeight * p.stock;
+          }
+
+          const rate = p.logistics?.unitFreightCost || 0;
+          const baseFreightCost = activeTotalBillingWeight * rate;
+          const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+          const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
+          
+          const manualTotalFreightCNY = p.logistics?.totalFreightCost;
+          const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
+          
+          const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
+          const totalFreightDisplayCNY = effectiveTotalFreightCNY + (unitConsumablesCNY * p.stock);
+
+          if (method === 'Sea') seaCost += totalFreightDisplayCNY;
+          else airCost += totalFreightDisplayCNY;
       });
       
       // Avoid empty chart
@@ -407,10 +433,10 @@ const Dashboard: React.FC = () => {
                             {costData.map((entry, index) => (
                                 <Cell 
                                     key={`cell-${index}`} 
-                                    fill={index === 0 ? '#06b6d4' : '#334155'} 
+                                    fill={index === 0 ? '#06b6d4' : '#3b82f6'} 
                                     fillOpacity={activeHighlight && activeHighlight !== entry.name ? 0.3 : 1}
                                     style={{
-                                        filter: index===0 ? 'drop-shadow(0 0 10px rgba(6,182,212,0.3))' : '',
+                                        filter: entry.name === '海运 (Sea)' ? 'drop-shadow(0 0 10px rgba(6,182,212,0.3))' : 'drop-shadow(0 0 10px rgba(59,130,246,0.3))',
                                         outline: 'none'
                                     }} 
                                 />
@@ -421,7 +447,7 @@ const Dashboard: React.FC = () => {
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
                     <p className="text-xs text-slate-500 uppercase font-bold tracking-widest">运费估值</p>
                     <p className="text-3xl font-display font-bold text-white tracking-tight text-glow-cyan mt-1">
-                        ¥{(costData.reduce((a,b) => a+b.value, 0) / 1000).toFixed(1)}k
+                        ¥{(costData.reduce((a,b) => a+(typeof b.value === 'number' ? b.value : 0), 0) / 1000).toFixed(1)}k
                     </p>
                 </div>
             </div>
@@ -431,7 +457,7 @@ const Dashboard: React.FC = () => {
                     <span className="text-sm text-slate-300 font-bold">海运库存</span>
                 </div>
                 <div className={`flex items-center gap-2 transition-opacity ${activeHighlight && activeHighlight !== '空运 (Air)' ? 'opacity-30' : 'opacity-100'}`}>
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-600"></span>
+                    <span className="w-2.5 h-2.5 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></span>
                     <span className="text-sm text-slate-300 font-bold">空运库存</span>
                 </div>
             </div>
