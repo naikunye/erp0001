@@ -4,8 +4,8 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
-// 采用更稳定的数据库键名，防止版本冲突
-const DB_KEY = 'TANXING_DB_STABLE_PROD_V7'; 
+const DB_KEY = 'TANXING_DB_V8_STABLE'; 
+const CONFIG_KEY = 'TANXING_UPLINK_CONFIG'; // 独立的配置存储，防止刷新丢失连接
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'paper-minimal';
@@ -32,7 +32,7 @@ interface AppState {
     auditLogs: AuditLog[];
     exportTasks: ExportTask[];
     isMobileMenuOpen: boolean;
-    isInitialized: boolean; // 用于控制 UI 加载遮罩
+    isInitialized: boolean; 
     isDemoMode: boolean;
 }
 
@@ -97,7 +97,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_ORDER': return { ...state, orders: [action.payload, ...state.orders], isDemoMode: false };
         case 'HYDRATE_STATE': return { ...state, ...action.payload, isInitialized: true };
         case 'FULL_RESTORE': 
-            SESSION_ID = Math.random().toString(36).substring(7); // 恢复数据后重置会话，强制下一次同步能被识别
+            SESSION_ID = Math.random().toString(36).substring(7);
             return { ...state, ...action.payload, isInitialized: true, isDemoMode: false };
         case 'LOAD_MOCK_DATA':
             return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true };
@@ -107,6 +107,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': 
             localStorage.removeItem(DB_KEY);
+            localStorage.removeItem(CONFIG_KEY);
             return { ...emptyState, isInitialized: true };
         default: return state;
     }
@@ -122,75 +123,85 @@ const TanxingContext = createContext<{
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
-    const [isHydrated, setIsHydrated] = useState(false); // 关键锁：防止覆盖写入
+    const [isHydrated, setIsHydrated] = useState(false); 
     const lastSyncFingerprintRef = useRef<string>('');
     const isInternalUpdateRef = useRef(false);
     const supabaseRef = useRef<SupabaseClient | null>(null);
 
-    // 1. 初始化启动序列
+    // 1. 终极初始化序列：解决刷新配置丢失
     useEffect(() => {
-        const initializeApp = async () => {
-            console.log("[System] Booting Terminal...");
-            const saved = localStorage.getItem(DB_KEY);
-            let localData = null;
+        const initializeSystem = async () => {
+            console.log("[Boot] Initializing System Core...");
             
-            if (saved) {
+            // A. 首先尝试恢复独立的配置
+            const savedConfig = localStorage.getItem(CONFIG_KEY);
+            let config = state.supabaseConfig;
+            if (savedConfig) {
                 try {
-                    localData = JSON.parse(saved);
-                } catch (e) { console.error("[System] Cache corrupt"); }
+                    config = JSON.parse(savedConfig);
+                    dispatch({ type: 'SET_SUPABASE_CONFIG', payload: config });
+                } catch (e) { console.error("[Boot] Config corrupted"); }
             }
 
-            const config = localData?.supabaseConfig || state.supabaseConfig;
+            // B. 尝试从本地加载主数据库（作为备选）
+            const savedDb = localStorage.getItem(DB_KEY);
+            let localData = null;
+            if (savedDb) {
+                try { localData = JSON.parse(savedDb); } catch (e) {}
+            }
 
-            // 云优先策略
+            // C. 核心同步逻辑：云端优先
             if (config?.url && config?.key) {
+                console.log("[Boot] Uplink detected, pulling cloud snapshot...");
                 try {
-                    const tempSupabase = createClient(config.url, config.key);
-                    const { data, error } = await tempSupabase.from('app_backups').select('data').order('created_at', { ascending: false }).limit(1);
+                    const client = createClient(config.url, config.key);
+                    const { data, error } = await client.from('app_backups').select('data').order('created_at', { ascending: false }).limit(1);
                     
                     if (!error && data && data.length > 0) {
                         const cloudPayload = data[0].data.payload;
-                        console.log("[System] Cloud snapshot recovered");
+                        console.log("[Boot] Cloud data recovered successfully");
                         dispatch({ type: 'HYDRATE_STATE', payload: { ...cloudPayload, supabaseConfig: config } });
                         lastSyncFingerprintRef.current = JSON.stringify(cloudPayload);
                     } else if (localData) {
+                        console.log("[Boot] Cloud empty, falling back to local storage");
                         dispatch({ type: 'HYDRATE_STATE', payload: localData });
                     } else {
                         dispatch({ type: 'LOAD_MOCK_DATA' });
                     }
                 } catch (e) {
+                    console.log("[Boot] Cloud pull failed, using local fallback");
                     if (localData) dispatch({ type: 'HYDRATE_STATE', payload: localData });
                     else dispatch({ type: 'LOAD_MOCK_DATA' });
                 }
             } else if (localData && localData.products?.length > 0) {
+                console.log("[Boot] No uplink config, using local cache");
                 dispatch({ type: 'HYDRATE_STATE', payload: localData });
             } else {
+                console.log("[Boot] Pure environment, loading mock matrix");
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
 
-            // 完成初始化，释放写入锁
             setIsHydrated(true);
         };
-        initializeApp();
+        initializeSystem();
     }, []);
 
-    // 2. Supabase 实时监听
+    // 2. 实时链路管理
     useEffect(() => {
         if (!isHydrated || !state.supabaseConfig?.url || !state.supabaseConfig?.key || !state.supabaseConfig?.isRealTime) return;
 
-        console.log("[Cloud] Connecting to real-time matrix...");
+        console.log("[Realtime] Opening terminal channel...");
         const client = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
         supabaseRef.current = client;
 
-        const channel = client.channel(`live_sync_v7`)
+        const channel = client.channel(`matrix_sync_stable`)
             .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'app_backups' }, (payload) => {
                 const incoming = payload.new;
-                // 排除自己发出的消息，防止死循环
                 if (incoming?.data?.source_session !== SESSION_ID) {
                     const payloadData = incoming.data.payload;
                     const fingerprint = JSON.stringify(payloadData);
                     if (fingerprint !== lastSyncFingerprintRef.current) {
-                        console.log("[Cloud] External broadcast detected, syncing...");
+                        console.log("[Realtime] External delta received, syncing local state");
                         isInternalUpdateRef.current = true;
                         lastSyncFingerprintRef.current = fingerprint;
                         dispatch({ type: 'HYDRATE_STATE', payload: payloadData });
@@ -204,30 +215,30 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return () => { channel.unsubscribe(); };
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, isHydrated]);
 
-    // 3. 稳健持久化逻辑：只有 isHydrated 为 true 时才允许保存
+    // 3. 稳健持久化
     useEffect(() => {
         if (!isHydrated) return;
 
-        // 保存到本地
+        // 持久化主数据库
         try {
             const persistencePayload = { ...state, toasts: [], exportTasks: [] };
             localStorage.setItem(DB_KEY, JSON.stringify(persistencePayload));
+            // 同时持久化独立配置
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(state.supabaseConfig));
         } catch (e) {}
 
         document.body.className = `theme-${state.theme}`;
 
-        // 如果是内部更新引发的 state 改变，不触发自动上行同步
         if (isInternalUpdateRef.current) {
             isInternalUpdateRef.current = false;
             return;
         }
 
-        // 自动云同步防抖：延时 3 秒，确保用户停止操作后再同步
         if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime && !state.isDemoMode) {
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.orders, state.transactions, state.theme, isHydrated]);
+    }, [state.products, state.orders, state.transactions, state.theme, isHydrated, state.supabaseConfig]);
 
     const pullFromCloud = async () => {
         if (!state.supabaseConfig?.url) return;
@@ -251,7 +262,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             products: state.products, orders: state.orders, tasks: state.tasks, customers: state.customers,
             shipments: state.shipments, suppliers: state.suppliers, transactions: state.transactions,
             adCampaigns: state.adCampaigns, influencers: state.influencers, inboundShipments: state.inboundShipments,
-            supabaseConfig: state.supabaseConfig // 也要同步配置，以便新设备拉取
+            supabaseConfig: state.supabaseConfig 
         };
 
         const fingerprint = JSON.stringify(payloadToSync);
@@ -259,16 +270,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         try {
             const client = supabaseRef.current || createClient(state.supabaseConfig.url, state.supabaseConfig.key);
-            const { error } = await client.from('app_backups').insert([{ 
+            await client.from('app_backups').insert([{ 
                 data: { source_session: SESSION_ID, payload: payloadToSync, timestamp: new Date().toISOString() } 
             }]);
-            
-            if (error) throw error;
-            
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
         } catch (e) { 
-            console.error("[Cloud] Sync Failed", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
         }
     };
