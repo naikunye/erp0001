@@ -23,66 +23,68 @@ const Dashboard: React.FC = () => {
 
   const activeProducts = useMemo(() => state.products.filter(p => !p.deletedAt), [state.products]);
 
-  // --- 资产穿透引擎 V2.5+ ---
+  // --- 核心修复：资产穿透核算引擎 V3.0 (归一化分摊模型) ---
   const metrics = useMemo(() => {
       let totalStockValueCNY = 0;
       let totalPotentialProfitUSD = 0;
-      let totalWeightKG = 0;
       let totalInvestmentCNY = 0;
 
       activeProducts.forEach(p => {
-          const stock = p.stock || 0;
+          const stock = Math.max(p.stock || 0, 0);
+          if (stock === 0) return; // 无库存不计入穿透损益
+
           const costCNY = p.costPrice || 0;
           totalStockValueCNY += stock * costCNY;
-          totalWeightKG += stock * (p.unitWeight || 0);
 
+          // 1. 计算单品物流分摊 (防止小库存导致的杂费溢出)
           const dims = p.dimensions || {l:0, w:0, h:0};
-          const theoreticalWeight = Math.max(p.unitWeight || 0, (dims.l * dims.w * dims.h) / 6000);
-          const rate = p.logistics?.unitFreightCost || 0;
+          const volWeight = (dims.l * dims.w * dims.h) / 6000;
+          const chargeableWeight = Math.max(p.unitWeight || 0, volWeight);
+          
+          const freightRate = p.logistics?.unitFreightCost || 0;
           const batchFees = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
-          const unitLogisticsCNY = (theoreticalWeight * rate) + (batchFees / Math.max(stock, 1)) + (p.logistics?.consumablesFee || 0);
+          
+          // 这里的技巧：杂费分摊不应随库存减少而增加，应基于“预期总货量”或当前库存（取较大值防止分母过小）
+          const divisor = Math.max(stock, 50); 
+          const unitLogisticsCNY = (chargeableWeight * freightRate) + (batchFees / divisor) + (p.logistics?.consumablesFee || 0);
           
           totalInvestmentCNY += (costCNY + unitLogisticsCNY) * stock;
 
+          // 2. 计算单品净利 (单位：USD)
           const priceUSD = p.price || 0;
           const eco = p.economics;
           const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
           const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
-          const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0) + (eco?.adCost || 0);
+          const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
+          
+          // 关键修复：广告费分摊。如果 adCost > 50，通常被认为是总投入而非单件投入
+          const unitAdCostUSD = (eco?.adCost || 0) > 50 ? (eco?.adCost || 0) / divisor : (eco?.adCost || 0);
+          
           const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100);
 
-          const unitProfitUSD = priceUSD - ( (costCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + fixedFeesUSD + refundLossUSD );
+          // 穿透公式：售价 - (采购/汇率) - (物流/汇率) - 平台费 - 达人费 - 尾程费 - 分摊广告费 - 预估退货
+          const unitProfitUSD = priceUSD - ( (costCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + fixedFeesUSD + unitAdCostUSD + refundLossUSD );
+          
           totalPotentialProfitUSD += unitProfitUSD * stock;
       });
 
       return {
           stockValueCNY: totalStockValueCNY,
           totalPotentialProfitUSD,
-          totalWeightKG,
           roi: totalInvestmentCNY > 0 ? (totalPotentialProfitUSD * EXCHANGE_RATE / totalInvestmentCNY * 100) : 0,
           lowStockSkus: activeProducts.filter(p => p.stock < 20).length
       };
   }, [activeProducts]);
 
-  // --- AI 哨兵主动审计 ---
   const handleProactiveAudit = async () => {
-    // 模拟 AI 主动扫描并生成实时洞察
     const mockInsights: AiInsight[] = [
         {
             id: 'ins-1',
             type: 'risk',
             title: '库存断货风险告警',
-            content: 'SKU-BOX2 过去 48h 销量激增 140%，当前 FBA 库存仅剩 12 件，预计将在 2.4 天内断货。建议立即发起 50pcs 空运补货。',
+            content: 'SKU-BOX2 过去 48h 销量激增，当前 FBA 库存预计将在 2.4 天内断货。',
             priority: 'high',
             timestamp: '刚刚'
-        },
-        {
-            id: 'ins-2',
-            type: 'opportunity',
-            title: '头程物流优化机会',
-            content: '检测到美西快船价格近期下调 15%。当前待发货的 SKU-MA001 建议由“空运”切换为“海运加班船”，可节省约 ¥4,200 成本。',
-            priority: 'medium',
-            timestamp: '15分钟前'
         }
     ];
     setInsights(mockInsights);
@@ -93,7 +95,7 @@ const Dashboard: React.FC = () => {
       setReport(null);
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `Role: Supply Chain Strategist. Stock: ¥${metrics.stockValueCNY.toLocaleString()}, Profit: $${metrics.totalPotentialProfitUSD.toLocaleString()}, Global ROI: ${metrics.roi.toFixed(1)}%. Negative SKU count: ${metrics.lowStockSkus}. Provide a Proactive Sentry Audit Report in Chinese HTML focusing on immediate actions.`;
+          const prompt = `你是一个供应链财务专家。当前库存货值 ¥${metrics.stockValueCNY.toLocaleString()}，穿透预估净利 $${metrics.totalPotentialProfitUSD.toLocaleString()}，整体 ROI ${metrics.roi.toFixed(1)}%。请简要分析当前资产结构（中文 HTML 格式，使用 <b> 加粗）。`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setReport(response.text);
       } catch (e) {
@@ -105,30 +107,26 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-10">
-      {/* AI Sentry Bar - 主动决策流 */}
+      {/* AI Sentry Bar */}
       <div className="ios-glass-panel border-violet-500/30 bg-violet-500/5 p-4 rounded-2xl flex items-center gap-6 overflow-hidden relative">
           <div className="absolute top-0 left-0 w-1 h-full bg-violet-600 animate-pulse"></div>
           <div className="flex items-center gap-3 shrink-0">
-              <div className="p-2 bg-violet-600 rounded-lg text-white shadow-lg shadow-violet-900/40">
+              <div className="p-2 bg-violet-600 rounded-lg text-white">
                   <Zap className="w-5 h-5 fill-current" />
               </div>
               <span className="text-xs font-black text-violet-400 uppercase tracking-[0.2em]">AI Sentry</span>
           </div>
           <div className="flex-1 flex gap-8 overflow-x-auto scrollbar-none">
               {insights.map(ins => (
-                  <div key={ins.id} className="flex items-center gap-3 shrink-0 group cursor-pointer hover:bg-white/5 p-2 rounded-xl transition-all">
-                      <div className={`w-2 h-2 rounded-full ${ins.type === 'risk' ? 'bg-red-500 shadow-[0_0_8px_#ef4444]' : 'bg-emerald-500 shadow-[0_0_8px_#10b981]'}`}></div>
+                  <div key={ins.id} className="flex items-center gap-3 shrink-0">
+                      <div className={`w-2 h-2 rounded-full ${ins.type === 'risk' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
                       <div className="flex flex-col">
                           <span className="text-[10px] font-bold text-white uppercase">{ins.title}</span>
                           <span className="text-[10px] text-slate-500 line-clamp-1 w-64">{ins.content}</span>
                       </div>
-                      <ChevronRight className="w-3 h-3 text-slate-700 group-hover:text-white transition-colors" />
                   </div>
               ))}
           </div>
-          <button className="text-[10px] font-bold text-violet-400 hover:text-white border-l border-white/5 pl-4 shrink-0 uppercase tracking-widest">
-              查看全部决策 &gt;
-          </button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -138,10 +136,8 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-          {/* 左侧：资产诊断报告 */}
           <div className="lg:col-span-8 space-y-6">
               <div className="ios-glass-card p-1 relative group">
-                <div className="absolute inset-0 bg-gradient-to-r from-violet-600/10 to-indigo-600/10 rounded-[20px] pointer-events-none"></div>
                 <div className="p-6 flex items-center justify-between relative z-10">
                     <div className="flex items-center gap-6">
                         <div className="p-4 bg-black/60 border border-white/10 rounded-2xl text-violet-400">
@@ -149,49 +145,37 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-white tracking-tight italic uppercase">资产风控审计系统</h2>
-                            <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Kernel v2.5.8 • Integrated Proactive Audit</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">基于分摊成本模型的实时穿透</p>
                         </div>
                     </div>
-                    <button onClick={handleGenerateReport} disabled={isGenerating} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold shadow-xl shadow-violet-900/30 transition-all active:scale-95 flex items-center gap-2">
-                        {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Command className="w-4 h-4" />} 即刻生成穿透报告
+                    <button onClick={handleGenerateReport} disabled={isGenerating} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold shadow-xl flex items-center gap-2">
+                        {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Command className="w-4 h-4" />} 生成审计报告
                     </button>
                 </div>
                 {report && (
                     <div className="px-6 pb-6 animate-in fade-in relative z-10">
-                        <div className="p-6 bg-black/60 rounded-2xl border border-white/5 text-slate-200 leading-relaxed font-mono shadow-inner text-xs prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: report }}></div>
+                        <div className="p-6 bg-black/60 rounded-2xl border border-white/5 text-slate-200 leading-relaxed font-mono text-xs" dangerouslySetInnerHTML={{ __html: report }}></div>
                     </div>
                 )}
               </div>
           </div>
 
-          {/* 右侧：物流管道简报 */}
           <div className="lg:col-span-4 flex flex-col gap-6">
               <div className="ios-glass-card p-6 flex flex-col flex-1 border-l-4 border-l-blue-500">
                   <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                      <Box className="w-4 h-4 text-blue-500" /> 物流管道资产 (Pipeline)
+                      <Box className="w-4 h-4 text-blue-500" /> 物流在途资产
                   </h3>
                   <div className="space-y-6">
                       {state.shipments.slice(0, 3).map(ship => (
-                          <div key={ship.id} className="relative pl-6">
-                              <div className="absolute left-0 top-0 bottom-0 w-px bg-white/5"></div>
-                              <div className="absolute left-[-4px] top-1 w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></div>
+                          <div key={ship.id} className="relative pl-6 border-l border-white/5">
+                              <div className="absolute left-[-4.5px] top-1 w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></div>
                               <div className="flex justify-between items-start mb-1">
                                   <span className="text-[11px] font-bold text-white font-mono">{ship.trackingNo}</span>
                                   <span className="text-[9px] px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{ship.status}</span>
                               </div>
-                              <div className="text-[10px] text-slate-500 mb-2 truncate">{ship.productName}</div>
-                              <div className="h-1 w-full bg-white/5 rounded-full overflow-hidden">
-                                  <div className="h-full bg-blue-600/40 w-2/3"></div>
-                              </div>
-                              <div className="flex justify-between mt-1 text-[8px] font-bold text-slate-600 uppercase tracking-tighter">
-                                  <span>Departure</span>
-                                  <span>ETA: {ship.estimatedDelivery}</span>
-                              </div>
+                              <div className="text-[10px] text-slate-500 truncate">{ship.productName}</div>
                           </div>
                       ))}
-                      <button onClick={() => dispatch({type: 'NAVIGATE', payload: {page: 'logistics-hub'}})} className="w-full py-2 border border-white/5 hover:bg-white/5 rounded-lg text-[10px] font-bold text-slate-500 transition-all uppercase tracking-widest">
-                          管理全球货件 &gt;
-                      </button>
                   </div>
               </div>
           </div>
