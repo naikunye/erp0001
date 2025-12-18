@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, X, Menu, ChevronDown, CalendarDays, Cloud, RefreshCw, Radio } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Clock, Globe } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -8,14 +8,12 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ title }) => {
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showUserMenu, setShowUserMenu] = useState(false);
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [now, setNow] = useState(new Date());
   const { state, dispatch, showToast, syncToCloud } = useTanxing();
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-      const timer = setInterval(() => setCurrentTime(new Date()), 1000);
+      const timer = setInterval(() => setNow(new Date()), 1000);
       return () => clearInterval(timer);
   }, []);
 
@@ -28,6 +26,35 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       await syncToCloud();
       setIsSyncing(false);
       showToast('数据已即时广播至所有终端', 'success');
+  };
+
+  // --- 时区转换引擎 ---
+  const formatTime = (tz: string) => {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: tz,
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+    }).format(now);
+  };
+
+  // 获取美国太平洋时间（美西/洛杉矶）日期 - 确保与美西运营时区对齐
+  const getUSDate = () => {
+    return new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Los_Angeles',
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(now);
+  };
+
+  // 获取美国太平洋时间星期
+  const getUSWeekday = () => {
+    return new Intl.DateTimeFormat('zh-CN', {
+      timeZone: 'America/Los_Angeles',
+      weekday: 'long',
+    }).format(now);
   };
 
   const isCloudConnected = !!(state.supabaseConfig.url && state.supabaseConfig.key);
@@ -46,6 +73,45 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       </div>
 
       <div className="flex items-center space-x-6">
+        {/* US Timezones Display - High Fidelity Restoration */}
+        <div className="hidden xl:flex items-center gap-6 pr-6 border-r border-white/5">
+            {/* US Anchored Date - Now PT (Pacific Time) */}
+            <div className="flex flex-col items-end">
+                <div className="flex items-center gap-1.5 text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">
+                    <Globe className="w-2.5 h-2.5" />
+                    US DATE (PT)
+                </div>
+                <div className="flex items-baseline gap-1.5">
+                    <span className="text-[10px] text-slate-500 font-bold">{getUSWeekday()}</span>
+                    <span className="text-xs font-mono font-bold text-white">{getUSDate()}</span>
+                </div>
+            </div>
+            
+            {/* Eastern Time (EST/EDT) */}
+            <div className="flex flex-col items-center">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美东 ET</span>
+                <span className="text-xs font-mono text-white/70">
+                    {formatTime('America/New_York')}
+                </span>
+            </div>
+
+            {/* Central Time (CST/CDT) */}
+            <div className="flex flex-col items-center">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美中 CT</span>
+                <span className="text-xs font-mono text-white/70">
+                    {formatTime('America/Chicago')}
+                </span>
+            </div>
+
+            {/* Pacific Time (PST/PDT) */}
+            <div className="flex flex-col items-center">
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美西 PT</span>
+                <span className="text-xs font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
+                    {formatTime('America/Los_Angeles')}
+                </span>
+            </div>
+        </div>
+
         {/* Real-time Status Pill */}
         {isRealTimeActive && (
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
@@ -67,8 +133,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </button>
 
             <button 
-                onClick={() => setShowNotifications(!showNotifications)}
-                className={`relative p-2 rounded-full transition-all ${showNotifications ? 'bg-white/10 text-white' : 'text-white/60 hover:text-white hover:bg-white/5'}`}
+                className={`relative p-2 rounded-full transition-all text-white/60 hover:text-white hover:bg-white/5`}
             >
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full ring-2 ring-[#121217]"></span>
@@ -76,7 +141,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             
             <div className="relative">
                 <button 
-                    onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent"
                 >
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">AD</div>
