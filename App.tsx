@@ -23,7 +23,7 @@ import Suppliers from './pages/Suppliers';
 import Profile from './pages/Profile';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
-import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
+import { Hexagon, ArrowRight, Loader2, Cpu, Zap } from 'lucide-react';
 import Logger from './utils/logger';
 
 const MainLayout: React.FC = () => {
@@ -101,8 +101,26 @@ const MainLayout: React.FC = () => {
     }
   };
 
-  if (authChecking) {
-      return <div className="min-h-screen flex items-center justify-center bg-black"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>;
+  if (authChecking || !state.isInitialized) {
+      return (
+          <div className="min-h-screen flex flex-col items-center justify-center bg-black gap-6">
+              <div className="relative">
+                  <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center animate-pulse">
+                      <Hexagon className="w-10 h-10 text-indigo-500 animate-spin-slow" />
+                  </div>
+                  <div className="absolute -bottom-1 -right-1">
+                      <Zap className="w-6 h-6 text-yellow-500 animate-bounce" />
+                  </div>
+              </div>
+              <div className="flex flex-col items-center">
+                  <h2 className="text-white font-mono font-bold tracking-[0.3em] uppercase text-sm">System Initializing</h2>
+                  <div className="flex gap-1 mt-3">
+                      {[1,2,3].map(i => <div key={i} className="w-1.5 h-1.5 rounded-full bg-indigo-500 animate-bounce" style={{animationDelay: `${i*0.2}s`}}></div>)}
+                  </div>
+                  <p className="text-[10px] text-slate-600 font-mono mt-4 uppercase">Syncing Neural Matrix from Cloud...</p>
+              </div>
+          </div>
+      );
   }
 
   if (!isAuthenticated) {
