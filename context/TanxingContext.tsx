@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
-const DB_KEY = 'TANXING_DB_V4_FINAL';
+const DB_KEY = 'TANXING_DB_FINAL_V5';
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'paper-minimal';
@@ -103,31 +103,14 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_CONNECTION_STATUS': return { ...state, connectionStatus: action.payload };
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
-        case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p) };
-        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products] };
-        case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload) };
-        case 'ADD_TASK': return { ...state, tasks: [action.payload, ...state.tasks] };
-        case 'UPDATE_TASK': return { ...state, tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) };
-        case 'DELETE_TASK': return { ...state, tasks: state.tasks.filter(t => t.id !== action.payload) };
-        case 'ADD_ORDER': return { ...state, orders: [action.payload, ...state.orders] };
-        case 'UPDATE_ORDER_STATUS': return { ...state, orders: state.orders.map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) };
-        case 'DELETE_ORDER': return { ...state, orders: state.orders.filter(o => o.id !== action.payload) };
-        case 'ADD_CUSTOMER': return { ...state, customers: [action.payload, ...state.customers] };
-        case 'UPDATE_CUSTOMER': return { ...state, customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c) };
-        case 'DELETE_CUSTOMER': return { ...state, customers: state.customers.filter(c => c.id !== action.payload) };
-        case 'ADD_SHIPMENT': return { ...state, shipments: [action.payload, ...state.shipments] };
-        case 'UPDATE_SHIPMENT': return { ...state, shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s) };
-        case 'DELETE_SHIPMENT': return { ...state, shipments: state.shipments.filter(s => s.id !== action.payload) };
-        case 'ADD_INFLUENCER': return { ...state, influencers: [action.payload, ...state.influencers] };
-        case 'CREATE_AD_CAMPAIGN': return { ...state, adCampaigns: [action.payload, ...state.adCampaigns] };
-        case 'ADD_SUPPLIER': return { ...state, suppliers: [action.payload, ...state.suppliers] };
-        case 'UPDATE_SUPPLIER': return { ...state, suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s) };
-        case 'DELETE_SUPPLIER': return { ...state, suppliers: state.suppliers.filter(s => s.id !== action.payload) };
-        case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
+        case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
+        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
+        case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload), isDemoMode: false };
+        case 'ADD_TASK': return { ...state, tasks: [action.payload, ...state.tasks], isDemoMode: false };
+        case 'UPDATE_TASK': return { ...state, tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t), isDemoMode: false };
+        case 'ADD_ORDER': return { ...state, orders: [action.payload, ...state.orders], isDemoMode: false };
         case 'HYDRATE_STATE': return { ...state, ...action.payload, isInitialized: true };
-        case 'FULL_RESTORE': 
-            SESSION_ID = Math.random().toString(36).substring(7);
-            return { ...state, ...action.payload, isInitialized: true, isDemoMode: false };
+        case 'FULL_RESTORE': return { ...state, ...action.payload, isInitialized: true, isDemoMode: false };
         case 'LOAD_MOCK_DATA':
             return {
                 ...state,
@@ -144,9 +127,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
                 isInitialized: true
             };
         case 'SET_SUPABASE_CONFIG': return { ...state, supabaseConfig: { ...state.supabaseConfig, ...action.payload } };
-        case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'SET_INITIALIZED': return { ...state, isInitialized: action.payload };
-        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
         case 'RESET_DATA': 
             localStorage.removeItem(DB_KEY);
             return emptyState;
@@ -163,42 +144,36 @@ const TanxingContext = createContext<{
 }>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => {}, pullFromCloud: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    // 1. 初始化 Reducer
     const [state, dispatch] = useReducer(appReducer, emptyState);
-
-    const isInternalUpdate = useRef(false);
     const lastSyncDataRef = useRef<string>('');
+    const isInternalUpdate = useRef(false);
 
-    // 2. 启动逻辑：先读本地，有云连云，无云看是否加载 Mock
+    // 1. 核心生命周期：阻止任何写入，直到确认加载完毕
     useEffect(() => {
-        const boot = async () => {
+        const init = async () => {
             const saved = localStorage.getItem(DB_KEY);
-            let localState = null;
+            let initialState = null;
             if (saved) {
                 try {
-                    localState = JSON.parse(saved);
-                    dispatch({ type: 'HYDRATE_STATE', payload: { ...localState, isInitialized: false } });
-                } catch (e) { console.error("Local storage corrupt"); }
+                    initialState = JSON.parse(saved);
+                } catch (e) { console.error("Cache Corrupt"); }
             }
 
-            const currentConfig = localState?.supabaseConfig || state.supabaseConfig;
-            
-            if (currentConfig?.url && currentConfig?.key) {
-                // 如果有云配置，启动必须拉取云端覆盖本地
-                await pullFromCloud(currentConfig);
+            // 如果有本地云配置，优先拉取
+            if (initialState?.supabaseConfig?.url && initialState?.supabaseConfig?.key) {
+                await pullFromCloud(initialState.supabaseConfig);
+            } else if (initialState && initialState.products.length > 0) {
+                // 如果没有云但有本地数据，恢复本地
+                dispatch({ type: 'HYDRATE_STATE', payload: initialState });
             } else {
-                // 如果本地也为空且没云端，自动注入模拟数据（仅内存，不写代码）
-                if (!localState || (localState.products.length === 0)) {
-                    dispatch({ type: 'LOAD_MOCK_DATA' });
-                } else {
-                    dispatch({ type: 'SET_INITIALIZED', payload: true });
-                }
+                // 全空环境，加载模拟数据
+                dispatch({ type: 'LOAD_MOCK_DATA' });
             }
         };
-        boot();
+        init();
     }, []);
 
-    // 3. Supabase 实时监听
+    // 2. Supabase 实时监听修复
     useEffect(() => {
         const config = state.supabaseConfig;
         if (!config?.url || !config?.key || !config?.isRealTime || !state.isInitialized) return;
@@ -206,48 +181,45 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         try {
             const supabase = createClient(config.url, config.key);
-            const channel = supabase.channel('tanxing_realtime_v4')
+            const channel = supabase.channel('tanxing_realtime_v5')
                 .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'app_backups' }, (payload) => {
                     const incoming = payload.new;
-                    if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
-                        const incomingPayload = incoming.data.payload;
-                        const payloadString = JSON.stringify(incomingPayload);
-                        if (payloadString !== lastSyncDataRef.current) {
+                    if (incoming?.data?.source_session !== SESSION_ID) {
+                        const payloadData = incoming.data.payload;
+                        if (JSON.stringify(payloadData) !== lastSyncDataRef.current) {
                             isInternalUpdate.current = true;
-                            lastSyncDataRef.current = payloadString;
-                            dispatch({ type: 'HYDRATE_STATE', payload: incomingPayload });
+                            lastSyncDataRef.current = JSON.stringify(payloadData);
+                            dispatch({ type: 'HYDRATE_STATE', payload: payloadData });
                         }
                     }
                 })
                 .subscribe((status) => {
                     if (status === 'SUBSCRIBED') dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-                    else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+                    else if (status === 'CHANNEL_ERROR') dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
                 });
 
             return () => { supabase.removeChannel(channel); };
         } catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); }
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, state.isInitialized]);
 
-    // 4. 数据持久化与自动同步执行
+    // 3. 持久化副作用 (只有初始化后才生效)
     useEffect(() => {
         if (!state.isInitialized) return;
 
-        // 写入本地存储 (Guard: 防止空状态覆盖)
+        // 写入本地存储 (Guard: 防止覆盖)
         try {
             const payload = { ...state, toasts: [], exportTasks: [] };
             localStorage.setItem(DB_KEY, JSON.stringify(payload));
         } catch (e) {}
-        
-        document.body.className = `theme-${state.theme}`;
 
         if (isInternalUpdate.current) {
             isInternalUpdate.current = false;
             return;
         }
 
-        // 自动上云 (非演示模式)
+        // 演示模式或空配置不触发自动同步
         if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 5000);
+            const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
     }, [state.products, state.orders, state.transactions, state.isInitialized]);
@@ -270,7 +242,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const cloudPayload = data[0].data.payload;
                 lastSyncDataRef.current = JSON.stringify(cloudPayload);
                 isInternalUpdate.current = true;
-                dispatch({ type: 'HYDRATE_STATE', payload: cloudPayload });
+                dispatch({ type: 'HYDRATE_STATE', payload: { ...cloudPayload, supabaseConfig: config } });
             } else {
                 dispatch({ type: 'SET_INITIALIZED', payload: true });
             }
@@ -282,7 +254,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (isForce: boolean = false) => {
         if (!state.isInitialized || !state.supabaseConfig?.url || !state.supabaseConfig?.key) return;
-        if (state.isDemoMode && !isForce) return; // 演示模式禁同步
+        if (state.isDemoMode && !isForce) return;
 
         const payloadToSync = {
             products: state.products,
@@ -294,8 +266,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             transactions: state.transactions,
             adCampaigns: state.adCampaigns,
             influencers: state.influencers,
-            inboundShipments: state.inboundShipments,
-            supabaseConfig: state.supabaseConfig // 保持配置同步
+            inboundShipments: state.inboundShipments
         };
 
         const payloadString = JSON.stringify(payloadToSync);
@@ -304,11 +275,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
             await supabase.from('app_backups').insert([{
-                data: {
-                    source_session: SESSION_ID,
-                    payload: payloadToSync,
-                    timestamp: new Date().toISOString()
-                }
+                data: { source_session: SESSION_ID, payload: payloadToSync, timestamp: new Date().toISOString() }
             }]);
             lastSyncDataRef.current = payloadString;
             dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });

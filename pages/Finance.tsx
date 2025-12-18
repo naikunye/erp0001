@@ -15,7 +15,7 @@ type ViewMode = 'ledger' | 'overview' | 'penetration';
 const Finance: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
   const [viewMode, setViewMode] = useState<ViewMode>('ledger');
-  const [selectedSku, setSelectedSku] = useState<string | null>(state.products[0]?.sku || null);
+  const [selectedSku, setSelectedSku] = useState<string | null>(state.products.find(p => !p.deletedAt)?.sku || null);
   const [searchTerm, setSearchTerm] = useState('');
 
   const EXCHANGE_RATE = 7.2;
@@ -44,7 +44,7 @@ const Finance: React.FC = () => {
           .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [state.transactions, searchTerm]);
 
-  // --- 核心算法：单品盈利穿透 V3.3 (彻底解决负数) ---
+  // --- 核心算法：单品盈利穿透 V3.5 (异常保护) ---
   const penetrationData = useMemo(() => {
       const product = state.products.find(p => p.sku === selectedSku) || state.products[0];
       if (!product) return null;
@@ -53,31 +53,19 @@ const Finance: React.FC = () => {
       const priceUSD = product.price || 0;
       const costUSD = (product.costPrice || 0) / EXCHANGE_RATE;
       
-      // 1. 物流分摊 - 修复分母爆表问题
+      // 1. 物流成本 - 保护性分摊
       const dims = product.dimensions || {l:0, w:0, h:0};
-      const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
-      const autoUnitWeight = Math.max(product.unitWeight || 0, unitVolWeight);
+      const autoUnitWeight = Math.max(product.unitWeight || 0, (dims.l * dims.w * dims.h) / 6000);
       const rate = product.logistics?.unitFreightCost || 0;
-
-      // 逻辑修正：如果手动设置了总运费，但库存很小，说明这是历史总成本，不能直接分摊给剩余的几件商品
-      // 我们改用“理论计费单价”和“手动录入单价”中更合理的一个
-      let unitLogisticsCNY = 0;
       
-      // 检查是否有手动覆盖的单品运费单价
-      if (product.logistics?.unitBillingWeight && product.logistics.unitBillingWeight > 0) {
-          unitLogisticsCNY = product.logistics.unitBillingWeight * rate;
+      let unitLogisticsCNY = 0;
+      const manualTotal = product.logistics?.totalFreightCost;
+      
+      // 逻辑：如果总运费存在且库存大于一定阈值，采用平均分摊；否则采用理论单价模型
+      if (manualTotal && manualTotal > 0 && stock > 5) {
+          unitLogisticsCNY = (manualTotal / stock) + (product.logistics?.consumablesFee || 0);
       } else {
-          // 如果没有手动单价，优先看手动总价的分摊，但要加保护
-          const batchFeesCNY = (product.logistics?.customsFee || 0) + (product.logistics?.portFee || 0);
-          const manualTotal = product.logistics?.totalFreightCost;
-          
-          if (manualTotal && manualTotal > 0 && stock > 10) {
-              // 只有当库存量级尚可时，才使用总额平摊
-              unitLogisticsCNY = (manualTotal / stock) + (product.logistics?.consumablesFee || 0);
-          } else {
-              // 库存太小或没有手动总价时，使用理论计费重单价
-              unitLogisticsCNY = (autoUnitWeight * rate) + (product.logistics?.consumablesFee || 0);
-          }
+          unitLogisticsCNY = (autoUnitWeight * rate) + (product.logistics?.consumablesFee || 0);
       }
 
       const unitLogisticsUSD = unitLogisticsCNY / EXCHANGE_RATE;
@@ -102,10 +90,10 @@ const Finance: React.FC = () => {
               { name: '采购成本', value: -costUSD, color: '#ef4444' },
               { name: '头程物流分摊', value: -unitLogisticsUSD, color: '#f59e0b' },
               { name: '平台/达人扣点', value: -(platformFee + creatorFee), color: '#ec4899' },
-              { name: '广告 CPA', value: -unitAds, color: '#ec4899' },
+              { name: '营销广告 (CPA)', value: -unitAds, color: '#ec4899' },
               { name: '尾程派送', value: -lastLeg, color: '#6366f1' },
-              { name: '退货及杂费', value: -(fixedFee + refundRateLoss), color: '#94a3b8' },
-              { name: '穿透净利', value: netProfit, color: '#8b5cf6' }
+              { name: '预估退货及杂费', value: -(fixedFee + refundRateLoss), color: '#94a3b8' },
+              { name: '单品穿透净利', value: netProfit, color: '#8b5cf6' }
           ],
           margin: priceUSD > 0 ? (netProfit / priceUSD) * 100 : 0,
           totalPotentialProfit: netProfit * stock
@@ -119,7 +107,7 @@ const Finance: React.FC = () => {
               <h1 className="text-2xl font-bold text-white flex items-center gap-3 italic uppercase tracking-tighter">
                   <Wallet className="w-8 h-8 text-violet-500" /> 财务穿透中枢 (Audit Matrix)
               </h1>
-              <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Logic Validated: Batch-Normalizing Allocation V3.3</p>
+              <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Sync V5 • Persistence Guard Active</p>
           </div>
           <div className="flex items-center gap-3">
               <div className="flex bg-black/60 p-1 rounded-xl border border-white/5 shadow-xl">
@@ -131,13 +119,10 @@ const Finance: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 shrink-0">
-          <div className="ios-glass-card p-4 border-l-4 border-l-blue-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">可用资金</div><div className="text-xl font-black text-white font-mono">¥ {financeStats.balance.toLocaleString()}</div></div>
-          <div className="ios-glass-card p-4 border-l-4 border-l-emerald-500">
-              <div className="text-[9px] text-slate-500 font-bold uppercase mb-1">当前库存总值</div>
-              <div className="text-xl font-black text-emerald-400 font-mono">¥ {state.products.reduce((a,b)=>a+(b.stock*(b.costPrice||0)),0).toLocaleString()}</div>
-          </div>
-          <div className="ios-glass-card p-4 border-l-4 border-l-rose-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">本月累计支出</div><div className="text-xl font-black text-rose-400 font-mono">¥ {financeStats.expense.toLocaleString()}</div></div>
-          <div className="ios-glass-card p-4 border-l-4 border-l-amber-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">待对账款项</div><div className="text-xl font-black text-amber-500 font-mono">¥ {financeStats.pending.toLocaleString()}</div></div>
+          <div className="ios-glass-card p-4 border-l-4 border-l-blue-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">现金池</div><div className="text-xl font-black text-white font-mono">¥ {financeStats.balance.toLocaleString()}</div></div>
+          <div className="ios-glass-card p-4 border-l-4 border-l-emerald-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">库存货值</div><div className="text-xl font-black text-emerald-400 font-mono">¥ {state.products.reduce((a,b)=>a+(b.stock*(b.costPrice||0)),0).toLocaleString()}</div></div>
+          <div className="ios-glass-card p-4 border-l-4 border-l-rose-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">本月支出</div><div className="text-xl font-black text-rose-400 font-mono">¥ {financeStats.expense.toLocaleString()}</div></div>
+          <div className="ios-glass-card p-4 border-l-4 border-l-amber-500"><div className="text-[9px] text-slate-500 font-bold uppercase mb-1">待结/待审</div><div className="text-xl font-black text-amber-500 font-mono">¥ {financeStats.pending.toLocaleString()}</div></div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-hidden">
@@ -146,13 +131,13 @@ const Finance: React.FC = () => {
                   <div className="p-4 bg-white/5 border-b border-white/5 flex justify-between items-center">
                       <div className="relative">
                           <Search className="w-4 h-4 text-slate-600 absolute left-3 top-2.5" />
-                          <input type="text" placeholder="检索流水、分类..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-xs text-white focus:border-indigo-500 outline-none w-64"/>
+                          <input type="text" placeholder="检索流水..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="bg-black/40 border border-white/10 rounded-lg pl-9 pr-4 py-2 text-xs text-white focus:border-indigo-500 outline-none w-64"/>
                       </div>
                   </div>
                   <div className="flex-1 overflow-y-auto custom-scrollbar">
-                      <table className="w-full text-left border-collapse">
+                      <table className="w-full text-left">
                           <thead className="bg-black/40 sticky top-0 z-10 border-b border-white/5 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                              <tr><th className="p-4">日期</th><th className="p-4">分类</th><th className="p-4">描述</th><th className="p-4 text-right">金额</th><th className="p-4 text-right">折合(CNY)</th><th className="p-4 text-center">状态</th></tr>
+                              <tr><th className="p-4">日期</th><th className="p-4">分类</th><th className="p-4">摘要</th><th className="p-4 text-right">金额</th><th className="p-4 text-center">状态</th></tr>
                           </thead>
                           <tbody className="divide-y divide-white/5">
                               {filteredTransactions.map(tx => (
@@ -161,7 +146,6 @@ const Finance: React.FC = () => {
                                       <td className="p-4 text-xs font-bold text-slate-200">{tx.category}</td>
                                       <td className="p-4 text-xs text-slate-300 truncate max-w-xs">{tx.description}</td>
                                       <td className={`p-4 text-right font-mono font-bold ${tx.type === 'income' ? 'text-emerald-400' : 'text-rose-400'}`}>{tx.type === 'income' ? '+' : '-'}{tx.amount.toLocaleString()} {tx.currency}</td>
-                                      <td className="p-4 text-right text-xs text-slate-500 font-mono italic">¥ {(tx.currency === 'USD' ? tx.amount * EXCHANGE_RATE : tx.amount).toLocaleString()}</td>
                                       <td className="p-4 text-center"><span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-black ${tx.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-500'}`}>{tx.status}</span></td>
                                   </tr>
                               ))}
@@ -174,13 +158,13 @@ const Finance: React.FC = () => {
           {viewMode === 'penetration' && penetrationData && (
               <div className="h-full grid grid-cols-12 gap-6 animate-in slide-in-from-right-4">
                    <div className="col-span-4 ios-glass-card p-6 overflow-y-auto">
-                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4 tracking-tighter">选择核算 SKU (仅限活跃)</h4>
+                        <h4 className="text-xs font-bold text-slate-500 uppercase mb-4">选择核算对象</h4>
                         <div className="space-y-2">
                             {state.products.filter(p => !p.deletedAt).map(p => (
                                 <div key={p.id} onClick={() => setSelectedSku(p.sku)} className={`p-4 rounded-xl border cursor-pointer transition-all ${selectedSku === p.sku ? 'bg-violet-600/10 border-violet-500' : 'bg-white/5 border-white/5 hover:border-white/10'}`}>
                                     <div className="flex justify-between items-start">
-                                        <div className="text-sm font-bold text-white font-mono tracking-tight">{p.sku}</div>
-                                        <div className="text-[10px] text-slate-500 uppercase">现存: {p.stock}</div>
+                                        <div className="text-sm font-bold text-white font-mono">{p.sku}</div>
+                                        <div className="text-[10px] text-slate-500 uppercase">库: {p.stock}</div>
                                     </div>
                                     <div className="text-[10px] text-slate-500 mt-1 truncate">{p.name}</div>
                                 </div>
@@ -195,10 +179,10 @@ const Finance: React.FC = () => {
                         <div className="flex justify-between items-end mb-10 relative z-10">
                             <div>
                                 <h3 className="text-xl font-bold text-white italic uppercase tracking-tighter mb-1">单品穿透损益瀑布模型</h3>
-                                <p className="text-xs text-slate-500 font-mono">P&L Waterfall | Exchange Rate 1:{EXCHANGE_RATE}</p>
+                                <p className="text-xs text-slate-500 font-mono">P&L Waterfall | 汇率 1:{EXCHANGE_RATE}</p>
                             </div>
                             <div className="text-right">
-                                <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">库存预期净利润 (USD)</div>
+                                <div className="text-[10px] text-slate-500 font-bold uppercase mb-1">预估累计利润 (USD)</div>
                                 <div className={`text-4xl font-black font-mono tracking-tighter ${penetrationData.totalPotentialProfit >= 0 ? 'text-white' : 'text-rose-500'}`}>
                                     ${penetrationData.totalPotentialProfit.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                 </div>
@@ -221,16 +205,15 @@ const Finance: React.FC = () => {
                             ))}
                         </div>
 
-                        <div className="mt-8 p-6 bg-violet-600/10 border border-violet-500/30 rounded-2xl flex justify-between items-center shadow-2xl relative overflow-hidden">
-                            <div className="absolute inset-0 bg-gradient-to-r from-violet-600/5 to-transparent"></div>
+                        <div className="mt-8 p-6 bg-violet-600/10 border border-violet-500/30 rounded-2xl flex justify-between items-center relative overflow-hidden">
                             <div className="flex items-center gap-4 relative z-10">
                                 <div className="p-3 bg-violet-600 rounded-xl text-white shadow-xl shadow-violet-900/40"><Zap className="w-5 h-5 fill-current"/></div>
                                 <div>
-                                    <div className="text-xs font-bold text-white uppercase tracking-widest">穿透综合净利率 (Margin)</div>
-                                    <div className="text-[10px] text-violet-400 font-mono mt-0.5">已计入 CPA、物流及退货损益</div>
+                                    <div className="text-xs font-bold text-white uppercase tracking-widest">穿透综合净利率</div>
+                                    <div className="text-[10px] text-violet-400 font-mono mt-0.5">计入 CPA、头程物流及退货损益</div>
                                 </div>
                             </div>
-                            <div className={`text-4xl font-black font-mono tracking-tighter relative z-10 ${penetrationData.margin > 15 ? 'text-emerald-400' : penetrationData.margin > 0 ? 'text-amber-400' : 'text-rose-500 animate-pulse'}`}>
+                            <div className={`text-4xl font-black font-mono tracking-tighter relative z-10 ${penetrationData.margin > 15 ? 'text-emerald-400' : penetrationData.margin > 0 ? 'text-amber-400' : 'text-rose-500'}`}>
                                 {penetrationData.margin.toFixed(1)}%
                             </div>
                         </div>
