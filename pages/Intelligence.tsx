@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bot, Brain, Zap, Globe, MapPin, Image as ImageIcon, Video, Mic, 
@@ -120,7 +119,8 @@ const OmniChat = () => {
             if (!process.env.API_KEY) throw new Error("API Key missing");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            let model = 'gemini-3-pro-preview';
+            // Default model updated to recommended gemini-3-flash-preview
+            let model = 'gemini-3-flash-preview';
             let config: any = {};
             let tools: any[] = [];
 
@@ -130,18 +130,21 @@ const OmniChat = () => {
                     config = { thinkingConfig: { thinkingBudget: 32768 } };
                     break;
                 case 'search':
-                    model = 'gemini-2.5-flash';
+                    // Recommended model for search grounding is gemini-3-flash-preview
+                    model = 'gemini-3-flash-preview';
                     tools = [{ googleSearch: {} }];
                     break;
                 case 'maps':
+                    // Maps grounding is only supported in Gemini 2.5 series models.
                     model = 'gemini-2.5-flash';
                     tools = [{ googleMaps: {} }];
                     break;
                 case 'lite':
-                    model = 'gemini-2.5-flash-lite';
+                    // Recommended model for lite tasks
+                    model = 'gemini-flash-lite-latest';
                     break;
                 default: 
-                    model = 'gemini-2.5-flash';
+                    model = 'gemini-3-flash-preview';
             }
 
             const response = await ai.models.generateContent({
@@ -223,6 +226,7 @@ const OmniChat = () => {
             {/* Input */}
             <div className="p-4 border-t border-white/10 bg-black/40">
                 <div className="flex gap-2">
+                    {/* Fixed setQuery to setInput for correct state update */}
                     <input 
                         type="text" 
                         value={input}
