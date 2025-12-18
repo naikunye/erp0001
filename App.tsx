@@ -15,10 +15,10 @@ import Marketing from './pages/Marketing';
 import Analytics from './pages/Analytics'; 
 import CalculatorCenter from './pages/CalculatorCenter';
 import OperationsTasks from './pages/OperationsTasks';
-import Profile from './pages/Profile';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
-import DownloadManager from './components/DownloadManager';
+import Suppliers from './pages/Suppliers'; 
+import Profile from './pages/Profile';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
 import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
@@ -68,8 +68,9 @@ const MainLayout: React.FC = () => {
       case 'calculator': return '智能计算 (Intelligent Calc)';
       case 'calendar': return '运营日历 (Operations Timeline)';
       case 'settings': return '系统配置 (System Config)';
+      case 'suppliers': return '供应商管理 (Suppliers)';
+      case 'profile': return '管理员配置 (Admin Profile)';
       case 'tasks': return '运营协同中心 (Operations Hub)';
-      case 'profile': return '个人中心 (User Profile)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -87,8 +88,9 @@ const MainLayout: React.FC = () => {
       case 'analytics': return <Analytics />;
       case 'calculator': return <CalculatorCenter />;
       case 'settings': return <Settings />;
-      case 'tasks': return <OperationsTasks />;
+      case 'suppliers': return <Suppliers />;
       case 'profile': return <Profile />;
+      case 'tasks': return <OperationsTasks />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };
@@ -126,7 +128,6 @@ const MainLayout: React.FC = () => {
     <div className="flex h-screen w-screen overflow-hidden p-4 gap-4 font-sans">
       <ToastContainer />
       <GlobalSearch />
-      <DownloadManager />
       
       <Sidebar activePage={state.activePage} onNavigate={handleNavigate} onLogout={handleLogout} />
       
