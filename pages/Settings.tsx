@@ -1,15 +1,13 @@
-
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, History, User, Activity, FileText, Search } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, syncToCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'audit'>('theme');
+  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud'>('theme');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [logSearch, setLogSearch] = useState('');
 
   const [supabaseForm, setSupabaseForm] = useState({
       url: state.supabaseConfig.url || '',
@@ -24,7 +22,7 @@ const Settings: React.FC = () => {
           const { error } = await supabase.from('app_backups').select('id').limit(1);
           if (error) throw error;
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
-          showToast('云端实时引擎配置已保存', 'success');
+          showToast('云端实时协同引擎配置已保存', 'success');
       } catch (e: any) {
           showToast(`配置无效: ${e.message}`, 'error');
       } finally {
@@ -32,163 +30,145 @@ const Settings: React.FC = () => {
       }
   };
 
-  const filteredLogs = state.auditLogs.filter(log => 
-    log.action.toLowerCase().includes(logSearch.toLowerCase()) || 
-    log.details.toLowerCase().includes(logSearch.toLowerCase())
-  );
+  const themes = [
+    { 
+        id: 'ios-glass', 
+        name: 'Vision Glass', 
+        desc: 'VisionOS 空间磨砂质感', 
+        icon: Smartphone, 
+        color: 'from-blue-500 to-indigo-600',
+        activeColor: 'border-indigo-500 shadow-indigo-500/20'
+    },
+    { 
+        id: 'cyber-neon', 
+        name: 'Cyber Neon', 
+        desc: '沉浸式量子黑客风格', 
+        icon: Zap, 
+        color: 'from-cyan-400 to-blue-600',
+        activeColor: 'border-cyan-400 shadow-cyan-400/20'
+    },
+    { 
+        id: 'paper-minimal', 
+        name: 'Carbon Obsidian', 
+        desc: '极致暗黑，碳纤纹理与电光紫', 
+        icon: Cpu, 
+        color: 'from-violet-600 to-slate-900',
+        activeColor: 'border-violet-600 shadow-violet-900/40'
+    }
+  ];
 
   return (
-    <div className="space-y-6 max-w-5xl mx-auto pb-10">
-      <div className="flex justify-between items-end">
-        <div>
-          <h2 className="text-xl font-bold text-white flex items-center gap-2">
-              <SettingsIcon className="w-6 h-6 text-slate-400" /> 系统设置 (System Settings)
-          </h2>
-          <p className="text-sm text-slate-500 mt-1">控制 UI 风格、跨端同步及审计日志查询</p>
-        </div>
-        {activeTab === 'audit' && (
-           <button 
-              onClick={() => dispatch({ type: 'CLEAR_AUDIT_LOGS' })}
-              className="px-3 py-1.5 bg-red-500/10 text-red-400 hover:bg-red-500 hover:text-white rounded-lg text-[10px] font-bold border border-red-500/20 transition-all"
-           >
-              清空日志
-           </button>
-        )}
+    <div className="space-y-8 max-w-5xl mx-auto pb-10">
+      <div>
+        <h2 className="text-2xl font-bold text-white flex items-center gap-3">
+            <SettingsIcon className="w-7 h-7 text-violet-500" /> 系统核心配置 (Kernel)
+        </h2>
+        <p className="text-sm text-slate-500 mt-2 font-mono uppercase tracking-widest">Management of UI Protocol & Synchronization Matrix</p>
       </div>
 
-      <div className="flex gap-2 border-b border-white/10 mb-6">
-          {['theme', 'general', 'cloud', 'audit'].map(tab => (
+      <div className="flex gap-4 border-b border-white/5 mb-8">
+          {[
+            { id: 'theme', label: '视觉外观', icon: Palette },
+            { id: 'cloud', label: '云端同步', icon: Cloud },
+            { id: 'general', label: '系统通用', icon: Server }
+          ].map(tab => (
               <button 
-                key={tab}
-                onClick={() => setActiveTab(tab as any)} 
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-all capitalize ${activeTab === tab ? 'border-indigo-500 text-white' : 'border-transparent text-slate-500 hover:text-slate-300'}`}
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id as any)} 
+                className={`px-6 py-4 text-xs font-bold border-b-2 transition-all flex items-center gap-2 uppercase tracking-widest ${activeTab === tab.id ? 'border-violet-500 text-white' : 'border-transparent text-slate-600 hover:text-slate-400'}`}
               >
-                  {tab === 'cloud' ? '同步引擎' : tab === 'audit' ? '审计日志' : tab}
+                  <tab.icon className="w-4 h-4" />
+                  {tab.label}
               </button>
           ))}
       </div>
 
-      {activeTab === 'audit' && (
-          <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
-              <div className="relative group">
-                  <Search className="w-4 h-4 text-slate-500 absolute left-3 top-3 group-hover:text-white transition-colors" />
-                  <input 
-                      type="text" 
-                      placeholder="检索日志操作码或详情明细..." 
-                      value={logSearch}
-                      onChange={e => setLogSearch(e.target.value)}
-                      className="w-full pl-10 pr-4 py-2.5 bg-black/40 border border-white/10 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 transition-all placeholder-slate-600"
-                  />
+      {activeTab === 'theme' && (
+          <div className="space-y-10 animate-in fade-in">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {themes.map((t) => (
+                      <div 
+                        key={t.id}
+                        onClick={() => dispatch({type: 'SET_THEME', payload: t.id as Theme})} 
+                        className={`group relative cursor-pointer rounded-2xl border-2 p-7 transition-all duration-300 overflow-hidden ${
+                            state.theme === t.id 
+                            ? `${t.activeColor} bg-white/5` 
+                            : 'border-white/5 bg-black/40 opacity-50 hover:opacity-100 hover:bg-white/5'
+                        }`}
+                      >
+                        <div className={`absolute -top-10 -right-10 w-32 h-32 bg-gradient-to-br ${t.color} opacity-10 blur-3xl group-hover:opacity-30 transition-opacity`}></div>
+                        
+                        <div className={`w-14 h-14 rounded-2xl mb-6 flex items-center justify-center bg-gradient-to-br ${t.color} shadow-2xl text-white`}>
+                            <t.icon className="w-7 h-7" />
+                        </div>
+                        
+                        <h3 className="font-bold text-white text-lg">{t.name}</h3>
+                        <p className="text-xs text-slate-500 mt-2 leading-relaxed h-10">{t.desc}</p>
+                        
+                        {state.theme === t.id && (
+                            <div className="absolute bottom-5 right-5 bg-violet-500/20 text-violet-400 p-1.5 rounded-full border border-violet-500/30">
+                                <CheckCircle2 className="w-5 h-5" />
+                            </div>
+                        )}
+                      </div>
+                  ))}
               </div>
 
-              <div className="bg-black/20 rounded-2xl border border-white/10 overflow-hidden flex flex-col h-[500px]">
-                  <div className="flex-1 overflow-y-auto p-2 scrollbar-none space-y-1">
-                      {filteredLogs.length > 0 ? filteredLogs.map((log) => (
-                          <div key={log.id} className="p-4 bg-white/5 border border-white/5 rounded-xl hover:bg-white/10 transition-all flex flex-col gap-3 group">
-                              <div className="flex justify-between items-start">
-                                  <div className="flex items-center gap-3">
-                                      <div className={`p-2 rounded-lg ${log.action.includes('ERROR') ? 'bg-red-500/20 text-red-400' : log.action.includes('AI') ? 'bg-indigo-500/20 text-indigo-400' : 'bg-blue-500/20 text-blue-400'}`}>
-                                          {log.action.includes('AI') ? <Terminal className="w-4 h-4" /> : <Activity className="w-4 h-4" />}
-                                      </div>
-                                      <div>
-                                          <div className="text-xs font-black text-white font-mono uppercase tracking-tighter">{log.action}</div>
-                                          <div className="text-[10px] text-slate-500 mt-0.5 flex items-center gap-3">
-                                              <span className="flex items-center gap-1"><History className="w-3 h-3"/> {new Date(log.timestamp).toLocaleString()}</span>
-                                              <span className="flex items-center gap-1"><User className="w-3 h-3"/> {log.user}</span>
-                                          </div>
-                                      </div>
-                                  </div>
-                                  <div className="text-[9px] font-mono text-slate-700 uppercase opacity-0 group-hover:opacity-100 transition-opacity">ID: {log.id}</div>
-                              </div>
-                              <div className="bg-black/40 border border-white/5 rounded-lg p-3 text-[11px] font-mono text-slate-400 leading-relaxed break-all">
-                                  {log.details}
-                              </div>
-                          </div>
-                      )) : (
-                          <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-3">
-                              <FileText className="w-12 h-12 opacity-20" />
-                              <p className="text-sm">当前暂无符合条件的审计日志</p>
-                          </div>
-                      )}
-                  </div>
+              <div className="p-7 rounded-2xl border border-violet-500/20 bg-violet-500/5 relative overflow-hidden">
+                  <div className="absolute top-0 left-0 w-1 h-full bg-violet-600"></div>
+                  <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
+                    <Zap className="w-5 h-5 text-violet-400" /> 渲染性能提示 (Performance Analytics)
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
+                    当前选中的 <b>Carbon Obsidian</b> 主题针对低对比度、高沉浸感办公场景进行了特殊优化。它使用了极简的着色器，在所有终端（包括移动端与低端显示器）上均具备极高的渲染效能与可读性。
+                  </p>
               </div>
           </div>
       )}
 
       {activeTab === 'cloud' && (
-          <div className="bg-black/20 rounded-xl border border-white/10 p-8 animate-in fade-in slide-in-from-bottom-2 space-y-8">
-              <div className="flex flex-col gap-4 p-5 bg-indigo-900/20 border border-indigo-500/30 rounded-xl">
-                  <div className="flex items-start gap-4">
-                      <div className="p-3 bg-indigo-600/20 rounded-xl text-indigo-400">
-                        <Wifi className="w-6 h-6" />
+          <div className="ios-glass-panel p-10 animate-in fade-in slide-in-from-bottom-2 space-y-10">
+              <div className="flex flex-col gap-6 p-7 bg-violet-900/10 border border-violet-500/20 rounded-2xl">
+                  <div className="flex items-start gap-5">
+                      <div className="p-4 bg-violet-600/10 rounded-2xl text-violet-400 shadow-inner">
+                        <Wifi className="w-8 h-8" />
                       </div>
                       <div>
-                          <h4 className="text-sm font-bold text-white mb-1 flex items-center gap-2">
-                              Supabase 实时协同引擎 (Experimental)
-                              {state.supabaseConfig.url && <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full border border-emerald-500/20 animate-pulse">Running</span>}
+                          <h4 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                              Supabase 量子同步引擎
+                              {state.supabaseConfig.url && <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full border border-emerald-500/20 animate-pulse font-mono font-bold">READY</span>}
                           </h4>
-                          <p className="text-xs text-indigo-200/70 leading-relaxed">
-                              开启后，系统将自动监听云端数据库变更。任何终端（电脑、手机）的修改都将秒级同步到当前窗口。
+                          <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
+                              基于 Postgres 实时订阅技术，实现全球范围内的业务数据对等同步。任何修改都将瞬间同步至所有活跃会话。
                           </p>
                       </div>
                   </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                  <div className="space-y-4">
-                      <div className="space-y-1">
-                          <label className="text-xs text-slate-400">Project URL</label>
-                          <input type="text" value={supabaseForm.url} onChange={e => setSupabaseForm({...supabaseForm, url: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white font-mono" placeholder="https://xyz.supabase.co" />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                  <div className="space-y-6">
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Project Endpoint</label>
+                          <input type="text" value={supabaseForm.url} onChange={e => setSupabaseForm({...supabaseForm, url: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-violet-500 outline-none" placeholder="https://xyz.supabase.co" />
                       </div>
-                      <div className="space-y-1">
-                          <label className="text-xs text-slate-400">Public API Key</label>
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Master Protocol Key</label>
                           <div className="relative">
-                              <input type={showKey ? "text" : "password"} value={supabaseForm.key} onChange={e => setSupabaseForm({...supabaseForm, key: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-lg p-2.5 text-sm text-white font-mono pr-10" />
-                              <button onClick={() => setShowKey(!showKey)} className="absolute right-3 top-2.5 text-slate-500 hover:text-white">
-                                  {showKey ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                              <input type={showKey ? "text" : "password"} value={supabaseForm.key} onChange={e => setSupabaseForm({...supabaseForm, key: e.target.value})} className="w-full bg-black border border-white/10 rounded-xl p-3 text-sm text-white font-mono pr-12 focus:border-violet-500 outline-none" />
+                              <button onClick={() => setShowKey(!showKey)} className="absolute right-4 top-3 text-slate-600 hover:text-white">
+                                  {showKey ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}
                               </button>
                           </div>
-                      </div>
-                      <div className="flex items-center justify-between p-4 bg-white/5 rounded-lg border border-white/5">
-                          <div>
-                              <div className="text-xs font-bold text-white">开启实时监听 (Real-time)</div>
-                              <div className="text-[10px] text-slate-500 mt-0.5">自动接收来自其他终端的更新</div>
-                          </div>
-                          <input 
-                            type="checkbox" 
-                            checked={supabaseForm.isRealTime} 
-                            onChange={e => setSupabaseForm({...supabaseForm, isRealTime: e.target.checked})}
-                            className="w-10 h-5 bg-slate-800 rounded-full appearance-none checked:bg-emerald-600 relative transition-all cursor-pointer before:content-[''] before:absolute before:w-4 before:h-4 before:bg-white before:rounded-full before:top-0.5 before:left-0.5 checked:before:left-5.5"
-                          />
                       </div>
                       <button 
                         onClick={handleSupabaseSave} 
                         disabled={isSaving}
-                        className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold shadow-lg flex items-center justify-center gap-2"
+                        className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-2xl text-xs font-bold shadow-xl shadow-violet-900/30 flex items-center justify-center gap-3 active:scale-95 transition-all"
                       >
-                          {isSaving ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>}
-                          保存并激活协同引擎
+                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Save className="w-5 h-5"/>}
+                          连接并初始化同步矩阵
                       </button>
                   </div>
-
-                  <div className="flex flex-col justify-center items-center p-6 border-l border-white/10 pl-8 space-y-4">
-                      <div className="text-center">
-                          <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">当前会话标识</div>
-                          <div className="px-4 py-2 bg-black/40 rounded border border-white/10 font-mono text-indigo-400 text-sm">
-                              {SESSION_ID}
-                          </div>
-                      </div>
-                  </div>
-              </div>
-          </div>
-      )}
-      
-      {activeTab === 'theme' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
-              <div onClick={() => dispatch({type: 'SET_THEME', payload: 'ios-glass'})} className={`cursor-pointer rounded-2xl border-2 p-4 transition-all ${state.theme === 'ios-glass' ? 'border-indigo-500 bg-indigo-500/5 shadow-[0_0_20px_rgba(99,102,241,0.2)]' : 'border-white/5 opacity-50 hover:opacity-100'}`}>
-                <Radio className="w-8 h-8 mb-4 text-indigo-400" />
-                <h3 className="font-bold text-white">Vision Glass</h3>
-                <p className="text-xs text-slate-500 mt-2">VisionOS 空间磨砂质感</p>
               </div>
           </div>
       )}
