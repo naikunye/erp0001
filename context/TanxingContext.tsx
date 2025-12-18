@@ -62,6 +62,7 @@ type Action =
     | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
     | { type: 'SET_SUPABASE_CONFIG'; payload: Partial<AppState['supabaseConfig']> }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
+    | { type: 'FULL_RESTORE'; payload: AppState }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' };
@@ -121,6 +122,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'DELETE_SUPPLIER': return { ...state, suppliers: state.suppliers.filter(s => s.id !== action.payload) };
         case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
         case 'HYDRATE_STATE': return { ...state, ...action.payload };
+        case 'FULL_RESTORE': return { ...action.payload, toasts: [], connectionStatus: 'disconnected' };
         case 'SET_SUPABASE_CONFIG': return { ...state, supabaseConfig: { ...state.supabaseConfig, ...action.payload } };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
@@ -169,7 +171,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const incoming = payload.new;
                 if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
                     const incomingPayload = incoming.data.payload;
-                    // 使用 stringify 简单校验内容是否真的变了，避免冗余更新
                     const payloadString = JSON.stringify(incomingPayload);
                     if (payloadString !== lastSyncDataRef.current) {
                         isInternalUpdate.current = true;
@@ -180,7 +181,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             })
             .subscribe((status) => {
-                console.log('Supabase Channel Status:', status);
                 if (status === 'SUBSCRIBED') {
                     dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
                 } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
@@ -203,9 +203,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
-        // 仅在已连接且配置实时同步时触发自动广播
         if (state.connectionStatus === 'connected' && state.supabaseConfig.isRealTime) {
-            const timer = setTimeout(() => syncToCloud(), 3000); // 3秒节流
+            const timer = setTimeout(() => syncToCloud(), 3000); 
             return () => clearTimeout(timer);
         }
     }, [state.products, state.orders, state.tasks, state.customers, state.shipments, state.theme, state.connectionStatus]);
@@ -227,7 +226,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
 
         const payloadString = JSON.stringify(payloadToSync);
-        if (payloadString === lastSyncDataRef.current) return; // 无变化不同步
+        if (payloadString === lastSyncDataRef.current) return; 
 
         try {
             const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
@@ -239,11 +238,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }]);
             
             if (error) throw error;
-
             lastSyncDataRef.current = payloadString;
             dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
         } catch (e) {
-            console.error('Realtime Sync Error:', e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
         }
     };
