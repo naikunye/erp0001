@@ -1,5 +1,6 @@
+
 import React, { useState, useEffect } from 'react';
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
 
@@ -18,11 +19,19 @@ const Settings: React.FC = () => {
   const handleSupabaseSave = async () => {
       setIsSaving(true);
       try {
+          // 深度验证 Supabase 连接与权限
           const supabase = createClient(supabaseForm.url, supabaseForm.key);
-          const { error } = await supabase.from('app_backups').select('id').limit(1);
-          if (error) throw error;
+          const { data, error } = await supabase.from('app_backups').select('id').limit(1);
+          
+          if (error) {
+              if (error.code === 'PGRST116' || error.message.includes('not found')) {
+                  throw new Error('未检测到 app_backups 表。请确保已在 Supabase Dashboard 创建此表并开启 Realtime 权限。');
+              }
+              throw error;
+          }
+
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
-          showToast('云端实时协同引擎配置已保存', 'success');
+          showToast('云端协同引擎配置成功', 'success');
       } catch (e: any) {
           showToast(`配置无效: ${e.message}`, 'error');
       } finally {
@@ -113,16 +122,6 @@ const Settings: React.FC = () => {
                       </div>
                   ))}
               </div>
-
-              <div className="p-7 rounded-2xl border border-violet-500/20 bg-violet-500/5 relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-1 h-full bg-violet-600"></div>
-                  <h4 className="text-sm font-bold text-white mb-3 flex items-center gap-2">
-                    <Zap className="w-5 h-5 text-violet-400" /> 渲染性能提示 (Performance Analytics)
-                  </h4>
-                  <p className="text-xs text-slate-400 leading-relaxed max-w-2xl">
-                    当前选中的 <b>Carbon Obsidian</b> 主题针对低对比度、高沉浸感办公场景进行了特殊优化。它使用了极简的着色器，在所有终端（包括移动端与低端显示器）上均具备极高的渲染效能与可读性。
-                  </p>
-              </div>
           </div>
       )}
 
@@ -130,16 +129,20 @@ const Settings: React.FC = () => {
           <div className="ios-glass-panel p-10 animate-in fade-in slide-in-from-bottom-2 space-y-10">
               <div className="flex flex-col gap-6 p-7 bg-violet-900/10 border border-violet-500/20 rounded-2xl">
                   <div className="flex items-start gap-5">
-                      <div className="p-4 bg-violet-600/10 rounded-2xl text-violet-400 shadow-inner">
-                        <Wifi className="w-8 h-8" />
+                      <div className={`p-4 rounded-2xl shadow-inner ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-violet-600/10 text-violet-400'}`}>
+                        {state.connectionStatus === 'connected' ? <Wifi className="w-8 h-8" /> : <Power className="w-8 h-8" />}
                       </div>
-                      <div>
-                          <h4 className="text-base font-bold text-white mb-2 flex items-center gap-2">
-                              Supabase 量子同步引擎
-                              {state.supabaseConfig.url && <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full border border-emerald-500/20 animate-pulse font-mono font-bold">READY</span>}
-                          </h4>
+                      <div className="flex-1">
+                          <div className="flex items-center justify-between">
+                              <h4 className="text-base font-bold text-white mb-2 flex items-center gap-2">
+                                  Supabase 量子同步引擎
+                                  {state.connectionStatus === 'connected' && <span className="px-2.5 py-1 bg-emerald-500/10 text-emerald-400 text-[10px] rounded-full border border-emerald-500/20 animate-pulse font-mono font-bold">REALTIME ACTIVE</span>}
+                                  {state.connectionStatus === 'error' && <span className="px-2.5 py-1 bg-red-500/10 text-red-400 text-[10px] rounded-full border border-red-500/20 font-mono font-bold">LINK ERROR</span>}
+                              </h4>
+                              <div className="text-[10px] text-slate-500 font-mono">CLIENT ID: {SESSION_ID}</div>
+                          </div>
                           <p className="text-xs text-slate-500 leading-relaxed max-w-xl">
-                              基于 Postgres 实时订阅技术，实现全球范围内的业务数据对等同步。任何修改都将瞬间同步至所有活跃会话。
+                              基于 Postgres 实时订阅技术。任何修改都将瞬发广播至全球所有活跃会话，实现无缝多人协作。
                           </p>
                       </div>
                   </div>
@@ -165,9 +168,30 @@ const Settings: React.FC = () => {
                         disabled={isSaving}
                         className="w-full py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-2xl text-xs font-bold shadow-xl shadow-violet-900/30 flex items-center justify-center gap-3 active:scale-95 transition-all"
                       >
-                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Save className="w-5 h-5"/>}
+                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin"/> : <Link2Off className="w-5 h-5"/>}
                           连接并初始化同步矩阵
                       </button>
+                  </div>
+
+                  <div className="bg-black/40 border border-white/5 rounded-2xl p-6">
+                      <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2"><Info className="w-4 h-4" /> 实时诊断报告 (Diagnosis)</h4>
+                      <div className="space-y-4 font-mono text-[10px]">
+                          <div className="flex justify-between border-b border-white/5 pb-2">
+                              <span className="text-slate-500">连接状态:</span>
+                              <span className={state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-400'}>{state.connectionStatus.toUpperCase()}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-white/5 pb-2">
+                              <span className="text-slate-500">上次心跳广播:</span>
+                              <span className="text-white">{state.supabaseConfig.lastSync || 'N/A'}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-white/5 pb-2">
+                              <span className="text-slate-500">Postgres 实时表:</span>
+                              <span className="text-white">public.app_backups</span>
+                          </div>
+                          <p className="text-slate-600 leading-relaxed pt-2">
+                            <b>提示：</b> 如果状态显示为已连接但数据未更新，请检查 Supabase 控制台的 `app_backups` 表是否开启了 "Realtime" 复制开关。
+                          </p>
+                      </div>
                   </div>
               </div>
           </div>

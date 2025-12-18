@@ -1,5 +1,5 @@
 
-export type Page = 'dashboard' | 'inventory' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'calculator' | 'profile' | 'tasks' | 'ai-command';
+export type Page = 'dashboard' | 'inventory' | 'customers' | 'intelligence' | 'settings' | 'finance' | 'tracking' | 'calendar' | 'marketing' | 'analytics' | 'replenishment' | 'suppliers' | 'calculator' | 'profile' | 'tasks' | 'ai-command' | 'logistics-hub';
 
 export interface User {
   id: string;
@@ -44,6 +44,7 @@ export interface Product {
   itemsPerBox?: number;
   boxCount?: number;
   unitWeight?: number;
+  warehouseAgeDays?: number; // 库龄
   logistics?: { 
     method: 'Air' | 'Sea'; 
     carrier: string; 
@@ -64,6 +65,7 @@ export interface Product {
     lastLegShipping: number; 
     adCost: number; 
     refundRatePercent?: number;
+    storageFeeMonthly?: number; // 月度仓储费
   };
   deletedAt?: string;
   image?: string;
@@ -72,6 +74,7 @@ export interface Product {
   notes?: string;
 }
 
+/* Added ReplenishmentItem for Inventory and Replenishment pages */
 export interface ReplenishmentItem extends Product {
   dailyBurnRate: number;
   daysRemaining: number;
@@ -84,9 +87,49 @@ export interface ReplenishmentItem extends Product {
   growth: number;
   profit: number;
   totalPotentialProfit: number;
-  margin?: number;
+  margin: number;
   totalWeight: number;
   boxes: number;
+}
+
+export interface AiInsight {
+  id: string;
+  type: 'risk' | 'opportunity' | 'action';
+  title: string;
+  content: string;
+  priority: 'high' | 'medium' | 'low';
+  timestamp: string;
+  executed?: boolean;
+}
+
+export interface InboundShipmentItem {
+  productId: string;
+  sku: string;
+  name: string;
+  quantity: number;
+  boxes: number;
+  unitPrice: number;
+  hscode?: string;
+}
+
+export interface InboundShipment {
+  id: string;
+  name: string;
+  sourceWarehouseId: string;
+  destinationWarehouseId: string;
+  status: 'Draft' | 'Working' | 'Shipped' | 'Receiving' | 'Closed';
+  items: InboundShipmentItem[];
+  totalWeight: number;
+  totalVolume: number;
+  carrier?: string;
+  trackingNumber?: string;
+  createdDate: string;
+  shippedDate?: string;
+  eta?: string;
+  documents?: {
+    ci_url?: string;
+    pl_url?: string;
+  };
 }
 
 export interface OrderLineItem {
@@ -112,11 +155,6 @@ export interface Order {
   trackingNumber?: string;
   automationTags?: string[];
   deletedAt?: string;
-}
-
-export interface SalesData {
-  name: string;
-  value: number;
 }
 
 export interface Customer {
@@ -198,65 +236,6 @@ export interface Supplier {
   leadTime: number;
 }
 
-export interface InboundShipmentItem {
-  productId: string;
-  sku: string;
-  name: string;
-  quantity: number;
-  boxes: number;
-}
-
-export interface InboundShipment {
-  id: string;
-  name: string;
-  sourceWarehouseId: string;
-  destinationWarehouseId: string;
-  status: 'Draft' | 'Working' | 'Shipped' | 'Receiving' | 'Closed';
-  items: InboundShipmentItem[];
-  totalWeight: number;
-  totalVolume: number;
-  carrier?: string;
-  trackingNumber?: string;
-  createdDate: string;
-  shippedDate?: string;
-  eta?: string;
-}
-
-export interface AdCampaign {
-  id: string;
-  name: string;
-  platform: 'TikTok' | 'Amazon' | 'Meta' | 'Google';
-  status: 'Active' | 'Paused' | 'Ended';
-  budget: number;
-  spend: number;
-  sales: number;
-  acos: number;
-  roas: number;
-  clicks: number;
-  impressions: number;
-  ctr: number;
-  cpc: number;
-}
-
-export type InfluencerStatus = 'To Contact' | 'Sample Sent' | 'Video Live' | 'Completed';
-
-export interface Influencer {
-  id: string;
-  name: string;
-  handle: string;
-  platform: 'TikTok' | 'Instagram' | 'YouTube';
-  followers: number;
-  country: string;
-  status: InfluencerStatus;
-  sampleProductSku?: string;
-  sampleDate?: string;
-  sampleCost?: number;
-  generatedSales?: number;
-  roi?: number;
-  tags?: string[];
-  videoUrl?: string;
-}
-
 export interface Toast {
   id: string;
   message: string;
@@ -275,18 +254,48 @@ export interface CalendarEvent {
   sku?: string;
 }
 
-export interface Integration {
-  id: string;
-  platform: 'TikTok' | 'Amazon' | 'Shopify' | 'eBay' | 'WooCommerce' | 'Walmart';
+/* Added SalesData for Dashboard and Charts */
+export interface SalesData {
   name: string;
-  region: string;
-  status: 'connected' | 'error' | 'syncing' | 'disconnected';
-  lastSync: string;
+  value: number;
 }
 
-/**
- * AuditLog interface for system tracking.
- */
+/* Added AdCampaign for Marketing and Finance */
+export interface AdCampaign {
+  id: string;
+  name: string;
+  platform: string;
+  status: 'Active' | 'Paused' | 'Ended';
+  budget: number;
+  spend: number;
+  sales: number;
+  acos: number;
+  roas: number;
+  clicks: number;
+  impressions: number;
+  ctr: number;
+  cpc: number;
+}
+
+/* Added Influencer for Marketing */
+export interface Influencer {
+  id: string;
+  name: string;
+  handle: string;
+  platform: 'TikTok' | 'Instagram' | 'YouTube';
+  followers: number;
+  country: string;
+  status: 'To Contact' | 'Sample Sent' | 'Video Live' | 'Completed';
+  sampleProductSku?: string;
+  sampleDate?: string;
+  sampleCost?: number;
+  generatedSales?: number;
+  roi?: number;
+  videoUrl?: string;
+  tags: string[];
+}
+
+/* Added AuditLog for Context */
 export interface AuditLog {
   id: string;
   timestamp: string;
@@ -295,12 +304,20 @@ export interface AuditLog {
   details: string;
 }
 
-/**
- * ExportTask interface for long-running export jobs.
- */
+/* Added ExportTask for Context */
 export interface ExportTask {
   id: string;
-  fileName: string;
+  name: string;
+  status: 'pending' | 'completed' | 'failed';
   progress: number;
-  status: 'pending' | 'processing' | 'completed' | 'failed';
+}
+
+/* Added Integration for Integrations Page */
+export interface Integration {
+  id: string;
+  platform: 'Amazon' | 'TikTok' | 'Shopify' | 'eBay' | 'WooCommerce' | 'Walmart';
+  name: string;
+  region: string;
+  status: 'connected' | 'error' | 'syncing';
+  lastSync: string;
 }

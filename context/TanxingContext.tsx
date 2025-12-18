@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+
+import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
@@ -7,12 +8,14 @@ const DB_KEY = 'TANXING_DB_V4';
 export const SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'paper-minimal';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 interface AppState {
     theme: Theme;
     activePage: Page;
     navParams: { searchQuery?: string };
     supabaseConfig: { url: string; key: string; lastSync: string | null; isRealTime: boolean };
+    connectionStatus: ConnectionStatus;
     products: Product[];
     transactions: Transaction[];
     customers: Customer[];
@@ -33,9 +36,9 @@ interface AppState {
 type Action =
     | { type: 'SET_THEME'; payload: AppState['theme'] }
     | { type: 'NAVIGATE'; payload: { page: Page; params?: { searchQuery?: string } } }
+    | { type: 'SET_CONNECTION_STATUS'; payload: ConnectionStatus }
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
-    | { type: 'ADD_AUDIT_LOG'; payload: Omit<AuditLog, 'id' | 'timestamp'> }
     | { type: 'UPDATE_PRODUCT'; payload: Product }
     | { type: 'ADD_PRODUCT'; payload: Product }
     | { type: 'DELETE_PRODUCT'; payload: string }
@@ -68,6 +71,7 @@ const mockState: AppState = {
     activePage: 'dashboard',
     navParams: {},
     supabaseConfig: { url: '', key: '', lastSync: null, isRealTime: true },
+    connectionStatus: 'disconnected',
     products: MOCK_PRODUCTS,
     transactions: MOCK_TRANSACTIONS,
     customers: MOCK_CUSTOMERS,
@@ -92,6 +96,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     switch (action.type) {
         case 'SET_THEME': return { ...state, theme: action.payload };
         case 'NAVIGATE': return { ...state, activePage: action.payload.page, navParams: action.payload.params || {} };
+        case 'SET_CONNECTION_STATUS': return { ...state, connectionStatus: action.payload };
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p) };
@@ -135,58 +140,112 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [state, dispatch] = useReducer(appReducer, mockState, (initial) => {
         try {
             const saved = localStorage.getItem(DB_KEY);
-            return saved ? { ...initial, ...JSON.parse(saved), toasts: [], exportTasks: [] } : initial;
+            return saved ? { ...initial, ...JSON.parse(saved), toasts: [], exportTasks: [], connectionStatus: 'disconnected' } : initial;
         } catch { return initial; }
     });
 
     const isInternalUpdate = useRef(false);
+    const lastSyncDataRef = useRef<string>('');
 
+    // --- 核心实时订阅逻辑 (Supabase Realtime) ---
     useEffect(() => {
-        if (!state.supabaseConfig.url || !state.supabaseConfig.key || !state.supabaseConfig.isRealTime) return;
-        const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
-        const channel = supabase.channel('realtime_sync_all').on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'app_backups' }, (payload) => {
-            const incoming = payload.new;
-            if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
-                isInternalUpdate.current = true;
-                dispatch({ type: 'HYDRATE_STATE', payload: incoming.data.payload });
-                dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleString() } });
-            }
-        }).subscribe();
-        return () => { supabase.removeChannel(channel); };
+        if (!state.supabaseConfig.url || !state.supabaseConfig.key || !state.supabaseConfig.isRealTime) {
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
+            return;
+        }
+
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
+        
+        const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key, {
+            realtime: { params: { eventsPerSecond: 10 } }
+        });
+
+        const channel = supabase.channel('tanxing_realtime_v4')
+            .on('postgres_changes', { 
+                event: 'INSERT', 
+                schema: 'public', 
+                table: 'app_backups' 
+            }, (payload) => {
+                const incoming = payload.new;
+                if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
+                    const incomingPayload = incoming.data.payload;
+                    // 使用 stringify 简单校验内容是否真的变了，避免冗余更新
+                    const payloadString = JSON.stringify(incomingPayload);
+                    if (payloadString !== lastSyncDataRef.current) {
+                        isInternalUpdate.current = true;
+                        lastSyncDataRef.current = payloadString;
+                        dispatch({ type: 'HYDRATE_STATE', payload: incomingPayload });
+                        dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
+                    }
+                }
+            })
+            .subscribe((status) => {
+                console.log('Supabase Channel Status:', status);
+                if (status === 'SUBSCRIBED') {
+                    dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+                } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                    dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+                }
+            });
+
+        return () => {
+            supabase.removeChannel(channel);
+        };
     }, [state.supabaseConfig.url, state.supabaseConfig.key, state.supabaseConfig.isRealTime]);
 
+    // --- 自动持久化与节流广播 ---
     useEffect(() => {
         localStorage.setItem(DB_KEY, JSON.stringify({ ...state, toasts: [], exportTasks: [] }));
         document.body.className = `theme-${state.theme}`;
-        if (isInternalUpdate.current) { isInternalUpdate.current = false; return; }
-        if (state.supabaseConfig.url && state.supabaseConfig.isRealTime) {
-            const timer = setTimeout(() => syncToCloud(), 2000);
+
+        if (isInternalUpdate.current) {
+            isInternalUpdate.current = false;
+            return;
+        }
+
+        // 仅在已连接且配置实时同步时触发自动广播
+        if (state.connectionStatus === 'connected' && state.supabaseConfig.isRealTime) {
+            const timer = setTimeout(() => syncToCloud(), 3000); // 3秒节流
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.orders, state.tasks, state.customers, state.shipments, state.theme]);
+    }, [state.products, state.orders, state.tasks, state.customers, state.shipments, state.theme, state.connectionStatus]);
 
     const syncToCloud = async () => {
         if (!state.supabaseConfig.url || !state.supabaseConfig.key) return;
+        
+        const payloadToSync = {
+            products: state.products,
+            orders: state.orders,
+            tasks: state.tasks,
+            customers: state.customers,
+            shipments: state.shipments,
+            suppliers: state.suppliers,
+            transactions: state.transactions,
+            adCampaigns: state.adCampaigns,
+            influencers: state.influencers,
+            inboundShipments: state.inboundShipments
+        };
+
+        const payloadString = JSON.stringify(payloadToSync);
+        if (payloadString === lastSyncDataRef.current) return; // 无变化不同步
+
         try {
             const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
-            await supabase.from('app_backups').insert([{
+            const { error } = await supabase.from('app_backups').insert([{
                 data: {
                     source_session: SESSION_ID,
-                    payload: {
-                        products: state.products,
-                        orders: state.orders,
-                        tasks: state.tasks,
-                        customers: state.customers,
-                        shipments: state.shipments,
-                        suppliers: state.suppliers,
-                        transactions: state.transactions,
-                        adCampaigns: state.adCampaigns,
-                        influencers: state.influencers
-                    }
+                    payload: payloadToSync
                 }
             }]);
-            dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleString() } });
-        } catch (e) { console.error('Realtime Sync Error:', e); }
+            
+            if (error) throw error;
+
+            lastSyncDataRef.current = payloadString;
+            dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
+        } catch (e) {
+            console.error('Realtime Sync Error:', e);
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+        }
     };
 
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });

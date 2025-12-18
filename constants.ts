@@ -82,8 +82,9 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
         destinationWarehouseId: 'WH-US-FBA',
         status: 'Shipped', // Working -> Shipped -> In Transit -> Closed
         items: [
-            { productId: '2', sku: 'CP-Q1M', name: 'Carplay Q1M', quantity: 200, boxes: 5 },
-            { productId: '3', sku: 'BOX2-NEW', name: 'AI BOX2', quantity: 500, boxes: 25 },
+            /* Added unitPrice to match InboundShipmentItem type */
+            { productId: '2', sku: 'CP-Q1M', name: 'Carplay Q1M', quantity: 200, boxes: 5, unitPrice: 39.60 },
+            { productId: '3', sku: 'BOX2-NEW', name: 'AI BOX2', quantity: 500, boxes: 25, unitPrice: 68.56 },
         ],
         totalWeight: 340,
         totalVolume: 1.2,
@@ -100,7 +101,8 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
         destinationWarehouseId: 'WH-US-FBA',
         status: 'Working',
         items: [
-            { productId: '4', sku: 'K7500-G', name: 'K7500-B 机械键盘', quantity: 50, boxes: 5 },
+            /* Added unitPrice to match InboundShipmentItem type */
+            { productId: '4', sku: 'K7500-G', name: 'K7500-B 机械键盘', quantity: 50, boxes: 5, unitPrice: 42.22 },
         ],
         totalWeight: 60,
         totalVolume: 0.25,
@@ -111,7 +113,7 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
 export const MOCK_SUPPLIERS: Supplier[] = [
     {
         id: 'SUP-001',
-        name: 'Shenzhen Tech Factory Ltd',
+        name: '深圳科技工厂',
         contactName: 'Mr. Zhang',
         email: 'zhang@sztech.com',
         phone: '+86 138-0000-1111',
@@ -124,7 +126,7 @@ export const MOCK_SUPPLIERS: Supplier[] = [
     },
     {
         id: 'SUP-002',
-        name: 'Guangzhou Garment Co',
+        name: '广州制衣厂',
         contactName: 'Ms. Li',
         email: 'sales@gzgarment.com',
         phone: '+86 139-2222-3333',
@@ -137,7 +139,7 @@ export const MOCK_SUPPLIERS: Supplier[] = [
     },
     {
         id: 'SUP-003',
-        name: 'Yiwu Accessories Wholesaler',
+        name: '义乌小商品',
         contactName: 'Boss Wang',
         email: 'wang@yiwu.com',
         phone: '+86 137-4444-5555',

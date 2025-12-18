@@ -16,6 +16,7 @@ import Analytics from './pages/Analytics';
 import CalculatorCenter from './pages/CalculatorCenter';
 import OperationsTasks from './pages/OperationsTasks';
 import AICommandCenter from './pages/AICommandCenter';
+import InboundShipments from './pages/InboundShipments';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import Suppliers from './pages/Suppliers'; 
@@ -59,7 +60,7 @@ const MainLayout: React.FC = () => {
   const getPageTitle = (page: Page) => {
     switch (page) {
       case 'dashboard': return '指挥中枢 (Command Center)';
-      case 'finance': return '资金财务 (Finance & Capital)';
+      case 'finance': return '财务穿透 (Audit & Capital)';
       case 'tracking': return '全球物流 (Global Logistics)';
       case 'customers': return '客户数据库 (Client Database)';
       case 'inventory': return '库存供应链 (Inventory & Supply)';
@@ -73,6 +74,7 @@ const MainLayout: React.FC = () => {
       case 'profile': return '管理员配置 (Admin Profile)';
       case 'tasks': return '运营协同中心 (Operations Hub)';
       case 'ai-command': return 'AI 指令控制台 (Quantum Command)';
+      case 'logistics-hub': return '物流中枢 (Logistics Matrix)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -94,6 +96,7 @@ const MainLayout: React.FC = () => {
       case 'profile': return <Profile />;
       case 'tasks': return <OperationsTasks />;
       case 'ai-command': return <AICommandCenter />;
+      case 'logistics-hub': return <InboundShipments />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };
@@ -104,22 +107,22 @@ const MainLayout: React.FC = () => {
 
   if (!isAuthenticated) {
       return (
-          <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden">
+          <div className="min-h-screen flex items-center justify-center p-6 relative overflow-hidden bg-black">
               <div className="ios-glass-panel w-full max-w-[400px] p-10 rounded-3xl relative z-10 border border-white/10 shadow-2xl">
                   <div className="flex flex-col items-center mb-10">
                       <div className="w-16 h-16 bg-white/5 rounded-2xl flex items-center justify-center shadow-2xl mb-6 text-white border border-white/10 backdrop-blur-md">
-                          <Hexagon className="w-8 h-8 fill-current text-blue-400" />
+                          <Hexagon className="w-8 h-8 fill-current text-violet-400" />
                       </div>
-                      <h1 className="text-3xl font-display font-bold text-white tracking-widest uppercase">探行 OS</h1>
+                      <h1 className="text-3xl font-display font-bold text-white tracking-widest uppercase italic">探行 OS</h1>
                       <p className="text-xs text-white/40 font-mono mt-2 tracking-[0.3em] uppercase">Enterprise Quantum OS</p>
                   </div>
                   <form onSubmit={handleLogin} className="space-y-6">
                       <div className="space-y-4">
-                          <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="账号 ID" />
-                          <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-blue-500 focus:bg-black/30 transition-all outline-none font-mono" placeholder="密码 Password" />
+                          <input type="email" value={loginForm.email} onChange={e => setLoginForm({...loginForm, email: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-violet-500 transition-all outline-none font-mono" placeholder="账号 ID" />
+                          <input type="password" value={loginForm.password} onChange={e => setLoginForm({...loginForm, password: e.target.value})} className="w-full px-4 py-3 bg-black/20 border border-white/10 rounded-xl text-sm text-white placeholder-white/30 focus:border-violet-500 transition-all outline-none font-mono" placeholder="密码 Password" />
                       </div>
                       <button type="submit" disabled={loginLoading} className="w-full py-3.5 bg-white text-black hover:bg-slate-200 font-bold rounded-xl shadow-lg flex items-center justify-center gap-2 mt-4 transition-all active:scale-[0.98]">
-                          {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>登录系统 <ArrowRight className="w-4 h-4" /></>}
+                          {loginLoading ? <Loader2 className="w-5 h-5 animate-spin" /> : <>进入系统 <ArrowRight className="w-4 h-4" /></>}
                       </button>
                   </form>
               </div>
@@ -128,17 +131,14 @@ const MainLayout: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden p-4 gap-4 font-sans">
+    <div className="flex h-screen w-screen overflow-hidden p-4 gap-4 font-sans bg-[#050506]">
       <ToastContainer />
       <GlobalSearch />
-      
       <Sidebar activePage={state.activePage} onNavigate={handleNavigate} onLogout={handleLogout} />
-      
-      <div className="flex-1 flex flex-col relative h-full min-w-0 ios-glass-panel rounded-3xl shadow-2xl overflow-hidden">
+      <div className="flex-1 flex flex-col relative h-full min-w-0 ios-glass-panel rounded-3xl shadow-2xl overflow-hidden border border-white/5">
         <div className="relative z-20">
             <Header title={getPageTitle(state.activePage)} />
         </div>
-        
         <main className="flex-1 overflow-y-auto scroll-smooth p-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           <ErrorBoundary>
             <div className="w-full h-full flex flex-col">
