@@ -26,7 +26,7 @@ const Analytics: React.FC = () => {
 
   const EXCHANGE_RATE = 7.2;
 
-  // --- 核心修复：全成本分摊矩阵计算 ---
+  // --- 核心修复：全成本分摊矩阵计算 (对齐 Inventory.tsx) ---
   const analysisData = useMemo(() => {
     const activeProducts = state.products.filter(p => !p.deletedAt);
     
@@ -42,25 +42,36 @@ const Analytics: React.FC = () => {
         const costPriceCNY = p.costPrice || 0;
         const stockValueCNY = stock * costPriceCNY;
         
-        // 1. 物流分摊 (引入稳定 divisor)
+        // 1. 物流分摊逻辑对齐
         const dims = p.dimensions || {l:0, w:0, h:0};
-        const unitWeight = Math.max(p.unitWeight || 0, (dims.l * dims.w * dims.h) / 6000);
-        const rate = p.logistics?.unitFreightCost || 0;
-        const batchFees = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+        const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
+        const autoUnitWeight = Math.max(p.unitWeight || 0, unitVolWeight);
         
-        const divisor = Math.max(stock, 50); 
-        const unitLogisticsCNY = (unitWeight * rate) + (batchFees / divisor) + (p.logistics?.consumablesFee || 0);
+        let activeTotalWeight = 0;
+        if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+            activeTotalWeight = p.logistics.billingWeight;
+        } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
+            activeTotalWeight = p.logistics.unitBillingWeight * stock;
+        } else {
+            activeTotalWeight = autoUnitWeight * stock;
+        }
+
+        const rate = p.logistics?.unitFreightCost || 0;
+        const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+        const autoTotalFreightCNY = (activeTotalWeight * rate) + batchFeesCNY;
+        const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
+        
+        const unitFreightCNY = stock > 0 ? effectiveTotalFreightCNY / stock : 0;
+        const unitLogisticsCNY = unitFreightCNY + (p.logistics?.consumablesFee || 0);
         const unitLogisticsUSD = unitLogisticsCNY / EXCHANGE_RATE;
 
-        // 2. 经营成本分摊
+        // 2. 经营成本
         const priceUSD = p.price || 0;
         const eco = p.economics;
         const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
         const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
         const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
-        
-        // 广告费分摊逻辑修正
-        const unitAdCostUSD = (eco?.adCost || 0) > 50 ? (eco?.adCost || 0) / divisor : (eco?.adCost || 0);
+        const unitAdCostUSD = eco?.adCost || 0; 
         const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100);
         
         const costPriceUSD = costPriceCNY / EXCHANGE_RATE;
@@ -114,8 +125,8 @@ const Analytics: React.FC = () => {
     <div className="flex flex-col h-full space-y-6 pb-10">
         <div className="flex justify-between items-end">
             <div>
-                <h1 className="text-3xl font-black text-white tracking-widest uppercase">数据分析中心 (V3.0)</h1>
-                <p className="text-xs text-slate-500 mt-2 font-mono">核算逻辑已修正：所有广告费与杂费均已按预期销量进行分摊</p>
+                <h1 className="text-3xl font-black text-white tracking-widest uppercase">数据分析中心 (V3.1)</h1>
+                <p className="text-xs text-slate-500 mt-2 font-mono">核算逻辑已对齐：支持手动运费覆盖与真实单品分摊</p>
             </div>
             <button onClick={handleAiDeepDive} disabled={isAiThinking} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg">
                 {isAiThinking ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />} AI 深度诊断
@@ -124,13 +135,13 @@ const Analytics: React.FC = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="ios-glass-card p-6 border-l-4 border-l-emerald-500">
-                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">分摊后 ROI</div>
+                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">综合 ROI (穿透后)</div>
                 <div className={`text-4xl font-mono font-bold ${analysisData.projectedROI >= 0 ? 'text-white' : 'text-red-500'}`}>
                     {analysisData.projectedROI.toFixed(1)}%
                 </div>
             </div>
             <div className="ios-glass-card p-6 border-l-4 border-l-blue-500">
-                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">库存预期总净利</div>
+                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">当前库存预期总净利</div>
                 <div className="text-4xl font-mono font-bold text-white">
                     ${analysisData.totalPotentialProfitUSD.toLocaleString(undefined, {maximumFractionDigits:0})}
                 </div>
@@ -143,7 +154,7 @@ const Analytics: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
             <div className="ios-glass-card p-6 flex flex-col min-h-[450px]">
-                <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><Target className="w-5 h-5 text-cyan-400"/> 资产健康矩阵 (散点分摊视图)</h3>
+                <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><Target className="w-5 h-5 text-cyan-400"/> 资产健康矩阵 (散点视图)</h3>
                 <div className="flex-1 bg-black/20 rounded-xl overflow-hidden">
                     <ResponsiveContainer width="100%" height="100%">
                         <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: -20 }}>

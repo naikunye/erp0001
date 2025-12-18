@@ -158,11 +158,11 @@ const ProfitSimulator = () => {
     const breakEvenRoas = breakEvenAdSpend > 0 ? price / breakEvenAdSpend : 0;
 
     const data = [
-        { name: 'COGS', value: cogs, color: '#3b82f6' },
-        { name: 'Shipping', value: ship, color: '#f59e0b' },
-        { name: 'Fees', value: fee, color: '#a855f7' },
-        { name: 'Ads (CPA)', value: adCpa, color: '#ec4899' },
-        { name: 'Profit', value: Math.max(0, profit), color: profit > 0 ? '#10b981' : '#ef4444' },
+        { name: '采购成本', value: cogs, color: '#3b82f6' },
+        { name: '物流运费', value: ship, color: '#f59e0b' },
+        { name: '平台扣点', value: fee, color: '#a855f7' },
+        { name: '广告支出', value: adCpa, color: '#ec4899' },
+        { name: '预估净利', value: Math.max(0, profit), color: profit > 0 ? '#10b981' : '#ef4444' },
     ];
 
     return (
@@ -219,7 +219,7 @@ const ProfitSimulator = () => {
                 </div>
 
                 <div className="flex-1 bg-black/20 border border-white/10 rounded-xl p-6 relative">
-                    <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase">利润瀑布流 (Structure)</h3>
+                    <h3 className="text-sm font-bold text-slate-400 mb-4 uppercase">利润结构分析 (Structure)</h3>
                     <ResponsiveContainer width="100%" height="100%">
                         <BarChart data={data} layout="vertical" margin={{left: 20, right: 30}}>
                             <XAxis type="number" hide />
@@ -262,33 +262,33 @@ const UnitConverter = () => {
 
             <div className="space-y-4">
                 <div className="bg-white/5 rounded-lg p-3">
-                    <div className="text-[10px] text-slate-500 uppercase mb-2">长度 Length</div>
+                    <div className="text-[10px] text-slate-500 uppercase mb-2">长度单位</div>
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-slate-300">CM to Inch</span>
+                        <span className="text-slate-300">厘米 转 英寸</span>
                         <span className="font-mono font-bold text-white">{cmToInch(v)} "</span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span className="text-slate-300">Inch to CM</span>
+                        <span className="text-slate-300">英寸 转 厘米</span>
                         <span className="font-mono font-bold text-white">{inchToCm(v)} cm</span>
                     </div>
                 </div>
 
                 <div className="bg-white/5 rounded-lg p-3">
-                    <div className="text-[10px] text-slate-500 uppercase mb-2">重量 Weight</div>
+                    <div className="text-[10px] text-slate-500 uppercase mb-2">重量单位</div>
                     <div className="flex justify-between items-center mb-1">
-                        <span className="text-slate-300">KG to Lbs</span>
+                        <span className="text-slate-300">公斤 转 磅</span>
                         <span className="font-mono font-bold text-white">{kgToLb(v)} lbs</span>
                     </div>
                     <div className="flex justify-between items-center">
-                        <span className="text-slate-300">Lbs to KG</span>
+                        <span className="text-slate-300">磅 转 公斤</span>
                         <span className="font-mono font-bold text-white">{lbToKg(v)} kg</span>
                     </div>
                 </div>
 
                 <div className="bg-white/5 rounded-lg p-3">
-                    <div className="text-[10px] text-slate-500 uppercase mb-2">材积 Volume</div>
+                    <div className="text-[10px] text-slate-500 uppercase mb-2">材积单位</div>
                     <div className="flex justify-between items-center">
-                        <span className="text-slate-300">CBM to CuFt</span>
+                        <span className="text-slate-300">立方米 转 立方英尺</span>
                         <span className="font-mono font-bold text-white">{(v * 35.3147).toFixed(2)} ft³</span>
                     </div>
                 </div>

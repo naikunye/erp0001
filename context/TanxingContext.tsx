@@ -32,8 +32,16 @@ interface AppState {
     exportTasks: ExportTask[];
     isMobileMenuOpen: boolean;
     isInitialized: boolean; 
-    isDemoMode: boolean; // 新增：标记当前是否为模拟演示数据
+    isDemoMode: boolean; 
 }
+
+// --- 核心：数据指纹检测，识别是否为代码内置的模拟数据 ---
+const isDataMock = (state: Partial<AppState>) => {
+    if (!state.products || state.products.length === 0) return false;
+    // 检查第一个产品的 SKU 是否匹配 MOCK 常量，作为识别“模拟环境”的指纹
+    const isProductMatch = state.products[0]?.sku === MOCK_PRODUCTS[0]?.sku;
+    return isProductMatch || state.isDemoMode === true;
+};
 
 type Action =
     | { type: 'SET_THEME'; payload: AppState['theme'] }
@@ -65,13 +73,12 @@ type Action =
     | { type: 'SET_SUPABASE_CONFIG'; payload: Partial<AppState['supabaseConfig']> }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'FULL_RESTORE'; payload: Partial<AppState> }
-    | { type: 'LOAD_MOCK_DATA' } // 新增：明确加载模拟数据动作
+    | { type: 'LOAD_MOCK_DATA' }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'SET_INITIALIZED'; payload: boolean }
     | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' };
 
-// --- 核心修复：空初始状态 ---
 const emptyState: AppState = {
     theme: 'ios-glass',
     activePage: 'dashboard',
@@ -148,7 +155,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'SET_INITIALIZED': return { ...state, isInitialized: action.payload };
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
-        case 'RESET_DATA': return emptyState;
+        case 'RESET_DATA': 
+            localStorage.removeItem(DB_KEY);
+            return emptyState;
         default: return state;
     }
 };
@@ -167,7 +176,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const saved = localStorage.getItem(DB_KEY);
             if (!saved) return initial;
             const parsed = JSON.parse(saved);
-            // 启动时禁用初始化标志，直到拉取完成
+            
+            // 重要：如果是模拟数据指纹，或者显式的演示模式，启动时强制丢弃缓存，确保始终尝试拉取云端
+            if (isDataMock(parsed)) return initial; 
+            
             return { ...initial, ...parsed, isInitialized: false, connectionStatus: 'disconnected' };
         } catch { return initial; }
     });
@@ -175,23 +187,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isInternalUpdate = useRef(false);
     const lastSyncDataRef = useRef<string>('');
 
-    // --- 严密的启动引导流 ---
     useEffect(() => {
         const init = async () => {
-            // 1. 检查是否有云端配置
             if (state.supabaseConfig?.url && state.supabaseConfig?.key) {
-                console.log("[Boot] Detected cloud config, pulling latest snapshot...");
+                // 如果有云配置，启动时必须拉取，且拉取前不允许上云
                 await pullFromCloud();
             } else {
-                // 2. 无云端配置，且无本地数据，维持空状态并标记初始化完成
-                console.log("[Boot] No cloud config, boot completed with local cache.");
                 dispatch({ type: 'SET_INITIALIZED', payload: true });
             }
         };
         init();
     }, []);
 
-    // --- 实时订阅逻辑 (仅处理远程变更) ---
     useEffect(() => {
         const config = state.supabaseConfig;
         if (!config?.url || !config?.key || !config?.isRealTime) {
@@ -210,6 +217,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         const incomingPayload = incoming.data.payload;
                         const payloadString = JSON.stringify(incomingPayload);
                         if (payloadString !== lastSyncDataRef.current) {
+                            // 远程同步防护：拒绝接收 MOCK 数据进入生产环境
+                            if (isDataMock(incomingPayload) && !state.isDemoMode) return;
+                            
                             isInternalUpdate.current = true;
                             lastSyncDataRef.current = payloadString;
                             dispatch({ type: 'HYDRATE_STATE', payload: incomingPayload });
@@ -225,9 +235,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); }
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, state.supabaseConfig?.isRealTime]);
 
-    // --- 持久化保护层 ---
     useEffect(() => {
-        // 关键：未初始化前，禁止一切本地存储和同步，防止模拟数据写回
         if (!state.isInitialized) return;
 
         try {
@@ -241,8 +249,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
-        // 仅在连接正常且非演示模式时触发同步
-        if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime && !state.isDemoMode) {
+        // 仅在非演示模式且不是模拟数据时触发自动同步
+        if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime && !state.isDemoMode && !isDataMock(state)) {
             const timer = setTimeout(() => syncToCloud(), 5000);
             return () => clearTimeout(timer);
         }
@@ -264,24 +272,32 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             if (data && data.length > 0) {
                 const cloudPayload = data[0].data.payload;
-                lastSyncDataRef.current = JSON.stringify(cloudPayload);
-                isInternalUpdate.current = true;
-                dispatch({ type: 'HYDRATE_STATE', payload: cloudPayload });
-                console.log("[Sync] Pulled from cloud successfully.");
+                // 如果云端是 MOCK 数据，则忽略，防止污染真实环境
+                if (isDataMock(cloudPayload)) {
+                    console.warn("[Boot] Cloud data is mock, bypassing...");
+                    dispatch({ type: 'SET_INITIALIZED', payload: true });
+                } else {
+                    lastSyncDataRef.current = JSON.stringify(cloudPayload);
+                    isInternalUpdate.current = true;
+                    dispatch({ type: 'HYDRATE_STATE', payload: cloudPayload });
+                }
             } else {
-                console.log("[Sync] Cloud is empty.");
                 dispatch({ type: 'SET_INITIALIZED', payload: true });
             }
         } catch (e) {
-            console.error("[Sync] Pull failed:", e);
             dispatch({ type: 'SET_INITIALIZED', payload: true });
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
         }
     };
 
     const syncToCloud = async (isForce: boolean = false) => {
-        // 演示模式下禁止自动上传，防止污染真实云端数据
-        if (!state.isInitialized || !state.supabaseConfig?.url || !state.supabaseConfig?.key || (state.isDemoMode && !isForce)) return;
+        if (!state.isInitialized || !state.supabaseConfig?.url || !state.supabaseConfig?.key) return;
+        
+        // 核心拦截：绝不让模拟数据进入云端，除非用户在设置页点击“强制推送”
+        if (!isForce && (state.isDemoMode || isDataMock(state))) {
+            console.warn("[Sync] Operation blocked: Attempted to sync mock data to production cloud.");
+            return;
+        }
         
         const payloadToSync = {
             products: state.products,

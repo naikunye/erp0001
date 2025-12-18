@@ -23,7 +23,7 @@ const Dashboard: React.FC = () => {
 
   const activeProducts = useMemo(() => state.products.filter(p => !p.deletedAt), [state.products]);
 
-  // --- 核心修复：资产穿透核算引擎 V3.0 (归一化分摊模型) ---
+  // --- 核心修复：资产穿透核算引擎 V3.1 (同步库存页验证逻辑) ---
   const metrics = useMemo(() => {
       let totalStockValueCNY = 0;
       let totalPotentialProfitUSD = 0;
@@ -31,38 +31,47 @@ const Dashboard: React.FC = () => {
 
       activeProducts.forEach(p => {
           const stock = Math.max(p.stock || 0, 0);
-          if (stock === 0) return; // 无库存不计入穿透损益
-
           const costCNY = p.costPrice || 0;
           totalStockValueCNY += stock * costCNY;
 
-          // 1. 计算单品物流分摊 (防止小库存导致的杂费溢出)
+          if (stock === 0) return; 
+
+          // 1. 物流成本精确核算 (与 Inventory.tsx 保持绝对一致)
           const dims = p.dimensions || {l:0, w:0, h:0};
-          const volWeight = (dims.l * dims.w * dims.h) / 6000;
-          const chargeableWeight = Math.max(p.unitWeight || 0, volWeight);
+          const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
+          const autoUnitWeight = Math.max(p.unitWeight || 0, unitVolWeight);
           
-          const freightRate = p.logistics?.unitFreightCost || 0;
-          const batchFees = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+          // 确定当前批次的有效计费总重
+          let activeTotalWeight = 0;
+          if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+              activeTotalWeight = p.logistics.billingWeight; // 手动总重优先
+          } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
+              activeTotalWeight = p.logistics.unitBillingWeight * stock; // 手动单品计费重
+          } else {
+              activeTotalWeight = autoUnitWeight * stock; // 系统自动计算
+          }
+
+          const rate = p.logistics?.unitFreightCost || 0;
+          const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+          const autoTotalFreightCNY = (activeTotalWeight * rate) + batchFeesCNY;
           
-          // 这里的技巧：杂费分摊不应随库存减少而增加，应基于“预期总货量”或当前库存（取较大值防止分母过小）
-          const divisor = Math.max(stock, 50); 
-          const unitLogisticsCNY = (chargeableWeight * freightRate) + (batchFees / divisor) + (p.logistics?.consumablesFee || 0);
+          // 最终有效总运费 (支持手动覆盖)
+          const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
+          const unitFreightCNY = effectiveTotalFreightCNY / stock;
+          const unitLogisticsCNY = unitFreightCNY + (p.logistics?.consumablesFee || 0);
           
           totalInvestmentCNY += (costCNY + unitLogisticsCNY) * stock;
 
-          // 2. 计算单品净利 (单位：USD)
+          // 2. 单品净利穿透 (单位：USD)
           const priceUSD = p.price || 0;
           const eco = p.economics;
           const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
           const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
           const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
-          
-          // 关键修复：广告费分摊。如果 adCost > 50，通常被认为是总投入而非单件投入
-          const unitAdCostUSD = (eco?.adCost || 0) > 50 ? (eco?.adCost || 0) / divisor : (eco?.adCost || 0);
-          
+          const unitAdCostUSD = eco?.adCost || 0; // TikTok 习惯：直接计入单品广告成本
           const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100);
 
-          // 穿透公式：售价 - (采购/汇率) - (物流/汇率) - 平台费 - 达人费 - 尾程费 - 分摊广告费 - 预估退货
+          // 穿透公式
           const unitProfitUSD = priceUSD - ( (costCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + fixedFeesUSD + unitAdCostUSD + refundLossUSD );
           
           totalPotentialProfitUSD += unitProfitUSD * stock;
@@ -82,7 +91,7 @@ const Dashboard: React.FC = () => {
             id: 'ins-1',
             type: 'risk',
             title: '库存断货风险告警',
-            content: 'SKU-BOX2 过去 48h 销量激增，当前 FBA 库存预计将在 2.4 天内断货。',
+            content: '部分核心 SKU 过去 48h 销量波动，请关注补货提醒。',
             priority: 'high',
             timestamp: '刚刚'
         }
@@ -107,7 +116,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="space-y-8 pb-10">
-      {/* AI Sentry Bar */}
       <div className="ios-glass-panel border-violet-500/30 bg-violet-500/5 p-4 rounded-2xl flex items-center gap-6 overflow-hidden relative">
           <div className="absolute top-0 left-0 w-1 h-full bg-violet-600 animate-pulse"></div>
           <div className="flex items-center gap-3 shrink-0">
@@ -145,7 +153,7 @@ const Dashboard: React.FC = () => {
                         </div>
                         <div>
                             <h2 className="text-xl font-bold text-white tracking-tight italic uppercase">资产风控审计系统</h2>
-                            <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">基于分摊成本模型的实时穿透</p>
+                            <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">基于有效分摊成本模型的实时穿透</p>
                         </div>
                     </div>
                     <button onClick={handleGenerateReport} disabled={isGenerating} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold shadow-xl flex items-center gap-2">

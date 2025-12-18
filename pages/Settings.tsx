@@ -1,7 +1,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 /* Added AlertTriangle to imports */
-import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, AlertTriangle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon, Scissors, ArrowUpCircle, ArrowDownCircle, TestTube2 } from 'lucide-react';
+import { Settings as SettingsIcon, Database, Save, Shield, Cloud, RefreshCw, CheckCircle2, AlertCircle, AlertTriangle, Eye, EyeOff, Globe, Trash2, Radio, Smartphone, Zap, Server, Wifi, Terminal, Copy, ChevronDown, ChevronUp, Palette, Box, Layers, Grid, FileText, MonitorDot, Cpu, Info, Power, Link2Off, Download, Upload, History, FileJson, AlertOctagon, Scissors, ArrowUpCircle, ArrowDownCircle, TestTube2, Ghost } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 import { createClient } from '@supabase/supabase-js';
 
@@ -28,7 +28,15 @@ const Settings: React.FC = () => {
     });
   }, [state.supabaseConfig]);
 
-  // --- 演示模式控制 ---
+  // --- 系统终极重置 ---
+  const handleNukeSystem = () => {
+      if (confirm('🆘 终极警告：这将彻底清除浏览器中的所有本地数据、缓存和云端连接配置。您的云端数据库不会被删除，但本设备将回归出厂状态。确定继续？')) {
+          dispatch({ type: 'RESET_DATA' });
+          showToast('系统已成功执行初始化重置', 'success');
+          setTimeout(() => window.location.reload(), 1000);
+      }
+  };
+
   const handleLoadMock = () => {
       if (confirm('加载模拟演示数据将覆盖当前界面的显示。演示模式下“自动云同步”将临时禁用以防止污染。确定继续？')) {
           dispatch({ type: 'LOAD_MOCK_DATA' });
@@ -105,11 +113,16 @@ const Settings: React.FC = () => {
           </h2>
           <p className="text-sm text-slate-500 mt-2 font-mono tracking-widest uppercase">System Control & Sync Matrix</p>
         </div>
-        {!state.isDemoMode && state.products.length === 0 && (
-            <button onClick={handleLoadMock} className="px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-500 hover:text-white transition-all">
-                <TestTube2 className="w-4 h-4"/> 载入演示模拟数据
+        <div className="flex gap-3">
+            {!state.isDemoMode && state.products.length === 0 && (
+                <button onClick={handleLoadMock} className="px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-indigo-500 hover:text-white transition-all">
+                    <TestTube2 className="w-4 h-4"/> 载入演示模拟数据
+                </button>
+            )}
+            <button onClick={handleNukeSystem} className="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-500 rounded-xl text-xs font-bold flex items-center gap-2 hover:bg-red-600 hover:text-white transition-all">
+                <Ghost className="w-4 h-4"/> 重置本地缓存
             </button>
-        )}
+        </div>
       </div>
 
       <div className="flex gap-4 border-b border-white/5 mb-8">
