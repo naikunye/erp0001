@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Wallet, Loader2, TrendingUp, Sparkles, Command, Zap, Gem, Package, PieChart as PieIcon } from 'lucide-react';
+import { Box, Wallet, Loader2, TrendingUp, Sparkles, Command, Zap, Gem, Package } from 'lucide-react';
 import { CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie, Legend } from 'recharts';
 import StatCard from '../components/StatCard';
 import { useTanxing } from '../context/TanxingContext';
@@ -12,6 +12,8 @@ const Dashboard: React.FC = () => {
   const [report, setReport] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
+  const EXCHANGE_RATE = 7.2;
+
   useEffect(() => {
       const timer = setTimeout(() => setIsLoading(false), 500);
       return () => clearTimeout(timer);
@@ -19,87 +21,79 @@ const Dashboard: React.FC = () => {
 
   const activeProducts = useMemo(() => state.products.filter(p => !p.deletedAt), [state.products]);
 
+  // --- UNIFIED CALCULATOR ENGINE (Shared Logic) ---
   const metrics = useMemo(() => {
-      const EXCHANGE_RATE = 7.2;
-      const stockValue = activeProducts.reduce((acc, p) => acc + (p.stock * (p.costPrice || 0)), 0);
-      
+      let totalStockValueCNY = 0;
       let totalStockProfitUSD = 0;
-      let totalStockRevenuePotentialUSD = 0;
+      let totalStockRevenueUSD = 0;
+      let totalWeightKG = 0;
+      let seaFreightAssetCNY = 0;
+      let airFreightAssetCNY = 0;
 
       activeProducts.forEach(p => {
+          const stock = p.stock || 0;
+          const costCNY = p.costPrice || 0;
+          totalStockValueCNY += stock * costCNY;
+
+          // 1. Logistics Weight & Cost
           const unitRealWeight = p.unitWeight || 0;
           const dims = p.dimensions || {l:0, w:0, h:0};
           const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
-          const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
-          
-          let activeTotalBillingWeight = 0;
-          if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
-              activeTotalBillingWeight = p.logistics.billingWeight;
-          } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
-              activeTotalBillingWeight = p.logistics.unitBillingWeight * p.stock;
-          } else {
-              activeTotalBillingWeight = autoUnitChargeableWeight * p.stock;
-          }
+          const unitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
+          totalWeightKG += stock * unitRealWeight;
 
           const rate = p.logistics?.unitFreightCost || 0;
-          const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
-          const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? (activeTotalBillingWeight * rate + batchFeesCNY);
-          const effectiveUnitFreightCNY = p.stock > 0 ? effectiveTotalFreightCNY / p.stock : (rate * autoUnitChargeableWeight);
+          const billingWeightTotal = (p.logistics?.billingWeight || (unitChargeableWeight * stock));
+          const batchFees = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+          const totalFreightCNY = p.logistics?.totalFreightCost ?? (billingWeightTotal * rate + batchFees);
           
-          const priceUSD = p.price || 0;
-          const costPriceUSD = (p.costPrice || 0) / EXCHANGE_RATE;
-          const freightCostUSD = (effectiveUnitFreightCNY + (p.logistics?.consumablesFee || 0)) / EXCHANGE_RATE;
+          if (p.logistics?.method === 'Sea') seaFreightAssetCNY += totalFreightCNY;
+          else airFreightAssetCNY += totalFreightCNY;
 
-          const eco = p.economics;
-          const totalUnitCost = costPriceUSD + freightCostUSD + 
-            (priceUSD * ((eco?.platformFeePercent || 0) / 100)) + 
-            (priceUSD * ((eco?.creatorFeePercent || 0) / 100)) + 
-            (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0) + (eco?.adSpend || 0);
+          // 2. Unit Profit Calculation (Full Cost Model)
+          const unitFreightUSD = (stock > 0 ? (totalFreightCNY / stock) : (rate * unitChargeableWeight)) / EXCHANGE_RATE;
+          const consumablesUSD = (p.logistics?.consumablesFee || 0) / EXCHANGE_RATE;
+          const costUSD = costCNY / EXCHANGE_RATE;
+          const priceUSD = p.price || 0;
           
-          totalStockProfitUSD += (priceUSD - totalUnitCost) * p.stock;
-          totalStockRevenuePotentialUSD += priceUSD * p.stock;
+          const eco = p.economics;
+          const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
+          const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
+          const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0) + (eco?.adCost || 0);
+          const refundUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100);
+
+          const totalUnitCostUSD = costUSD + unitFreightUSD + consumablesUSD + platformFeeUSD + creatorFeeUSD + fixedFeesUSD + refundUSD;
+          const unitProfitUSD = priceUSD - totalUnitCostUSD;
+
+          totalStockProfitUSD += unitProfitUSD * stock;
+          totalStockRevenueUSD += priceUSD * stock;
       });
 
       return {
-          stockValue,
-          totalStockProfit: totalStockProfitUSD,
-          stockMargin: totalStockRevenuePotentialUSD > 0 ? (totalStockProfitUSD / totalStockRevenuePotentialUSD * 100).toFixed(1) : "0",
-          logisticsWeight: activeProducts.reduce((acc, p) => acc + (p.stock * (p.unitWeight || 0)), 0).toFixed(1),
+          stockValueCNY: totalStockValueCNY,
+          totalStockProfitUSD,
+          totalWeightKG,
+          margin: totalStockRevenueUSD > 0 ? (totalStockProfitUSD / totalStockRevenueUSD) * 100 : 0,
+          seaFreightAssetCNY,
+          airFreightAssetCNY
       };
   }, [activeProducts]);
 
-  const costData = useMemo(() => {
-      let seaCost = 0;
-      let airCost = 0;
-      activeProducts.forEach(p => {
-          const method = p.logistics?.method || 'Air';
-          // 计算该渠道占用的运费资产 (库存数 * 单品物流成本)
-          const unitRealWeight = p.unitWeight || 0;
-          const dims = p.dimensions || {l:0, w:0, h:0};
-          const autoUnitWeight = Math.max(unitRealWeight, (dims.l * dims.w * dims.h) / 6000);
-          const freight = p.stock * autoUnitWeight * (p.logistics?.unitFreightCost || 0);
-          
-          if (method === 'Sea') seaCost += freight;
-          else airCost += freight;
-      });
-
-      if (seaCost === 0 && airCost === 0) return [{ name: '无物流资产', value: 1 }];
-      return [
-          { name: '海运在库资产', value: Math.round(seaCost) },
-          { name: '空运在库资产', value: Math.round(airCost) },
-      ];
-  }, [activeProducts]);
+  const costData = useMemo(() => [
+      { name: '海运在库资产', value: Math.round(metrics.seaFreightAssetCNY) },
+      { name: '空运在库资产', value: Math.round(metrics.airFreightAssetCNY) },
+  ], [metrics]);
 
   const handleGenerateReport = async () => {
       setIsGenerating(true);
       setReport(null);
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `Role: Supply Chain expert. Stock Value ¥${metrics.stockValue.toLocaleString()}, Profit $${metrics.totalStockProfit.toLocaleString()}, Margin ${metrics.stockMargin}%. Analyze in 3 brief HTML bullet points.`;
+          const prompt = `Role: Supply Chain expert. Stock Value ¥${metrics.stockValueCNY.toLocaleString()}, Profit $${metrics.totalStockProfitUSD.toLocaleString()}, Margin ${metrics.margin.toFixed(1)}%. Analyze in 3 brief HTML bullet points.`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setReport(response.text);
       } catch (e) {
-          setReport(`<b>系统提示:</b> AI 报告生成暂时不可用。`);
+          setReport(`<b>系统提示:</b> AI 服务暂时不可用。`);
       } finally {
           setIsGenerating(false);
       }
@@ -115,7 +109,7 @@ const Dashboard: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white flex items-center gap-2">供应链资产透视 (Asset Insight)</h2>
-                    <p className="text-sm text-slate-400 font-mono mt-1">基于现有库存资产实时监控中...</p>
+                    <p className="text-sm text-slate-400 font-mono mt-1">全局统一利润模型已生效 • 实时资产穿透</p>
                 </div>
             </div>
             <button onClick={handleGenerateReport} disabled={isGenerating} className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition-all active:scale-95 disabled:opacity-50">
@@ -130,18 +124,19 @@ const Dashboard: React.FC = () => {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard loading={isLoading} title="库存采购资金占用" value={`¥${metrics.stockValue.toLocaleString()}`} trend="在库实物价值" trendUp={true} icon={Wallet} accentColor="blue" />
-        <StatCard loading={isLoading} title="库存预计销售总利" value={`$${metrics.totalStockProfit.toLocaleString()}`} trend={`${metrics.stockMargin}% 毛利率`} trendUp={true} icon={Gem} accentColor="green" />
-        <StatCard loading={isLoading} title="待售货物理重总计" value={metrics.logisticsWeight} subValue="kg" trend="物流仓储负载" trendUp={true} icon={Box} accentColor="orange" />
+        <StatCard loading={isLoading} title="库存采购资金占用" value={`¥${metrics.stockValueCNY.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="采购成本基准" trendUp={true} icon={Wallet} accentColor="blue" />
+        <StatCard loading={isLoading} title="库存预计销售总利" value={`$${metrics.totalStockProfitUSD.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.margin.toFixed(1)}% 毛利率`} trendUp={true} icon={Gem} accentColor="green" />
+        <StatCard loading={isLoading} title="待售货物理重总计" value={metrics.totalWeightKG.toFixed(1)} subValue="kg" trend="物流仓储负载" trendUp={true} icon={Box} accentColor="orange" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="ios-glass-card p-8 flex flex-col min-h-[480px]">
+        {/* FIXED PIE CHART CONTAINER */}
+        <div className="ios-glass-card p-8 flex flex-col min-h-[500px]">
             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-1.5 h-6 bg-cyan-500 rounded-full"></span>
                 海空运输渠道资产分布 (Freight Value)
             </h3>
-            <div className="flex-1 w-full relative min-h-[300px]">
+            <div className="flex-1 w-full relative min-h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
                         <Pie 
@@ -149,34 +144,33 @@ const Dashboard: React.FC = () => {
                             cx="50%" 
                             cy="45%" 
                             innerRadius={75} 
-                            outerRadius={105} 
+                            outerRadius={110} 
                             paddingAngle={8} 
                             dataKey="value" 
                             stroke="none"
                         >
                             <Cell fill="#06b6d4" />
                             <Cell fill="#3b82f6" />
-                            <Cell fill="#334155" />
                         </Pie>
                         <Tooltip 
                             contentStyle={{ backgroundColor: '#000', borderColor: '#333', borderRadius: '8px' }}
                             itemStyle={{ color: '#fff', fontSize: '12px' }}
                             formatter={(value: number) => `¥${value.toLocaleString()}`}
                         />
-                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', color: '#94a3b8' }} />
+                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', color: '#94a3b8', paddingTop: '20px' }} />
                     </PieChart>
                 </ResponsiveContainer>
-                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-12">
-                    <p className="text-[10px] text-slate-500 uppercase font-bold">总物流成本资产</p>
-                    <p className="text-3xl font-mono font-bold text-white">¥{((costData.reduce((a, b) => a + (b.value || 0), 0)) / 1000).toFixed(1)}k</p>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-14">
+                    <p className="text-[10px] text-slate-500 uppercase font-bold">在库物流估值</p>
+                    <p className="text-3xl font-mono font-bold text-white">¥{((metrics.seaFreightAssetCNY + metrics.airFreightAssetCNY) / 1000).toFixed(1)}k</p>
                 </div>
             </div>
         </div>
 
-        <div className="ios-glass-card p-8 bg-gradient-to-br from-indigo-950/20 to-transparent flex flex-col min-h-[480px]">
+        <div className="ios-glass-card p-8 bg-gradient-to-br from-indigo-950/20 to-transparent flex flex-col min-h-[500px]">
             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-1.5 h-6 bg-purple-500 rounded-full"></span>
-                资产流动性与回笼预测
+                资产流动性与利润预测
             </h3>
             <div className="space-y-8 flex-1">
                 <div className="p-6 bg-white/5 border border-white/10 rounded-2xl shadow-inner">
@@ -199,11 +193,6 @@ const Dashboard: React.FC = () => {
                         <div className="text-2xl font-mono font-bold text-white">T+15</div>
                     </div>
                 </div>
-            </div>
-            <div className="mt-auto pt-6 border-t border-white/5">
-                <p className="text-[11px] text-slate-500 italic leading-relaxed text-center">
-                    注：此预测基于各 SKU 的历史日销速度与补货提前期计算得出。
-                </p>
             </div>
         </div>
       </div>
