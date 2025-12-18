@@ -21,7 +21,7 @@ const Dashboard: React.FC = () => {
 
   const activeProducts = useMemo(() => state.products.filter(p => !p.deletedAt), [state.products]);
 
-  // --- UNIFIED CALCULATOR ENGINE (Shared Logic) ---
+  // --- UNIFIED CALCULATOR ENGINE ---
   const metrics = useMemo(() => {
       let totalStockValueCNY = 0;
       let totalStockProfitUSD = 0;
@@ -50,11 +50,11 @@ const Dashboard: React.FC = () => {
           if (p.logistics?.method === 'Sea') seaFreightAssetCNY += totalFreightCNY;
           else airFreightAssetCNY += totalFreightCNY;
 
-          // 2. Unit Profit Calculation (Full Cost Model)
+          // 2. Unit Profit (Full Cost Model)
           const unitFreightUSD = (stock > 0 ? (totalFreightCNY / stock) : (rate * unitChargeableWeight)) / EXCHANGE_RATE;
           const consumablesUSD = (p.logistics?.consumablesFee || 0) / EXCHANGE_RATE;
-          const costUSD = costCNY / EXCHANGE_RATE;
           const priceUSD = p.price || 0;
+          const costUSD = costCNY / EXCHANGE_RATE;
           
           const eco = p.economics;
           const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
@@ -74,14 +74,15 @@ const Dashboard: React.FC = () => {
           totalStockProfitUSD,
           totalWeightKG,
           margin: totalStockRevenueUSD > 0 ? (totalStockProfitUSD / totalStockRevenueUSD) * 100 : 0,
+          roi: totalStockValueCNY > 0 ? (totalStockProfitUSD * EXCHANGE_RATE / totalStockValueCNY) * 100 : 0,
           seaFreightAssetCNY,
           airFreightAssetCNY
       };
   }, [activeProducts]);
 
   const costData = useMemo(() => [
-      { name: '海运在库资产', value: Math.round(metrics.seaFreightAssetCNY) },
-      { name: '空运在库资产', value: Math.round(metrics.airFreightAssetCNY) },
+      { name: '海运渠道资产', value: Math.round(metrics.seaFreightAssetCNY) },
+      { name: '空运渠道资产', value: Math.round(metrics.airFreightAssetCNY) },
   ], [metrics]);
 
   const handleGenerateReport = async () => {
@@ -89,11 +90,11 @@ const Dashboard: React.FC = () => {
       setReport(null);
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `Role: Supply Chain expert. Stock Value ¥${metrics.stockValueCNY.toLocaleString()}, Profit $${metrics.totalStockProfitUSD.toLocaleString()}, Margin ${metrics.margin.toFixed(1)}%. Analyze in 3 brief HTML bullet points.`;
+          const prompt = `Act as a Supply Chain Pro. Stock ¥${metrics.stockValueCNY}, ROI ${metrics.roi.toFixed(1)}%. Provide 3 points (HTML).`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setReport(response.text);
       } catch (e) {
-          setReport(`<b>系统提示:</b> AI 服务暂时不可用。`);
+          setReport(`<b>系统提示:</b> AI 报告生成暂时不可用。`);
       } finally {
           setIsGenerating(false);
       }
@@ -104,33 +105,32 @@ const Dashboard: React.FC = () => {
       <div className="holo-card p-1 animate-in fade-in slide-in-from-top-4">
         <div className="p-6 flex flex-col md:flex-row items-center justify-between relative z-10 bg-gradient-to-r from-indigo-900/20 to-transparent rounded-[20px] border border-white/10">
             <div className="flex items-center gap-6">
-                <div className="relative p-3.5 rounded-xl border border-indigo-500/30 bg-black/40 text-indigo-400 shadow-lg shadow-indigo-500/10">
+                <div className="relative p-3.5 rounded-xl border border-indigo-500/30 bg-black/40 text-indigo-400">
                     <Zap className="w-7 h-7 fill-current" />
                 </div>
                 <div>
-                    <h2 className="text-xl font-bold text-white flex items-center gap-2">供应链资产透视 (Asset Insight)</h2>
-                    <p className="text-sm text-slate-400 font-mono mt-1">全局统一利润模型已生效 • 实时资产穿透</p>
+                    <h2 className="text-xl font-bold text-white">供应链资产透视 (Asset Insight)</h2>
+                    <p className="text-sm text-slate-400 font-mono mt-1 uppercase">Unified Full-Cost Engine Active</p>
                 </div>
             </div>
-            <button onClick={handleGenerateReport} disabled={isGenerating} className="flex items-center gap-2 px-8 py-3.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition-all active:scale-95 disabled:opacity-50">
-                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Command className="w-5 h-5" />} 生成资产诊断
+            <button onClick={handleGenerateReport} disabled={isGenerating} className="px-8 py-3.5 rounded-xl text-sm font-bold bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg transition-all">
+                {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : '生成资产诊断'}
             </button>
         </div>
         {report && (
             <div className="px-6 pb-6 animate-in fade-in relative z-10">
-                <div className="p-5 bg-black/40 rounded-xl border border-white/5 text-slate-200 leading-relaxed font-mono shadow-inner text-sm" dangerouslySetInnerHTML={{ __html: report }}></div>
+                <div className="p-5 bg-black/40 rounded-xl border border-white/5 text-slate-200 text-sm font-mono" dangerouslySetInnerHTML={{ __html: report }}></div>
             </div>
         )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard loading={isLoading} title="库存采购资金占用" value={`¥${metrics.stockValueCNY.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="采购成本基准" trendUp={true} icon={Wallet} accentColor="blue" />
-        <StatCard loading={isLoading} title="库存预计销售总利" value={`$${metrics.totalStockProfitUSD.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.margin.toFixed(1)}% 毛利率`} trendUp={true} icon={Gem} accentColor="green" />
-        <StatCard loading={isLoading} title="待售货物理重总计" value={metrics.totalWeightKG.toFixed(1)} subValue="kg" trend="物流仓储负载" trendUp={true} icon={Box} accentColor="orange" />
+        <StatCard loading={isLoading} title="库存采购资金占用" value={`¥${metrics.stockValueCNY.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="采购本金" trendUp={true} icon={Wallet} accentColor="blue" />
+        <StatCard loading={isLoading} title="库存预计销售总利" value={`$${metrics.totalStockProfitUSD.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi.toFixed(1)}% ROI`} trendUp={metrics.roi >= 0} icon={Gem} accentColor="green" />
+        <StatCard loading={isLoading} title="待售货物理重总计" value={metrics.totalWeightKG.toFixed(1)} subValue="kg" trend="物流负载" trendUp={true} icon={Box} accentColor="orange" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* FIXED PIE CHART CONTAINER */}
         <div className="ios-glass-card p-8 flex flex-col min-h-[500px]">
             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-1.5 h-6 bg-cyan-500 rounded-full"></span>
@@ -138,26 +138,13 @@ const Dashboard: React.FC = () => {
             </h3>
             <div className="flex-1 w-full relative min-h-[320px]">
                 <ResponsiveContainer width="100%" height="100%">
-                    <PieChart margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
-                        <Pie 
-                            data={costData} 
-                            cx="50%" 
-                            cy="45%" 
-                            innerRadius={75} 
-                            outerRadius={110} 
-                            paddingAngle={8} 
-                            dataKey="value" 
-                            stroke="none"
-                        >
+                    <PieChart>
+                        <Pie data={costData} cx="50%" cy="45%" innerRadius={75} outerRadius={110} paddingAngle={8} dataKey="value" stroke="none">
                             <Cell fill="#06b6d4" />
                             <Cell fill="#3b82f6" />
                         </Pie>
-                        <Tooltip 
-                            contentStyle={{ backgroundColor: '#000', borderColor: '#333', borderRadius: '8px' }}
-                            itemStyle={{ color: '#fff', fontSize: '12px' }}
-                            formatter={(value: number) => `¥${value.toLocaleString()}`}
-                        />
-                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{ fontSize: '12px', color: '#94a3b8', paddingTop: '20px' }} />
+                        <Tooltip contentStyle={{ backgroundColor: '#000', borderColor: '#333' }} />
+                        <Legend verticalAlign="bottom" height={36} wrapperStyle={{paddingTop: '20px'}} />
                     </PieChart>
                 </ResponsiveContainer>
                 <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none pb-14">
@@ -170,29 +157,38 @@ const Dashboard: React.FC = () => {
         <div className="ios-glass-card p-8 bg-gradient-to-br from-indigo-950/20 to-transparent flex flex-col min-h-[500px]">
             <h3 className="text-base font-bold text-white uppercase tracking-wider mb-6 flex items-center gap-3">
                 <span className="w-1.5 h-6 bg-purple-500 rounded-full"></span>
-                资产流动性与利润预测
+                资产赚钱效率排行 (ROI Efficiency)
             </h3>
-            <div className="space-y-8 flex-1">
-                <div className="p-6 bg-white/5 border border-white/10 rounded-2xl shadow-inner">
-                    <div className="flex justify-between items-center mb-3">
-                        <span className="text-sm font-bold text-slate-300">潜在利润转化进度 (Forecast)</span>
-                        <span className="text-xl font-mono font-bold text-emerald-400">82%</span>
-                    </div>
-                    <div className="h-4 w-full bg-black/40 rounded-full overflow-hidden p-1 border border-white/5">
-                        <div className="h-full bg-gradient-to-r from-indigo-500 to-emerald-500 rounded-full" style={{width: '82%'}}></div>
-                    </div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-6">
-                    <div className="p-5 bg-black/40 border border-white/10 rounded-xl">
-                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">全站平均周转天数</div>
-                        <div className="text-2xl font-mono font-bold text-white">42.5 <span className="text-xs">Days</span></div>
-                    </div>
-                    <div className="p-5 bg-black/40 border border-white/10 rounded-xl">
-                        <div className="text-[10px] text-slate-500 uppercase font-bold mb-2">资金加权回笼期</div>
-                        <div className="text-2xl font-mono font-bold text-white">T+15</div>
-                    </div>
-                </div>
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                {activeProducts
+                    .map(p => {
+                        const costPriceUSD = (p.costPrice || 0) / EXCHANGE_RATE;
+                        const unitWeight = Math.max(p.unitWeight || 0, ((p.dimensions?.l || 0) * (p.dimensions?.w || 0) * (p.dimensions?.h || 0)) / 6000);
+                        const unitFreightUSD = ((unitWeight * (p.logistics?.unitFreightCost || 0)) + (p.logistics?.consumablesFee || 0)) / EXCHANGE_RATE;
+                        const priceUSD = p.price || 0;
+                        const eco = p.economics;
+                        const feesUSD = (priceUSD * ((eco?.platformFeePercent || 0) + (eco?.creatorFeePercent || 0)) / 100) + 
+                                        (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0) + (eco?.adCost || 0);
+                        const unitProfitUSD = priceUSD - (costPriceUSD + unitFreightUSD + feesUSD);
+                        const roi = p.costPrice && p.costPrice > 0 ? (unitProfitUSD * EXCHANGE_RATE / p.costPrice * 100) : 0;
+                        return { sku: p.sku, roi };
+                    })
+                    .sort((a, b) => b.roi - a.roi)
+                    .slice(0, 5)
+                    .map((item, i) => (
+                        <div key={i} className="p-4 bg-white/5 border border-white/5 rounded-xl flex justify-between items-center">
+                            <div className="flex items-center gap-3">
+                                <span className="text-xs font-mono text-slate-500">0{i+1}</span>
+                                <span className="text-sm font-bold text-white">{item.sku}</span>
+                            </div>
+                            <span className={`text-sm font-mono font-bold ${item.roi >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                                {item.roi.toFixed(1)}%
+                            </span>
+                        </div>
+                    ))}
+            </div>
+            <div className="mt-4 pt-4 border-t border-white/5 text-[10px] text-slate-500 italic text-center">
+                * ROI 为负数表示该 SKU 的物流及营销总支出已超过其毛利空间
             </div>
         </div>
       </div>
