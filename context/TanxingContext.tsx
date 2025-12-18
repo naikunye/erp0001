@@ -62,7 +62,7 @@ type Action =
     | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
     | { type: 'SET_SUPABASE_CONFIG'; payload: Partial<AppState['supabaseConfig']> }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
-    | { type: 'FULL_RESTORE'; payload: AppState }
+    | { type: 'FULL_RESTORE'; payload: Partial<AppState> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' };
@@ -122,7 +122,21 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'DELETE_SUPPLIER': return { ...state, suppliers: state.suppliers.filter(s => s.id !== action.payload) };
         case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments] };
         case 'HYDRATE_STATE': return { ...state, ...action.payload };
-        case 'FULL_RESTORE': return { ...action.payload, toasts: [], connectionStatus: 'disconnected' };
+        case 'FULL_RESTORE': 
+            // 关键：合并默认状态以防止缺少字段
+            return { 
+                ...mockState, 
+                ...action.payload, 
+                // 强制修正容易引起崩溃的子对象结构
+                supabaseConfig: { 
+                    ...mockState.supabaseConfig, 
+                    ...(action.payload.supabaseConfig || {}) 
+                },
+                navParams: action.payload.navParams || {},
+                toasts: [], 
+                exportTasks: [],
+                connectionStatus: 'disconnected' 
+            };
         case 'SET_SUPABASE_CONFIG': return { ...state, supabaseConfig: { ...state.supabaseConfig, ...action.payload } };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
@@ -151,49 +165,54 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     // --- 核心实时订阅逻辑 (Supabase Realtime) ---
     useEffect(() => {
-        if (!state.supabaseConfig.url || !state.supabaseConfig.key || !state.supabaseConfig.isRealTime) {
+        // 安全读取配置，防止 undefined
+        const config = state.supabaseConfig || { url: '', key: '', isRealTime: false };
+        if (!config.url || !config.key || !config.isRealTime) {
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
             return;
         }
 
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         
-        const supabase = createClient(state.supabaseConfig.url, state.supabaseConfig.key, {
-            realtime: { params: { eventsPerSecond: 10 } }
-        });
-
-        const channel = supabase.channel('tanxing_realtime_v4')
-            .on('postgres_changes', { 
-                event: 'INSERT', 
-                schema: 'public', 
-                table: 'app_backups' 
-            }, (payload) => {
-                const incoming = payload.new;
-                if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
-                    const incomingPayload = incoming.data.payload;
-                    const payloadString = JSON.stringify(incomingPayload);
-                    if (payloadString !== lastSyncDataRef.current) {
-                        isInternalUpdate.current = true;
-                        lastSyncDataRef.current = payloadString;
-                        dispatch({ type: 'HYDRATE_STATE', payload: incomingPayload });
-                        dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-                    }
-                }
-            })
-            .subscribe((status) => {
-                if (status === 'SUBSCRIBED') {
-                    dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-                } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
-                    dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-                }
+        try {
+            const supabase = createClient(config.url, config.key, {
+                realtime: { params: { eventsPerSecond: 10 } }
             });
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, [state.supabaseConfig.url, state.supabaseConfig.key, state.supabaseConfig.isRealTime]);
+            const channel = supabase.channel('tanxing_realtime_v4')
+                .on('postgres_changes', { 
+                    event: 'INSERT', 
+                    schema: 'public', 
+                    table: 'app_backups' 
+                }, (payload) => {
+                    const incoming = payload.new;
+                    if (incoming && incoming.data && incoming.data.source_session !== SESSION_ID) {
+                        const incomingPayload = incoming.data.payload;
+                        const payloadString = JSON.stringify(incomingPayload);
+                        if (payloadString !== lastSyncDataRef.current) {
+                            isInternalUpdate.current = true;
+                            lastSyncDataRef.current = payloadString;
+                            dispatch({ type: 'HYDRATE_STATE', payload: incomingPayload });
+                        }
+                    }
+                })
+                .subscribe((status) => {
+                    if (status === 'SUBSCRIBED') {
+                        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+                    } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+                        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+                    }
+                });
 
-    // --- 自动持久化与节流广播 ---
+            return () => {
+                supabase.removeChannel(channel);
+            };
+        } catch (e) {
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+        }
+    }, [state.supabaseConfig?.url, state.supabaseConfig?.key, state.supabaseConfig?.isRealTime]);
+
+    // --- 自动持久化 ---
     useEffect(() => {
         localStorage.setItem(DB_KEY, JSON.stringify({ ...state, toasts: [], exportTasks: [] }));
         document.body.className = `theme-${state.theme}`;
@@ -203,14 +222,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
-        if (state.connectionStatus === 'connected' && state.supabaseConfig.isRealTime) {
+        if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime) {
             const timer = setTimeout(() => syncToCloud(), 3000); 
             return () => clearTimeout(timer);
         }
     }, [state.products, state.orders, state.tasks, state.customers, state.shipments, state.theme, state.connectionStatus]);
 
     const syncToCloud = async () => {
-        if (!state.supabaseConfig.url || !state.supabaseConfig.key) return;
+        if (!state.supabaseConfig?.url || !state.supabaseConfig?.key) return;
         
         const payloadToSync = {
             products: state.products,

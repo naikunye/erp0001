@@ -1,7 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
 import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle } from 'lucide-react';
-// Added SESSION_ID to the import from TanxingContext
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -19,7 +18,8 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handleCloudSync = async () => {
-      if (!state.supabaseConfig.url || !state.supabaseConfig.key) {
+      // 增加可选链保护
+      if (!state.supabaseConfig?.url || !state.supabaseConfig?.key) {
           showToast('请在系统设置中配置云端连接', 'warning');
           return;
       }
@@ -55,7 +55,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     }).format(now);
   };
 
-  // --- 链接状态计算 ---
   const getConnectionPill = () => {
       switch(state.connectionStatus) {
           case 'connected':
@@ -94,7 +93,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       }
   };
 
-  const isCloudConnected = !!(state.supabaseConfig.url && state.supabaseConfig.key);
+  const isCloudConnected = !!(state.supabaseConfig?.url && state.supabaseConfig?.key);
 
   return (
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
@@ -127,7 +126,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </div>
 
             <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美中 CT</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">美中 CT</span>
                 <span className="text-xs font-mono text-white/70">{formatTime('America/Chicago')}</span>
             </div>
 
@@ -139,7 +138,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </div>
         </div>
 
-        {/* Real-time Status Indicator */}
         <div className="hidden md:block">
             {getConnectionPill()}
         </div>
@@ -149,7 +147,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                 onClick={handleCloudSync}
                 disabled={isSyncing}
                 className={`relative p-2 rounded-full transition-all ${isCloudConnected ? 'text-indigo-400 hover:bg-indigo-500/10' : 'text-slate-600 hover:text-slate-400'}`}
-                title={isCloudConnected ? `同步中 (上次: ${state.supabaseConfig.lastSync || '待同步'})` : "云端未连接"}
+                title={isCloudConnected ? `同步中 (上次: ${state.supabaseConfig?.lastSync || '待同步'})` : "云端未连接"}
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
