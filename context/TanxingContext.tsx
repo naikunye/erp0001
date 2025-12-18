@@ -5,10 +5,10 @@ import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplie
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
 const DB_KEY = 'TANXING_DB_V8_STABLE'; 
-const CONFIG_KEY = 'TANXING_UPLINK_CONFIG'; // 独立的配置存储，防止刷新丢失连接
+const CONFIG_KEY = 'TANXING_UPLINK_CONFIG'; 
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
-export type Theme = 'ios-glass' | 'cyber-neon' | 'paper-minimal';
+export type Theme = 'ios-glass' | 'cyber-neon' | 'midnight-dark' | 'titanium-light';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'syncing';
 
 interface AppState {
@@ -128,12 +128,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isInternalUpdateRef = useRef(false);
     const supabaseRef = useRef<SupabaseClient | null>(null);
 
-    // 1. 终极初始化序列：解决刷新配置丢失
     useEffect(() => {
         const initializeSystem = async () => {
-            console.log("[Boot] Initializing System Core...");
-            
-            // A. 首先尝试恢复独立的配置
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             let config = state.supabaseConfig;
             if (savedConfig) {
@@ -143,41 +139,33 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 } catch (e) { console.error("[Boot] Config corrupted"); }
             }
 
-            // B. 尝试从本地加载主数据库（作为备选）
             const savedDb = localStorage.getItem(DB_KEY);
             let localData = null;
             if (savedDb) {
                 try { localData = JSON.parse(savedDb); } catch (e) {}
             }
 
-            // C. 核心同步逻辑：云端优先
             if (config?.url && config?.key) {
-                console.log("[Boot] Uplink detected, pulling cloud snapshot...");
                 try {
                     const client = createClient(config.url, config.key);
                     const { data, error } = await client.from('app_backups').select('data').order('created_at', { ascending: false }).limit(1);
                     
                     if (!error && data && data.length > 0) {
                         const cloudPayload = data[0].data.payload;
-                        console.log("[Boot] Cloud data recovered successfully");
                         dispatch({ type: 'HYDRATE_STATE', payload: { ...cloudPayload, supabaseConfig: config } });
                         lastSyncFingerprintRef.current = JSON.stringify(cloudPayload);
                     } else if (localData) {
-                        console.log("[Boot] Cloud empty, falling back to local storage");
                         dispatch({ type: 'HYDRATE_STATE', payload: localData });
                     } else {
                         dispatch({ type: 'LOAD_MOCK_DATA' });
                     }
                 } catch (e) {
-                    console.log("[Boot] Cloud pull failed, using local fallback");
                     if (localData) dispatch({ type: 'HYDRATE_STATE', payload: localData });
                     else dispatch({ type: 'LOAD_MOCK_DATA' });
                 }
             } else if (localData && localData.products?.length > 0) {
-                console.log("[Boot] No uplink config, using local cache");
                 dispatch({ type: 'HYDRATE_STATE', payload: localData });
             } else {
-                console.log("[Boot] Pure environment, loading mock matrix");
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
 
@@ -186,11 +174,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         initializeSystem();
     }, []);
 
-    // 2. 实时链路管理
     useEffect(() => {
         if (!isHydrated || !state.supabaseConfig?.url || !state.supabaseConfig?.key || !state.supabaseConfig?.isRealTime) return;
-
-        console.log("[Realtime] Opening terminal channel...");
         const client = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
         supabaseRef.current = client;
 
@@ -201,7 +186,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const payloadData = incoming.data.payload;
                     const fingerprint = JSON.stringify(payloadData);
                     if (fingerprint !== lastSyncFingerprintRef.current) {
-                        console.log("[Realtime] External delta received, syncing local state");
                         isInternalUpdateRef.current = true;
                         lastSyncFingerprintRef.current = fingerprint;
                         dispatch({ type: 'HYDRATE_STATE', payload: payloadData });
@@ -215,15 +199,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return () => { channel.unsubscribe(); };
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, isHydrated]);
 
-    // 3. 稳健持久化
     useEffect(() => {
         if (!isHydrated) return;
-
-        // 持久化主数据库
         try {
             const persistencePayload = { ...state, toasts: [], exportTasks: [] };
             localStorage.setItem(DB_KEY, JSON.stringify(persistencePayload));
-            // 同时持久化独立配置
             localStorage.setItem(CONFIG_KEY, JSON.stringify(state.supabaseConfig));
         } catch (e) {}
 

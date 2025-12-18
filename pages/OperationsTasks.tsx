@@ -28,6 +28,16 @@ const OperationsTasks: React.FC = () => {
     }
   };
 
+  const getProgressSpecs = (status: Task['status']) => {
+      switch(status) {
+          case 'todo': return { width: '15%', color: 'bg-slate-500', shadow: '' };
+          case 'in_progress': return { width: '45%', color: 'bg-blue-500', shadow: 'shadow-[0_0_10px_#3b82f6]' };
+          case 'review': return { width: '85%', color: 'bg-amber-500', shadow: 'shadow-[0_0_10px_#f59e0b]' };
+          case 'done': return { width: '100%', color: 'bg-emerald-500', shadow: 'shadow-[0_0_10px_#10b981]' };
+          default: return { width: '0%', color: 'bg-slate-700', shadow: '' };
+      }
+  };
+
   const handleMoveTask = (task: Task, direction: 'forward' | 'backward') => {
     const statusFlow: Task['status'][] = ['todo', 'in_progress', 'review', 'done'];
     const currentIndex = statusFlow.indexOf(task.status);
@@ -89,38 +99,55 @@ const OperationsTasks: React.FC = () => {
       </div>
       
       <div className="flex flex-col gap-3 min-h-[600px] bg-white/2 rounded-2xl p-2 border border-white/5">
-        {filteredTasks.filter(t => t.status === status).map(task => (
-          <div key={task.id} className="ios-glass-card p-4 hover:border-indigo-500/40 group relative animate-in fade-in slide-in-from-bottom-2">
-            <div className="flex justify-between items-start mb-3">
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)} uppercase tracking-tighter`}>
-                {task.priority}
-              </span>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {status !== 'todo' && <button onClick={() => handleMoveTask(task, 'backward')} className="p-1 hover:bg-white/10 rounded"><ArrowLeft className="w-3 h-3 text-slate-500"/></button>}
-                  {status !== 'done' && <button onClick={() => handleMoveTask(task, 'forward')} className="p-1 hover:bg-white/10 rounded"><ArrowRight className="w-3 h-3 text-slate-500"/></button>}
-              </div>
-            </div>
-            
-            <h4 
-                onClick={() => { setEditingTask(task); setIsModalOpen(true); }}
-                className="text-sm font-bold text-white mb-4 leading-snug cursor-pointer hover:text-indigo-400 transition-colors"
-            >
-                {task.title}
-            </h4>
-            
-            <div className="flex items-center justify-between pt-3 border-t border-white/5">
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
-                  {task.assignee.charAt(0)}
+        {filteredTasks.filter(t => t.status === status).map(task => {
+          const progress = getProgressSpecs(task.status);
+          return (
+            <div key={task.id} className="ios-glass-card p-4 hover:border-indigo-500/40 group relative animate-in fade-in slide-in-from-bottom-2">
+                <div className="flex justify-between items-start mb-3">
+                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)} uppercase tracking-tighter`}>
+                    {task.priority}
+                </span>
+                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    {status !== 'todo' && <button onClick={() => handleMoveTask(task, 'backward')} className="p-1 hover:bg-white/10 rounded"><ArrowLeft className="w-3 h-3 text-slate-500"/></button>}
+                    {status !== 'done' && <button onClick={() => handleMoveTask(task, 'forward')} className="p-1 hover:bg-white/10 rounded"><ArrowRight className="w-3 h-3 text-slate-500"/></button>}
                 </div>
-                <span className="text-[10px] text-slate-400">{task.assignee}</span>
-              </div>
-              <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
-                <Calendar className="w-3 h-3"/> {task.dueDate}
-              </div>
+                </div>
+                
+                <h4 
+                    onClick={() => { setEditingTask(task); setIsModalOpen(true); }}
+                    className="text-sm font-bold text-white mb-3 leading-snug cursor-pointer hover:text-indigo-400 transition-colors"
+                >
+                    {task.title}
+                </h4>
+
+                {/* Quantum Progress Bar */}
+                <div className="mb-4">
+                    <div className="flex justify-between items-center mb-1">
+                        <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Completion Profile</span>
+                        <span className="text-[8px] font-mono font-bold text-indigo-400">{progress.width}</span>
+                    </div>
+                    <div className="h-[2px] w-full bg-white/5 rounded-full overflow-hidden border border-white/5 shadow-inner">
+                        <div 
+                            className={`h-full transition-all duration-700 cubic-bezier(0.4, 0, 0.2, 1) ${progress.color} ${progress.shadow}`}
+                            style={{ width: progress.width }}
+                        ></div>
+                    </div>
+                </div>
+                
+                <div className="flex items-center justify-between pt-3 border-t border-white/5">
+                <div className="flex items-center gap-2">
+                    <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
+                    {task.assignee.charAt(0)}
+                    </div>
+                    <span className="text-[10px] text-slate-400">{task.assignee}</span>
+                </div>
+                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+                    <Calendar className="w-3 h-3"/> {task.dueDate}
+                </div>
+                </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <button 
             onClick={handleAddNew}
             className="w-full py-3 border-2 border-dashed border-white/5 rounded-xl text-slate-600 hover:text-slate-400 hover:border-indigo-500/30 hover:bg-indigo-500/5 transition-all text-xs flex items-center justify-center gap-1.5 group"
