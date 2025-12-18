@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -51,8 +50,6 @@ const Analytics: React.FC = () => {
         const rate = p.logistics?.unitFreightCost || 0;
         const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
         
-        // 计算“稳态单品物流费”：如果库存太少，分摊 batchFee 会失真，此时应取逻辑预估
-        // 假设每个批次正常备货量为 itemsPerBox * 10 (或 100pcs 兜底)
         const divisor = Math.max(stock, 100); 
         const unitLogisticsCNY = (theoreticalUnitWeight * rate) + (batchFeesCNY / divisor) + (p.logistics?.consumablesFee || 0);
         const unitLogisticsUSD = unitLogisticsCNY / EXCHANGE_RATE;
@@ -72,8 +69,6 @@ const Analytics: React.FC = () => {
         const unitProfitUSD = priceUSD - totalUnitCostUSD;
         const skuTotalProfitUSD = unitProfitUSD * stock;
         
-        // ROI = (单品利润 / (采购成本 + 物流成本)) * 100
-        // 只有当售价真的抵不过成本时，ROI 才会是负数
         const unitInvestmentCNY = costPriceCNY + unitLogisticsCNY;
         const roi = unitInvestmentCNY > 0 ? (unitProfitUSD * EXCHANGE_RATE / unitInvestmentCNY * 100) : 0;
 
@@ -117,6 +112,10 @@ const Analytics: React.FC = () => {
   const navigateToSku = (sku: string) => {
       dispatch({ type: 'NAVIGATE', payload: { page: 'inventory', params: { searchQuery: sku } } });
   };
+
+  const sortedMatrixData = useMemo(() => {
+      return [...analysisData.matrixData].sort((a, b) => b.roi - a.roi);
+  }, [analysisData.matrixData]);
 
   return (
     <div className="flex flex-col h-full space-y-6 pb-10">
@@ -188,7 +187,7 @@ const Analytics: React.FC = () => {
                                 return null;
                             }} />
                             <ReferenceLine x={45} stroke="#334155" strokeDasharray="3 3" />
-                            <Scatter name="Inventory" data={analysisData.matrixData}>
+                            <Scatter name="Inventory" data={[...analysisData.matrixData]}>
                                 {analysisData.matrixData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
                             </Scatter>
                         </ScatterChart>
@@ -199,9 +198,7 @@ const Analytics: React.FC = () => {
             <div className="ios-glass-card p-6 flex flex-col overflow-hidden">
                 <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><BarChart4 className="w-5 h-5 text-purple-400"/> 资产赚钱效率排行 (ROI Rank)</h3>
                 <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {analysisData.matrixData
-                        .sort((a, b) => b.roi - a.roi)
-                        .map((sku, i) => (
+                    {sortedMatrixData.map((sku, i) => (
                         <div key={sku.sku} onClick={() => navigateToSku(sku.sku)} className="bg-white/5 border border-white/5 rounded-xl p-4 flex items-center justify-between group hover:border-indigo-500/30 cursor-pointer transition-all">
                             <div className="flex items-center gap-4">
                                 <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${sku.roi < 0 ? 'bg-red-500/20 text-red-500' : (i < 3 ? 'bg-indigo-600 text-white' : 'bg-black/40 text-slate-500')}`}>

@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Search, X, Menu, ChevronDown, Command, CalendarDays, LogOut, Settings, User, Cloud, RefreshCw, Wifi } from 'lucide-react';
+import { Bell, Search, X, Menu, ChevronDown, Command, CalendarDays, LogOut, Settings, User, Cloud, RefreshCw } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -60,6 +60,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       <div className="flex items-center space-x-6">
         {/* Clock Pill - Cross Border Context */}
         <div className="hidden xl:flex items-center gap-4 mr-2 text-xs font-mono text-white/50 bg-black/20 px-4 py-2 rounded-full border border-white/5">
+            {/* US Date Format (Chinese) - Using US West as reference for date */}
             <div className="flex items-center gap-2 text-slate-300">
                 <CalendarDays className="w-3.5 h-3.5 text-slate-500" />
                 <span>{currentTime.toLocaleDateString('zh-CN', { timeZone: 'America/Los_Angeles', month: 'long', day: 'numeric', weekday: 'short' })}</span>
@@ -67,6 +68,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             
             <div className="w-px h-3 bg-white/10"></div>
 
+            {/* Beijing (Supply Chain) */}
             <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
                 <span>北京 {currentTime.toLocaleTimeString('en-US', { timeZone: 'Asia/Shanghai', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
@@ -74,9 +76,26 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             
             <div className="w-px h-3 bg-white/10"></div>
 
+            {/* US West (LA) */}
             <div className="flex items-center gap-2">
                 <span className="w-1.5 h-1.5 rounded-full bg-orange-500"></span>
                 <span>美西 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/Los_Angeles', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+
+            <div className="w-px h-3 bg-white/10"></div>
+
+            {/* US Central (Chicago) */}
+            <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
+                <span>美中 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/Chicago', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
+            </div>
+
+            <div className="w-px h-3 bg-white/10"></div>
+
+            {/* US East (NY) */}
+            <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+                <span>美东 {currentTime.toLocaleTimeString('en-US', { timeZone: 'America/New_York', hour12: false, hour: '2-digit', minute: '2-digit' })}</span>
             </div>
         </div>
 
@@ -100,22 +119,15 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         <div className="h-6 w-px bg-white/10"></div>
 
         <div className="flex items-center space-x-4">
-            {/* Cloud Sync Section with Live Indicator */}
-            <div className="flex items-center gap-1 bg-black/30 px-2 py-1 rounded-full border border-white/5">
-                {isCloudConnected && (
-                    <div className="flex items-center gap-1.5 px-2 py-0.5 bg-emerald-500/10 rounded-full">
-                        <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse shadow-[0_0_8px_#10b981]"></div>
-                        <span className="text-[9px] font-bold text-emerald-400 uppercase tracking-tighter">Live</span>
-                    </div>
-                )}
-                <button 
-                    onClick={handleCloudSync}
-                    className={`relative p-2 rounded-full transition-all ${isCloudConnected ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-slate-600 hover:text-slate-400'}`}
-                    title={isCloudConnected ? `云端实时同步中 (点击强制同步)` : "云端未配置"}
-                >
-                    {isSyncing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Cloud className="w-4 h-4" />}
-                </button>
-            </div>
+            {/* Cloud Sync Button */}
+            <button 
+                onClick={handleCloudSync}
+                className={`relative p-2 rounded-full transition-all ${isCloudConnected ? 'text-emerald-400 hover:bg-emerald-500/10' : 'text-slate-600 hover:text-slate-400'}`}
+                title={isCloudConnected ? `云端已连接 (点击同步)` : "云端未配置"}
+            >
+                {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
+                {isCloudConnected && !isSyncing && <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-emerald-500 rounded-full ring-2 ring-[#121217]"></span>}
+            </button>
 
             <button 
                 onClick={() => setShowNotifications(!showNotifications)}
@@ -171,7 +183,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                                 <User className="w-4 h-4" /> 个人资料
                             </button>
                             <button 
-                                onClick={() => dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } })}
+                                onClick={() => window.location.href = '/settings'}
                                 className="w-full text-left px-3 py-2 text-xs text-slate-300 hover:text-white hover:bg-white/10 rounded flex items-center gap-2"
                             >
                                 <Settings className="w-4 h-4" /> 系统设置

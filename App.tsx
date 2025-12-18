@@ -14,16 +14,18 @@ import Calendar from './pages/Calendar';
 import Marketing from './pages/Marketing';
 import Analytics from './pages/Analytics'; 
 import CalculatorCenter from './pages/CalculatorCenter';
+import OperationsTasks from './pages/OperationsTasks';
+import Profile from './pages/Profile';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
-import Suppliers from './pages/Suppliers'; 
+import DownloadManager from './components/DownloadManager';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
 import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
 import Logger from './utils/logger';
 
 const MainLayout: React.FC = () => {
-  const { state, dispatch } = useTanxing(); // Use Context
+  const { state, dispatch } = useTanxing();
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
   const [authChecking, setAuthChecking] = useState(true);
   const [loginForm, setLoginForm] = useState({ email: 'admin@tanxing.com', password: '' });
@@ -66,7 +68,8 @@ const MainLayout: React.FC = () => {
       case 'calculator': return '智能计算 (Intelligent Calc)';
       case 'calendar': return '运营日历 (Operations Timeline)';
       case 'settings': return '系统配置 (System Config)';
-      case 'suppliers': return '供应商管理 (Suppliers)';
+      case 'tasks': return '运营协同中心 (Operations Hub)';
+      case 'profile': return '个人中心 (User Profile)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -84,7 +87,8 @@ const MainLayout: React.FC = () => {
       case 'analytics': return <Analytics />;
       case 'calculator': return <CalculatorCenter />;
       case 'settings': return <Settings />;
-      case 'suppliers': return <Suppliers />;
+      case 'tasks': return <OperationsTasks />;
+      case 'profile': return <Profile />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };
@@ -122,19 +126,15 @@ const MainLayout: React.FC = () => {
     <div className="flex h-screen w-screen overflow-hidden p-4 gap-4 font-sans">
       <ToastContainer />
       <GlobalSearch />
+      <DownloadManager />
       
-      {/* Sidebar - using global state for active page */}
       <Sidebar activePage={state.activePage} onNavigate={handleNavigate} onLogout={handleLogout} />
       
-      {/* Main Content Area */}
       <div className="flex-1 flex flex-col relative h-full min-w-0 ios-glass-panel rounded-3xl shadow-2xl overflow-hidden">
-        
-        {/* Header sits on top */}
         <div className="relative z-20">
             <Header title={getPageTitle(state.activePage)} />
         </div>
         
-        {/* Scrollable Content */}
         <main className="flex-1 overflow-y-auto scroll-smooth p-6 relative z-10 scrollbar-thin scrollbar-thumb-white/10 scrollbar-track-transparent">
           <ErrorBoundary>
             <div className="w-full h-full flex flex-col">

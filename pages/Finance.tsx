@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   Wallet, TrendingUp, DollarSign, Plus, FileText, 
@@ -91,21 +90,6 @@ const Finance: React.FC = () => {
     }).format(finalAmount);
   };
 
-  const handleSmartFill = async () => {
-    if (!smartInput.trim()) return;
-    setIsSmartFilling(true);
-    try {
-        const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const prompt = `Parse this financial text: "${smartInput}". Return JSON: { "amount": number, "currency": "CNY"|"USD", "type": "income"|"expense", "category": "COGS"|"Logistics"|"Marketing"|"Other", "description": "String" }`;
-        await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt, config: { responseMimeType: "application/json" } });
-        showToast("AI 识别成功", "success");
-    } catch (e) {
-        showToast("识别失败", "error");
-    } finally {
-        setIsSmartFilling(false);
-    }
-  };
-
   const handleAiDeepDive = async () => {
       setIsAiThinking(true);
       setAiAnalysis(null);
@@ -120,6 +104,10 @@ const Finance: React.FC = () => {
           setIsAiThinking(false);
       }
   };
+
+  const areaChartData = useMemo(() => {
+    return [...transactions].slice(0, 20).reverse();
+  }, [transactions]);
 
   return (
     <div className="space-y-6 h-full flex flex-col">
@@ -179,7 +167,7 @@ const Finance: React.FC = () => {
               <div className="ios-glass-card p-6 h-96">
                   <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><Activity className="w-4 h-4 text-emerald-400"/> 资产波动监控 (Asset Flow)</h3>
                   <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={transactions.slice(0, 20).reverse()}>
+                      <AreaChart data={areaChartData}>
                           <defs>
                               <linearGradient id="colorAsset" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#3b82f6" stopOpacity={0.3}/><stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/></linearGradient>
                           </defs>

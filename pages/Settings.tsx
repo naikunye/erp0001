@@ -18,7 +18,7 @@ const RecycleBin = () => {
         
         const deletedOrders = state.orders
             .filter(o => o.deletedAt)
-            .map(o => ({ ...o, type: 'order' as const, originalId: o.id, name: `Order ${o.id}` })); // Normalize name
+            .map(o => ({ ...o, type: 'order' as const, originalId: o.id, name: `Order ${o.id}` }));
 
         let all = [...deletedProducts, ...deletedOrders].sort((a, b) => 
             new Date(b.deletedAt!).getTime() - new Date(a.deletedAt!).getTime()
@@ -135,7 +135,6 @@ const Settings: React.FC = () => {
   const [isTestingConnection, setIsTestingConnection] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
   
-  // Supabase specific connection status
   const [supabaseConnectionStatus, setSupabaseConnectionStatus] = useState<'idle' | 'testing' | 'success' | 'error'>(
       (state.supabaseConfig.url && state.supabaseConfig.key) ? 'success' : 'idle'
   );
@@ -146,7 +145,6 @@ const Settings: React.FC = () => {
   const [showSql, setShowSql] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Initial check on mount (Re-confirm state logic)
   useEffect(() => {
       if (state.supabaseConfig.url && state.supabaseConfig.key) {
           setSupabaseConnectionStatus('success');
@@ -170,11 +168,9 @@ on app_backups for all
 using (true)
 with check (true);`;
 
-  // --- Handlers ---
   const handleThemeChange = (theme: Theme) => dispatch({ type: 'SET_THEME', payload: theme });
 
   const handleGeneralSave = () => {
-      // Just simulate feedback
       showToast('系统设置已保存', 'success');
   };
 
@@ -187,37 +183,27 @@ with check (true);`;
               throw new Error("请填写完整的 Project URL 和 API Key");
           }
 
-          // Validate URL format
           try {
               new URL(supabaseForm.url);
           } catch {
               throw new Error("Project URL 格式不正确");
           }
 
-          // Create a temporary client just for testing
           const supabase = createClient(supabaseForm.url, supabaseForm.key);
-          
-          // Try to access the table metadata (head request)
-          // Use a simple select count to verify connectivity and table existence
           const { error } = await supabase.from('app_backups').select('id', { count: 'exact', head: true });
           
           if (error) {
-              console.error("Supabase Error:", error);
-              // Distinguish common errors
               if (error.code === 'PGRST301' || error.code === '42501') throw new Error("连接成功 but 权限被拒绝 (请检查 RLS 策略)");
               if (error.code === '401' || error.message.includes('JWT')) throw new Error("API Key 无效或已过期");
               if (error.message.includes('fetch') || error.message.includes('network')) throw new Error("无法连接 (请检查 URL 或网络状态)");
               if (error.code === '404' || error.message.includes('relation "app_backups" does not exist')) throw new Error("未找到 app_backups 表 (请运行 SQL)");
-              throw error; // Unknown error
+              throw error;
           }
 
-          // Success path - Save to global state
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: supabaseForm });
           setSupabaseConnectionStatus('success');
           showToast('✅ 配置已保存，云端连接成功！', 'success');
 
-          // --- AUTO SYNC CHECK ---
-          // Immediately check if there is data on the cloud to pull
           const lastBackup = await checkCloudVersion();
           if (lastBackup) {
               const dateStr = new Date(lastBackup).toLocaleString();
@@ -229,7 +215,6 @@ with check (true);`;
           }
 
       } catch (e: any) {
-          console.error("Supabase Connection Error:", e);
           setSupabaseConnectionStatus('error');
           showToast(`❌ 连接失败: ${e.message}`, 'error');
       } finally {
@@ -274,7 +259,6 @@ with check (true);`;
       showToast('SQL 代码已复制', 'success');
   };
 
-  // --- Local Backup Handlers ---
   const handleExportBackup = () => {
       try {
           const backupData = {
@@ -288,7 +272,6 @@ with check (true);`;
               adCampaigns: state.adCampaigns,
               influencers: state.influencers,
               calendarEvents: state.calendarEvents,
-              // Metadata
               timestamp: new Date().toISOString(),
               version: '2.0',
               app: 'Tanxing-ERP'
@@ -308,7 +291,6 @@ with check (true);`;
           
           showToast('本地备份文件已下载', 'success');
       } catch (e) {
-          console.error("Export failed", e);
           showToast('导出失败', 'error');
       }
   };
@@ -323,7 +305,6 @@ with check (true);`;
               const content = e.target?.result as string;
               const data = JSON.parse(content);
 
-              // Simple validation
               if (!data.products || !data.orders || data.app !== 'Tanxing-ERP') {
                   throw new Error('无效的备份文件格式');
               }
@@ -335,10 +316,8 @@ with check (true);`;
                   showToast('数据已成功恢复', 'success');
               }
           } catch (err: any) {
-              console.error("Import failed", err);
               showToast(`导入失败: ${err.message}`, 'error');
           } finally {
-              // Reset input so same file can be selected again if needed
               if (fileInputRef.current) fileInputRef.current.value = '';
           }
       };
@@ -382,7 +361,7 @@ with check (true);`;
 
       {/* THEME TAB */}
       {activeTab === 'theme' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
               {/* Option 1: Vision Glass */}
               <div onClick={() => handleThemeChange('ios-glass')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ios-glass' ? 'border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
                   <div className="bg-[#000] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
@@ -425,27 +404,12 @@ with check (true);`;
                       {state.theme === 'ios-titanium' && <div className="absolute top-3 right-3 text-orange-500"><CheckCircle2 className="w-5 h-5 fill-current text-black"/></div>}
                   </div>
               </div>
-
-              {/* Option 4: Ceramic Light */}
-              <div onClick={() => handleThemeChange('ceramic-light')} className={`cursor-pointer rounded-xl border-2 p-1 transition-all hover:scale-[1.02] ${state.theme === 'ceramic-light' ? 'border-sky-500 shadow-[0_0_20px_rgba(14,165,233,0.3)]' : 'border-white/10 opacity-70 hover:opacity-100'}`}>
-                  <div className="bg-[#f0f9ff] rounded-lg p-6 h-56 flex flex-col justify-center items-center relative overflow-hidden">
-                      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,#ffffff_0%,#e0f2fe_100%)]"></div>
-                      <div className="relative z-10 text-center">
-                          <Sun className="w-10 h-10 text-sky-500 mx-auto mb-3" />
-                          <h3 className="text-slate-800 font-bold text-lg">Ceramic Light</h3>
-                          <p className="text-xs text-slate-500 mt-2">陶瓷白高亮模式</p>
-                          <p className="text-[10px] text-sky-600 mt-1 font-bold">Clean • Bright</p>
-                      </div>
-                      {state.theme === 'ceramic-light' && <div className="absolute top-3 right-3 text-sky-500"><CheckCircle2 className="w-5 h-5 fill-current text-white"/></div>}
-                  </div>
-              </div>
           </div>
       )}
 
       {/* BACKUP TAB */}
       {activeTab === 'backup' && (
           <div className="bg-black/20 rounded-xl border border-white/10 p-8 animate-in fade-in slide-in-from-bottom-2 grid grid-cols-1 md:grid-cols-2 gap-8">
-              {/* Export Card */}
               <div className="bg-gradient-to-br from-indigo-900/20 to-black border border-indigo-500/30 rounded-xl p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-all">
                   <div>
                       <div className="w-12 h-12 bg-indigo-600/20 rounded-xl flex items-center justify-center mb-4 text-indigo-400 border border-indigo-500/30">
@@ -466,7 +430,6 @@ with check (true);`;
                   </button>
               </div>
 
-              {/* Import Card */}
               <div className="bg-gradient-to-br from-emerald-900/20 to-black border border-emerald-500/30 rounded-xl p-6 flex flex-col justify-between hover:border-emerald-500/50 transition-all">
                   <div>
                       <div className="w-12 h-12 bg-emerald-600/20 rounded-xl flex items-center justify-center mb-4 text-emerald-400 border border-emerald-500/30">
@@ -515,7 +478,6 @@ with check (true);`;
                       </div>
                   </div>
                   
-                  {/* Toggle SQL Instructions */}
                   <div className="w-full">
                       <button 
                           onClick={() => setShowSql(!showSql)}
@@ -590,7 +552,6 @@ with check (true);`;
       {/* GENERAL TAB */}
       {activeTab === 'general' && (
           <div className="bg-black/20 rounded-xl border border-white/10 p-8 animate-in fade-in slide-in-from-bottom-2 space-y-8">
-              {/* Section 1: Basic Info */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                   <div className="space-y-4">
                       <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-2">
@@ -610,7 +571,6 @@ with check (true);`;
                       </div>
                   </div>
 
-                  {/* Section 2: API & Security */}
                   <div className="space-y-4">
                       <h3 className="text-sm font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2 border-b border-white/5 pb-2">
                           <Shield className="w-4 h-4" /> API 连接配置
@@ -644,7 +604,6 @@ with check (true);`;
                   </div>
               </div>
 
-              {/* Danger Zone */}
               <div className="mt-8 pt-6 border-t border-white/10">
                   <h3 className="text-sm font-bold text-red-400 uppercase tracking-wider mb-4 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" /> 危险区域 (Danger Zone)
