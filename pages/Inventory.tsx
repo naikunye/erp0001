@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
-import { ReplenishmentItem, Product } from '../types';
+import { ReplenishmentItem, Product, AuditLog } from '../types';
 import { 
   PackageCheck, Search, Download, X, 
   Sparkles, Calculator, 
@@ -12,7 +12,8 @@ import {
   Link2, Calendar, User, Scale, Ruler, Truck,
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
   Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet,
-  PieChart, FileDown, Copy, CopyPlus
+  PieChart, FileDown, Copy, CopyPlus, History, History as HistoryIcon,
+  ArrowRight
 } from 'lucide-react';
 
 // --- Components ---
@@ -59,8 +60,64 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     );
 };
 
+// --- History Panel ---
+const HistoryPanel: React.FC<{ sku: string; logs: AuditLog[]; onClose: () => void }> = ({ sku, logs, onClose }) => {
+    const filteredLogs = logs.filter(log => log.action.includes(sku));
+
+    return (
+        <div className="absolute inset-0 z-50 bg-[#0a0a0c] flex flex-col animate-in slide-in-from-right duration-300">
+            <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
+                <div className="flex items-center gap-3">
+                    <History className="w-5 h-5 text-indigo-400" />
+                    <h3 className="text-lg font-bold text-white uppercase italic">变更记录: {sku}</h3>
+                </div>
+                <button onClick={onClose} className="p-2 hover:bg-white/10 rounded-full transition-colors text-slate-500 hover:text-white">
+                    <X className="w-6 h-6" />
+                </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-8">
+                {filteredLogs.length === 0 ? (
+                    <div className="h-full flex flex-col items-center justify-center text-slate-700 opacity-20">
+                        <HistoryIcon className="w-20 h-20 mb-4" />
+                        <p className="text-xs uppercase tracking-[0.4em] font-black">未检索到历史快照</p>
+                    </div>
+                ) : (
+                    <div className="space-y-8 relative pl-4">
+                        <div className="absolute left-[7px] top-2 bottom-2 w-px bg-white/5"></div>
+                        {filteredLogs.map((log) => (
+                            <div key={log.id} className="relative pl-6">
+                                <div className="absolute left-[-2.5px] top-1.5 w-2 h-2 rounded-full bg-indigo-500 shadow-[0_0_8px_#6366f1]"></div>
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="text-[10px] font-mono font-bold text-slate-500 uppercase tracking-tighter">
+                                        {new Date(log.timestamp).toLocaleString()}
+                                    </span>
+                                    <span className="text-[9px] bg-white/5 text-slate-400 px-2 py-0.5 rounded border border-white/5">BY: {log.user}</span>
+                                </div>
+                                <div className="bg-white/2 border border-white/5 rounded-xl p-4 hover:border-indigo-500/30 transition-colors">
+                                    <p className="text-xs text-white font-bold mb-2">{log.action}</p>
+                                    <div className="text-[10px] text-slate-400 font-mono leading-relaxed whitespace-pre-wrap">
+                                        {log.details.split(' | ').map((line, i) => (
+                                            <div key={i} className="flex items-center gap-2 mb-1 last:mb-0">
+                                                <ArrowRight className="w-2.5 h-2.5 text-indigo-600" />
+                                                {line}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
 // --- Edit Modal ---
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
+    const { state } = useTanxing();
+    const [showHistory, setShowHistory] = useState(false);
     const [formData, setFormData] = useState<Product>({
         ...product,
         dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
@@ -213,7 +270,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
-            <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217]" onClick={e => e.stopPropagation()}>
+            <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217] relative" onClick={e => e.stopPropagation()}>
+               {showHistory && <HistoryPanel sku={formData.sku} logs={state.auditLogs} onClose={() => setShowHistory(false)} />}
+               
                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                    <div>
                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -222,7 +281,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                        <p className="text-xs text-slate-500 mt-1">完善参数以获得更准确的智能补货建议</p>
                    </div>
                    <div className="flex items-center gap-3">
-                       <button className="px-3 py-1.5 border border-white/10 rounded text-xs text-slate-400 hover:text-white flex items-center gap-2 hover:bg-white/5 transition-colors">
+                       <button 
+                            onClick={() => setShowHistory(true)}
+                            className="px-3 py-1.5 border border-white/10 rounded text-xs text-slate-400 hover:text-white flex items-center gap-2 hover:bg-white/5 transition-colors"
+                        >
                            <Clock className="w-3 h-3"/> 变更历史
                        </button>
                        <button onClick={onClose}><X className="w-6 h-6 text-slate-500 hover:text-white" /></button>

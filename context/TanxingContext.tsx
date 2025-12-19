@@ -62,6 +62,7 @@ type Action =
     | { type: 'DELETE_SUPPLIER'; payload: string }
     | { type: 'ADD_INFLUENCER'; payload: Influencer }
     | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'ADD_AUDIT_LOG'; payload: Omit<AuditLog, 'id'> }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'FULL_RESTORE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
@@ -104,9 +105,46 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         
-        // Products
-        case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
-        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
+        // Products with Auto-Audit
+        case 'UPDATE_PRODUCT': {
+            const oldProduct = state.products.find(p => p.id === action.payload.id);
+            const newAuditLogs = [...state.auditLogs];
+            
+            if (oldProduct) {
+                const changes: string[] = [];
+                if (oldProduct.price !== action.payload.price) changes.push(`价格: $${oldProduct.price} -> $${action.payload.price}`);
+                if (oldProduct.stock !== action.payload.stock) changes.push(`库存: ${oldProduct.stock} -> ${action.payload.stock}`);
+                if (oldProduct.costPrice !== action.payload.costPrice) changes.push(`成本: ¥${oldProduct.costPrice} -> ¥${action.payload.costPrice}`);
+                if (oldProduct.lifecycle !== action.payload.lifecycle) changes.push(`阶段: ${oldProduct.lifecycle} -> ${action.payload.lifecycle}`);
+                
+                if (changes.length > 0) {
+                    newAuditLogs.unshift({
+                        id: `LOG-${Date.now()}`,
+                        timestamp: new Date().toISOString(),
+                        user: '管理员',
+                        action: `更新 SKU: ${action.payload.sku}`,
+                        details: changes.join(' | ')
+                    });
+                }
+            }
+
+            return { 
+                ...state, 
+                products: state.products.map(p => p.id === action.payload.id ? action.payload : p), 
+                auditLogs: newAuditLogs.slice(0, 500), // Keep last 500 logs
+                isDemoMode: false 
+            };
+        }
+        case 'ADD_PRODUCT': {
+            const log: AuditLog = {
+                id: `LOG-${Date.now()}`,
+                timestamp: new Date().toISOString(),
+                user: '管理员',
+                action: `创建 SKU: ${action.payload.sku}`,
+                details: `初始库存: ${action.payload.stock}, 单价: $${action.payload.price}`
+            };
+            return { ...state, products: [action.payload, ...state.products], auditLogs: [log, ...state.auditLogs], isDemoMode: false };
+        }
         case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload), isDemoMode: false };
         
         // Tasks
@@ -133,6 +171,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_SUPPLIER': return { ...state, suppliers: [action.payload, ...state.suppliers], isDemoMode: false };
         case 'UPDATE_SUPPLIER': return { ...state, suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s), isDemoMode: false };
         case 'DELETE_SUPPLIER': return { ...state, suppliers: state.suppliers.filter(s => s.id !== action.payload), isDemoMode: false };
+
+        // Audit Logs
+        case 'ADD_AUDIT_LOG': return { ...state, auditLogs: [{ ...action.payload, id: `LOG-${Date.now()}` }, ...state.auditLogs] };
 
         // Influencers & Inbound
         case 'ADD_INFLUENCER': return { ...state, influencers: [action.payload, ...state.influencers], isDemoMode: false };
@@ -285,6 +326,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             products: state.products, orders: state.orders, tasks: state.tasks, customers: state.customers,
             shipments: state.shipments, suppliers: state.suppliers, transactions: state.transactions,
             adCampaigns: state.adCampaigns, influencers: state.influencers, inboundShipments: state.inboundShipments,
+            auditLogs: state.auditLogs,
             supabaseConfig: state.supabaseConfig 
         };
 
