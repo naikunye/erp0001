@@ -43,7 +43,6 @@ const Settings: React.FC = () => {
   };
 
   const handleSupabaseSave = async () => {
-      // 1. 预处理 URL：去除空格，确保有 https 协议
       let cleanUrl = supabaseForm.url.trim().replace(/\/$/, "");
       if (cleanUrl && !cleanUrl.startsWith('http')) {
           cleanUrl = `https://${cleanUrl}`;
@@ -57,29 +56,19 @@ const Settings: React.FC = () => {
 
       setIsSaving(true);
       try {
-          // 2. 模拟握手测试
           const client = createClient(cleanUrl, cleanKey);
-          
-          // 执行一个极轻量的查询测试权限和连接性
           const { error } = await client.from('app_backups').select('id').limit(1);
-          
-          // 特殊处理：如果报错是 "relation app_backups does not exist"，说明连接成功但表没建
           if (error && error.code === 'PGRST116') {
-              // 这种情况视为鉴权通过，只是表空
+              // Auth success but table empty
           } else if (error && error.message.includes("failed to fetch")) {
               throw new Error("FAILED_TO_FETCH");
           } else if (error) {
               throw error;
           }
-          
-          // 3. 持久化有效配置
           dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { ...supabaseForm, url: cleanUrl, key: cleanKey } });
           showToast('云端协议已激活并持久化', 'success');
-          
-          // 尝试拉取一次数据
           await pullFromCloud();
       } catch (e: any) {
-          console.error("[Auth Error]", e);
           if (e.message === "FAILED_TO_FETCH" || e.toString().includes("TypeError: Failed to fetch")) {
               showToast('连接失败：请检查 URL 是否正确，或在 Supabase 后台允许当前域名的 CORS 访问', 'error');
           } else {
@@ -225,7 +214,7 @@ const Settings: React.FC = () => {
                   <Monitor className="w-6 h-6 text-indigo-400 shrink-0" />
                   <div>
                       <h4 className="text-xs font-bold text-white uppercase mb-1">响应式色彩协议</h4>
-                      <p className="text-[10px] text-indigo-300/60 leading-relaxed uppercase tracking-tighter font-mono">Tanxing OS 采用原子级 CSS 变量。切换主题将实时重绘全局阴影、模糊度和色温，而无需刷新页面。Titanium Light 模式在强光下表现更佳。</p>
+                      <p className="text-[10px] text-indigo-300/60 leading-relaxed uppercase tracking-tighter font-mono">Tanxing OS 采用原子级 CSS变量。切换主题将实时重绘全局阴影、模糊度和色温，而无需刷新页面。Titanium Light 模式在强光下表现更佳。</p>
                   </div>
               </div>
           </div>
@@ -281,7 +270,7 @@ const Settings: React.FC = () => {
                       <div className="space-y-5">
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
                               <span className="text-indigo-500 font-black">01</span>
-                              <span><b>TypeError: Failed to fetch</b>：这是浏览器抛出的网络阻塞。请检查你的 Supabase URL 是否包含 https://，以及是否在 Supabase 的 <b>Settings -> API -> Allow Origins</b> 中添加了当前域名。</span>
+                              <span><b>TypeError: Failed to fetch</b>：这是浏览器抛出的网络阻塞。请检查你的 Supabase URL 是否包含 https://，以及是否在 Supabase 的 <b>Settings &rarr; API &rarr; Allow Origins</b> 中添加了当前域名。</span>
                           </p>
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
                               <span className="text-indigo-500 font-black">02</span>

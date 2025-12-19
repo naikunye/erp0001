@@ -59,25 +59,21 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     );
 };
 
-// --- Edit Modal (High Fidelity Restoration) ---
+// --- Edit Modal ---
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
-    // Local State for inputs
     const [formData, setFormData] = useState<Product>({
         ...product,
-        // Ensure defaults
         dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
         logistics: product.logistics || { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0, targetWarehouse: '' },
         economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0, refundRatePercent: 0 },
-        boxCount: product.boxCount ?? 0, // Ensure boxCount is initialized
+        boxCount: product.boxCount ?? 0,
     });
     
-    // Gallery State
     const [gallery, setGallery] = useState<string[]>(
         (product.images && product.images.length > 0) ? product.images : (product.image ? [product.image] : [])
     );
     const [activeImageIndex, setActiveImageIndex] = useState(0);
 
-    // SKU Tags State
     const [skuTags, setSkuTags] = useState<string[]>(
         product.sku ? product.sku.split(',').map(s => s.trim()).filter(Boolean) : []
     );
@@ -85,7 +81,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    // Sync formData images when gallery changes
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
@@ -94,7 +89,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         }));
     }, [gallery]);
 
-    // Sync formData sku when tags change
     useEffect(() => {
         setFormData(prev => ({
             ...prev,
@@ -120,7 +114,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         }));
     };
     
-    // --- Gallery Handlers ---
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
@@ -128,11 +121,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
             reader.onloadend = () => {
                 const newImg = reader.result as string;
                 setGallery(prev => [...prev, newImg]);
-                setActiveImageIndex(gallery.length); // Point to the new (last) image
+                setActiveImageIndex(gallery.length);
             };
             reader.readAsDataURL(file);
         }
-        // Reset input to allow same file selection
         e.target.value = '';
     };
 
@@ -156,7 +148,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         }
     };
 
-    // --- SKU Tag Handlers ---
     const handleSkuKeyDown = (e: React.KeyboardEvent) => {
         if (e.key === 'Enter' || e.key === ',') {
             e.preventDefault();
@@ -174,46 +165,29 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         setSkuTags(skuTags.filter(t => t !== tagToRemove));
     };
 
-    // --- Dynamic Calculations for Modal ---
     const exchangeRate = 7.2;
-    // UPDATED: Volume now linked to manual boxCount
     const manualBoxes = formData.boxCount || 0;
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * manualBoxes;
 
-    // Unit Weight Logic (Theoretical)
     const unitRealWeight = formData.unitWeight || 0;
     const unitVolWeight = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0)) / 6000;
     const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
 
-    // --- LOGISTICS CALCULATION CORE ---
-    
-    // 1. Determine "Active Total Billing Weight"
-    // Priority: Manual Total Billing Weight > (Manual Unit Weight * Stock) > (Auto Unit Weight * Stock)
     let activeTotalBillingWeight = 0;
-    
     if (formData.logistics?.billingWeight && formData.logistics.billingWeight > 0) {
-        activeTotalBillingWeight = formData.logistics.billingWeight; // Manual Total
+        activeTotalBillingWeight = formData.logistics.billingWeight;
     } else if (formData.logistics?.unitBillingWeight && formData.logistics.unitBillingWeight > 0) {
-        activeTotalBillingWeight = formData.logistics.unitBillingWeight * formData.stock; // Manual Unit
+        activeTotalBillingWeight = formData.logistics.unitBillingWeight * formData.stock;
     } else {
-        activeTotalBillingWeight = autoUnitChargeableWeight * formData.stock; // Auto
+        activeTotalBillingWeight = autoUnitChargeableWeight * formData.stock;
     }
 
-    // 2. Calculate Base Freight (Weight * Rate)
     const rate = formData.logistics?.unitFreightCost || 0;
     const baseFreightCost = activeTotalBillingWeight * rate;
-
-    // 3. Add Batch Fees
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
-    
-    // 4. Auto Total Result
     const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
+    const effectiveTotalFreightCNY = formData.logistics?.totalFreightCost ?? autoTotalFreightCNY;
 
-    // 5. Final Effective Total (Manual Override checks)
-    const manualTotalFreightCNY = formData.logistics?.totalFreightCost;
-    const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
-
-    // 6. Back-calculate Effective Unit Freight for profit analysis
     const effectiveUnitFreightCNY = formData.stock > 0 
         ? effectiveTotalFreightCNY / formData.stock 
         : 0;
@@ -221,12 +195,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
     const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
     
-    // --- Profit Analysis (Real-time) ---
     const priceUSD = formData.price || 0;
     const cogsUSD = (formData.costPrice || 0) / exchangeRate;
     const freightUSD = totalUnitLogisticsCNY / exchangeRate;
     
-    // Platform Fees
     const platformFeeUSD = priceUSD * ((formData.economics?.platformFeePercent || 0) / 100);
     const creatorFeeUSD = priceUSD * ((formData.economics?.creatorFeePercent || 0) / 100);
     const fixedFeeUSD = formData.economics?.fixedCost || 0;
@@ -237,14 +209,11 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
-    
-    // Total Stock Profit Calculation
     const estimatedTotalStockProfitUSD = estimatedProfitUSD * formData.stock;
 
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
             <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217]" onClick={e => e.stopPropagation()}>
-               {/* Modal Header */}
                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                    <div>
                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -260,18 +229,15 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                    </div>
                </div>
                
-               {/* Modal Content - Bento Grid Layout */}
                <div className="flex-1 overflow-y-auto p-6 bg-black/40">
                    <div className="grid grid-cols-12 gap-6">
                        
-                       {/* Section 1: Product & Supply Chain (Top Wide) */}
                        <div className="col-span-12 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">1</div>
                                产品与供应链 (Product & Gallery)
                            </div>
                            <div className="flex gap-6">
-                               {/* Gallery Section */}
                                <div className="flex flex-col gap-3 w-48 shrink-0">
                                    <div className="flex justify-between items-center">
                                        <label className="text-[10px] text-slate-500 font-bold">画廊 ({gallery.length})</label>
@@ -294,7 +260,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                </button>
                                            </div>
                                        ))}
-                                       {/* Add Button */}
                                        <button 
                                             onClick={() => fileInputRef.current?.click()}
                                             className="aspect-square rounded-lg border border-dashed border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/40 flex items-center justify-center text-slate-400 hover:text-white transition-all group"
@@ -339,7 +304,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        <input type="text" value={formData.name} onChange={e => handleChange('name', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
                                    </div>
                                    
-                                   {/* Multi-SKU Tag Input */}
                                    <div className="col-span-2">
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">SKU (Multi-Tag)</label>
                                        <div className="flex flex-wrap items-center gap-1.5 bg-black/40 border border-white/10 rounded px-3 py-2 min-h-[42px]">
@@ -378,7 +342,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* Section 2: Procurement & CRM (Left) */}
                        <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5 flex flex-col">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">2</div>
@@ -417,9 +380,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* Section 3: Packing (Right Top) */}
                        <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5 relative overflow-hidden">
-                           {/* UPDATED: Badge shows manual boxCount */}
                            <div className="absolute top-0 right-0 p-2 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-bl-lg border-b border-l border-amber-500/20 shadow-lg">
                                {manualBoxes} 箱 | {totalVolume.toFixed(3)} CBM
                            </div>
@@ -442,7 +403,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                            </div>
                            
-                           {/* Volumetric Weight Display */}
                            <div className="flex justify-between items-center text-[10px] text-slate-500 bg-white/5 p-2 rounded mb-4 font-mono">
                                <span>单品实重: {unitRealWeight} kg</span>
                                <span>单品材积: {unitVolWeight.toFixed(2)} kg (÷6000)</span>
@@ -457,7 +417,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                <div className="flex items-end gap-2">
                                    <div className="flex-1">
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货箱数 (Box - 手动)</label>
-                                       {/* UPDATED: Strictly manual boxCount input with NO auto-calculations */}
                                        <input 
                                             type="number" 
                                             placeholder="手动填写" 
@@ -475,7 +434,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* Section 4: Logistics (Left Bottom) */}
                        <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">4</div>
@@ -544,7 +502,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                </div>
                                
-                               {/* LIVE TOTAL FREIGHT DISPLAY */}
                                <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
                                        <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
@@ -553,7 +510,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        </span>
                                    </div>
                                    
-                                   {/* MANUAL TOTAL OVERRIDE & TOTAL WEIGHT INPUT */}
                                    <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-blue-500/20">
                                        <div>
                                            <label className="text-[9px] text-blue-300 block mb-0.5">整批计费重 (Total KG)</label>
@@ -630,7 +586,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* Section 5: Sales (Right Bottom) */}
                        <div className="col-span-5 bg-white/5 border border-white/5 rounded-xl p-5 flex flex-col">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
@@ -686,7 +641,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* NEW: Live Profit Analysis (Bottom Right) */}
                        <div className="col-span-12 bg-gradient-to-br from-emerald-950/40 to-black border border-emerald-500/20 rounded-xl p-5 flex items-center justify-between shadow-lg">
                            <div className="flex items-center gap-4">
                                <div className="p-3 bg-emerald-500/10 rounded-xl border border-emerald-500/20">
@@ -715,7 +669,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        {estimatedMargin.toFixed(1)}%
                                    </div>
                                </div>
-                               {/* ADDED: Total Stock Profit */}
                                <div>
                                    <div className="text-[10px] text-slate-500 uppercase font-bold">Total Stock Profit</div>
                                    <div className={`text-2xl font-mono font-bold ${estimatedTotalStockProfitUSD > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
@@ -725,7 +678,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* Notes Section (Full Width Bottom) */}
                        <div className="col-span-12 bg-white/5 border border-white/5 rounded-xl p-5">
                            <label className="text-xs font-bold text-slate-400 block mb-2">备注信息 (Notes)</label>
                            <textarea 
@@ -739,7 +691,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                    </div>
                </div>
 
-               {/* Footer */}
                <div className="p-4 border-t border-white/10 bg-white/5 flex justify-center items-center">
                    <button onClick={() => onSave(formData)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all">
                        <Save className="w-4 h-4" /> 保存修改并记录日志
@@ -756,7 +707,6 @@ const Inventory: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
 
-    // Deep Linking: Auto-filter from navigation params
     useEffect(() => {
         if (state.navParams?.searchQuery) {
             setSearchTerm(state.navParams.searchQuery);
@@ -764,7 +714,6 @@ const Inventory: React.FC = () => {
         }
     }, [state.navParams, dispatch]);
 
-    // Calculate Real Revenue & Growth from Orders
     const productStats = useMemo(() => {
         const stats: Record<string, { revenue30d: number, revenuePrev30d: number }> = {};
         const now = new Date();
@@ -789,7 +738,6 @@ const Inventory: React.FC = () => {
         return stats;
     }, [state.orders]);
 
-    // Transform products to ReplenishmentItems
     const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
         return state.products
             .filter(p => !p.deletedAt)
@@ -806,7 +754,6 @@ const Inventory: React.FC = () => {
                 ? ((pStats.revenue30d - pStats.revenuePrev30d) / pStats.revenuePrev30d) * 100 
                 : 0;
 
-            // --- REAL PROFIT CALCULATION ---
             const exchangeRate = 7.2;
             const unitRealWeight = p.unitWeight || 0;
             const dims = p.dimensions || {l:0, w:0, h:0};
@@ -953,7 +900,6 @@ const Inventory: React.FC = () => {
 
     return (
         <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-black/20">
-            {/* Header */}
             <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-20">
                 <div>
                     <h2 className="text-white font-bold text-lg flex items-center gap-2">
@@ -994,7 +940,6 @@ const Inventory: React.FC = () => {
                 </div>
             </div>
 
-            {/* List */}
             <div className="flex-1 overflow-auto bg-transparent">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-white/5 backdrop-blur-md sticky top-0 z-10 shadow-sm border-b border-white/5">
@@ -1015,7 +960,6 @@ const Inventory: React.FC = () => {
                             <tr key={item.id} className="hover:bg-white/5 transition-colors group">
                                 <td className="px-4 py-4"><input type="checkbox" className="rounded bg-black/40 border-white/20"/></td>
                                 
-                                {/* SKU / Stage */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
@@ -1027,7 +971,6 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
 
-                                {/* Product Info */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex gap-3">
                                         <div className="w-12 h-12 bg-white/5 rounded border border-white/10 shrink-0 overflow-hidden relative">
@@ -1038,15 +981,14 @@ const Inventory: React.FC = () => {
                                         </div>
                                         <div className="flex flex-col gap-1 min-w-0">
                                             <div className="text-sm font-bold text-white truncate" title={item.name}>{item.name}</div>
-                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {item.supplier || '阳江老罗'}</div>
+                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {item.supplier || '未指定'}</div>
                                             <div className="text-[10px] bg-[#312e81] text-[#a5b4fc] px-1.5 py-0.5 rounded w-fit border border-[#4338ca] font-mono font-bold tracking-tight">
-                                                LX: {item.lingXingId || 'IB112251215RS'}
+                                                LX: {item.lingXingId || 'IB...'}
                                             </div>
                                         </div>
                                     </div>
                                 </td>
 
-                                {/* Logistics */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="space-y-1.5">
                                         <div className="flex items-center gap-2 text-xs text-blue-400 font-bold">
@@ -1059,7 +1001,7 @@ const Inventory: React.FC = () => {
                                             rel="noreferrer"
                                             className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono"
                                         >
-                                            {item.logistics?.trackingNo || '1Z9WV5620495954082'}
+                                            {item.logistics?.trackingNo || 'N/A'}
                                         </a>
                                         <div className="text-[10px] text-slate-500 font-mono">
                                             {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
@@ -1067,7 +1009,6 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
 
-                                {/* Investment */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono space-y-1">
                                         <div className="text-sm font-bold text-emerald-400">¥{item.totalInvestment.toLocaleString()}</div>
@@ -1076,7 +1017,6 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
 
-                                {/* Inventory */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-end gap-1">
@@ -1095,7 +1035,6 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
 
-                                {/* Sales & Profit */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono space-y-2">
                                         <div className="bg-white/5 p-2 rounded border border-white/5 space-y-1.5">
@@ -1116,14 +1055,12 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
 
-                                {/* Remarks */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="text-xs text-slate-400 max-w-[180px] line-clamp-3 leading-relaxed hover:text-white transition-colors cursor-text" title={item.notes}>
                                         {item.notes || '-'}
                                     </div>
                                 </td>
 
-                                {/* Action */}
                                 <td className="px-4 py-4 align-top text-right">
                                     <div className="flex flex-col gap-2 items-end opacity-40 group-hover:opacity-100 transition-opacity">
                                         <button onClick={() => setEditingItem(item)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="编辑">

@@ -24,6 +24,7 @@
               'glow-slow': 'glow 4s ease-in-out infinite',
               'pulse-soft': 'pulseSoft 3s ease-in-out infinite',
               'spin-slow': 'spin 8s linear infinite',
+              'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
             },
             keyframes: {
               glow: {
@@ -33,6 +34,10 @@
               pulseSoft: {
                 '0%, 100%': { opacity: 1 },
                 '50%': { opacity: 0.7 },
+              },
+              pulse: {
+                '0%, 100%': { opacity: 1 },
+                '50%': { opacity: .5 },
               }
             }
           }
@@ -170,6 +175,6 @@
     <div class="ambient-bg"></div>
     <div id="root" class="h-full w-full relative z-10 antialiased selection:bg-indigo-500/30 selection:text-white font-sans"></div>
     <!-- 增加随机查询参数强制刷新模块 -->
-    <script type="module" src="/index.tsx?v=20240327"></script>
+    <script type="module" src="/index.tsx?v=20240327v2"></script>
   </body>
 </html>
