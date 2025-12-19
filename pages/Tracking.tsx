@@ -6,7 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import { 
   Truck, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, 
   Search, Plus, MoreHorizontal, Globe, Edit2, Loader2, Bot, X, Trash2, Save, ExternalLink,
-  ArrowRight, Navigation, Anchor, Box, Scale, Layers
+  ArrowRight, Navigation, Anchor, Box, Scale, Layers, FileText, StickyNote
 } from 'lucide-react';
 
 const Tracking: React.FC = () => {
@@ -184,7 +184,7 @@ const Tracking: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-hidden flex relative z-10">
-          {/* List Side (Enhanced High-Density Thumbnails) */}
+          {/* List Side */}
           <div className={`${selectedShipment ? 'hidden lg:block w-[420px]' : 'w-full'} border-r border-white/10 overflow-y-auto p-4 space-y-4 bg-black/20 custom-scrollbar`}>
               {filteredShipments.map(shipment => (
                   <div 
@@ -192,7 +192,6 @@ const Tracking: React.FC = () => {
                       onClick={() => setSelectedShipment(shipment)}
                       className={`p-4 rounded-2xl border transition-all cursor-pointer relative group flex flex-col gap-3 ${selectedShipment?.id === shipment.id ? 'bg-indigo-600/10 border-indigo-500/50 shadow-[inset_0_0_30px_rgba(79,70,229,0.05)]' : 'bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/15'}`}
                   >
-                      {/* Top Bar: Carrier & Status */}
                       <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <span className="text-[10px] px-2 py-0.5 bg-white/5 text-slate-400 rounded font-black uppercase tracking-tighter border border-white/5">{shipment.carrier}</span>
@@ -203,7 +202,6 @@ const Tracking: React.FC = () => {
                           </span>
                       </div>
 
-                      {/* Main Data: Medicine Name & Quantity */}
                       <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 min-w-0">
                                <div className="w-8 h-8 rounded-lg bg-indigo-500/10 flex items-center justify-center shrink-0 border border-indigo-500/20">
@@ -222,7 +220,6 @@ const Tracking: React.FC = () => {
                           </div>
                       </div>
 
-                      {/* Route & Progress (Key Fix: Enhanced Glowing Bar) */}
                       <div className="space-y-2 mt-1 px-1">
                           <div className="flex justify-between items-center text-[10px] font-black text-slate-500 uppercase tracking-tighter px-0.5">
                                 <span className="flex items-center gap-1"><Anchor className="w-2.5 h-2.5 text-slate-700"/> {shipment.origin || 'SHZ'}</span>
@@ -230,18 +227,13 @@ const Tracking: React.FC = () => {
                                 <span className="flex items-center gap-1 text-slate-300 font-bold">{shipment.destination || 'LAX'} <MapPin className="w-2.5 h-2.5 text-indigo-500"/></span>
                           </div>
                           
-                          {/* Progress Container */}
                           <div className="relative h-2 w-full bg-black/40 rounded-full border border-white/5 shadow-inner">
-                               {/* The Glowing Bar */}
                                <div 
                                     className={`absolute left-0 top-0 h-full rounded-full transition-all duration-1000 ease-out z-10 ${translateStatus(shipment.status) === '异常' ? 'bg-red-500' : 'bg-indigo-500'}`}
                                     style={{ width: getProgressWidth(shipment.status) }}
                                >
-                                   {/* Energy Glow Layer */}
                                    <div className={`absolute inset-0 rounded-full blur-[4px] opacity-70 animate-pulse ${translateStatus(shipment.status) === '异常' ? 'bg-red-400' : 'bg-indigo-400'}`}></div>
-                                   <div className={`absolute top-[-4px] right-[-4px] w-4 h-4 blur-md opacity-50 rounded-full ${translateStatus(shipment.status) === '异常' ? 'bg-red-400' : 'bg-indigo-400'}`}></div>
                                </div>
-                               {/* Static Progress Indicator */}
                                <div 
                                     className={`absolute left-0 top-0 h-full rounded-full shadow-[0_0_15px_rgba(79,70,229,0.4)] ${translateStatus(shipment.status) === '异常' ? 'bg-red-600' : 'bg-indigo-600'}`}
                                     style={{ width: getProgressWidth(shipment.status) }}
@@ -249,7 +241,6 @@ const Tracking: React.FC = () => {
                           </div>
                       </div>
 
-                      {/* Footer Metadata */}
                       <div className="flex justify-between items-end pt-2 border-t border-white/5 mt-1">
                           <div className="flex items-center gap-3">
                               <div className="flex flex-col">
@@ -262,10 +253,9 @@ const Tracking: React.FC = () => {
                                   <span className="text-[10px] text-indigo-300 font-bold max-w-[120px] truncate">{shipment.lastUpdate || '处理中...'}</span>
                               </div>
                           </div>
-                          {shipment.notes && <AlertCircle className="w-4 h-4 text-amber-500/60" />}
+                          {shipment.notes && <AlertCircle className="w-4 h-4 text-amber-500" />}
                       </div>
 
-                      {/* External Link */}
                       <a 
                           href={getTrackingUrl(shipment.carrier, shipment.trackingNo)} 
                           target="_blank" 
@@ -302,25 +292,36 @@ const Tracking: React.FC = () => {
                                    <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-600"/> 发货于: <span className="text-white font-mono">{selectedShipment.shipDate}</span></span>
                                    <span className="flex items-center gap-1.5 text-indigo-400 font-bold"><Clock className="w-4 h-4"/> 预计到达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery || 'TBD'}</span></span>
                                </div>
-                               <div className="flex items-center gap-3 mt-1 bg-white/5 w-fit px-4 py-2 rounded-xl border border-white/5">
-                                   <Navigation className="w-4 h-4 text-indigo-400" />
-                                   <span className="text-slate-300 font-medium">物流枢纽: {selectedShipment.origin}</span>
-                                   <ArrowRight className="w-4 h-4 text-slate-600" />
-                                   <span className="text-slate-300 font-medium">{selectedShipment.destination}</span>
-                               </div>
                            </div>
                        </div>
                        
                        <div className="flex gap-3">
-                           <button onClick={handleEditClick} className="px-5 py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all"><Edit2 className="w-4 h-4" /> 编辑参数</button>
-                           <button onClick={handleDelete} className="px-5 py-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all"><Trash2 className="w-4 h-4" /> 作废节点</button>
+                           <button onClick={handleEditClick} className="px-5 py-3 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all"><Edit2 className="w-4 h-4" /> 编辑</button>
+                           <button onClick={handleDelete} className="px-5 py-3 bg-red-500/10 border border-red-500/20 hover:bg-red-500/20 text-red-400 rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all"><Trash2 className="w-4 h-4" /> 删除</button>
                            <button onClick={handleAnalyze} disabled={isAnalyzing} className="px-5 py-3 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase flex items-center gap-2 transition-all shadow-xl shadow-indigo-900/40">
-                               {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />} AI 物流审计
+                               {isAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Bot className="w-4 h-4" />} AI 审计
                            </button>
                        </div>
                   </div>
 
                   <div className="p-8 space-y-8">
+                      {/* Highlighted Notes Block */}
+                      {selectedShipment.notes && (
+                          <div className="bg-amber-500/10 border-2 border-dashed border-amber-500/40 rounded-3xl p-6 relative overflow-hidden group animate-in slide-in-from-top-4">
+                              <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform">
+                                  <StickyNote className="w-20 h-20 text-amber-500" />
+                              </div>
+                              <div className="relative z-10">
+                                  <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                                      <AlertCircle className="w-4 h-4" /> 运营备注 (Internal Memo)
+                                  </h3>
+                                  <p className="text-lg font-bold text-amber-100 leading-relaxed drop-shadow-sm whitespace-pre-wrap">
+                                      {selectedShipment.notes}
+                                  </p>
+                              </div>
+                          </div>
+                      )}
+
                       {aiAnalysis && (
                           <div className="p-6 bg-indigo-600/10 border border-indigo-500/30 rounded-3xl animate-in slide-in-from-top-4 relative overflow-hidden group">
                               <div className="absolute top-0 right-0 p-4 opacity-[0.03] group-hover:rotate-12 transition-transform"><Bot className="w-32 h-32"/></div>
@@ -384,7 +385,7 @@ const Tracking: React.FC = () => {
                       <button onClick={() => setShowEditModal(false)} className="p-2 hover:bg-white/10 rounded-full transition-colors"><X className="w-6 h-6 text-slate-500" /></button>
                   </div>
                   
-                  <div className="space-y-6">
+                  <div className="space-y-6 max-h-[60vh] overflow-y-auto px-1 custom-scrollbar">
                       <div>
                           <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] block mb-2">全球运单号 (Tracking Identity)</label>
                           <input type="text" value={editForm.trackingNo || ''} onChange={e => setEditForm({...editForm, trackingNo: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="Enter Global ID..." />
@@ -406,6 +407,15 @@ const Tracking: React.FC = () => {
                       <div>
                           <label className="text-[10px] text-slate-500 font-black uppercase block mb-2">装载品名 (Payload)</label>
                           <input type="text" value={editForm.productName || ''} onChange={e => setEditForm({...editForm, productName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm text-white" placeholder="药材品名或 SKU..." />
+                      </div>
+                      <div>
+                          <label className="text-[10px] text-amber-500 font-black uppercase block mb-2">信息备注 (Internal Memo)</label>
+                          <textarea 
+                            value={editForm.notes || ''} 
+                            onChange={e => setEditForm({...editForm, notes: e.target.value})} 
+                            className="w-full h-24 bg-amber-500/5 border border-amber-500/20 rounded-xl px-5 py-4 text-sm text-amber-100 focus:border-amber-500 outline-none resize-none" 
+                            placeholder="填写海关、包装或其它运营备注信息..." 
+                          />
                       </div>
                       <div className="grid grid-cols-2 gap-6">
                           <div><label className="text-[10px] text-slate-500 font-black block mb-2">起运日</label><input type="date" value={editForm.shipDate || ''} onChange={e => setEditForm({...editForm, shipDate: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono" /></div>
