@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -263,6 +262,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const adSpendUSD = formData.economics?.adCost || 0;
     const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
     
+    // Fix: replaced undefined variable 'lastLeg' with 'lastLegUSD'
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
@@ -346,7 +346,12 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                <div className="flex-1 grid grid-cols-4 gap-4">
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">备货日期</label>
-                                       <input type="date" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" />
+                                       <input 
+                                            type="date" 
+                                            value={formData.lastUpdated?.split('T')[0] || ''}
+                                            onChange={e => handleChange('lastUpdated', e.target.value)}
+                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" 
+                                       />
                                    </div>
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">生命周期阶段</label>
@@ -878,7 +883,8 @@ const Inventory: React.FC = () => {
                 profit: unitProfit,
                 totalPotentialProfit: totalPotentialProfit,
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0,
-                totalWeight: stock * unitRealWeight,
+                // 核心修复：列表总重量显示优先采用计算后的计费总重 (activeTotalBillingWeight)
+                totalWeight: activeTotalBillingWeight, 
                 boxes: p.boxCount || 0
             };
         });
@@ -1114,7 +1120,8 @@ const Inventory: React.FC = () => {
                                             {item.logistics?.trackingNo || 'N/A'}
                                         </a>
                                         <div className="text-[10px] text-slate-500 font-mono">
-                                            {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
+                                            {/* 核心显示修改：显示计费总重，因为这是用户最关心的物流成本依据 */}
+                                            计费: {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
                                         </div>
                                     </div>
                                 </td>
