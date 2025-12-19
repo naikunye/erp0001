@@ -12,7 +12,7 @@ import {
   Link2, Calendar, User, Scale, Ruler, Truck,
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
   Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet,
-  PieChart, FileDown
+  PieChart, FileDown, Copy
 } from 'lucide-react';
 
 // --- Components ---
@@ -898,6 +898,11 @@ const Inventory: React.FC = () => {
         showToast('CSV 报表导出完成', 'success');
     };
 
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        showToast(`SKU ${text} 已复制到剪贴板`, 'success');
+    };
+
     return (
         <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-black/20">
             <div className="p-4 border-b border-white/10 flex justify-between items-center bg-white/5 backdrop-blur-md z-20">
@@ -964,8 +969,20 @@ const Inventory: React.FC = () => {
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2 h-2 rounded-full ${item.dailyBurnRate > 5 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-500'}`}></div>
-                                            <span className="text-xl font-bold text-white tracking-tight font-mono">{item.sku}</span>
-                                            <ExternalLink className="w-3 h-3 text-slate-600 hover:text-white cursor-pointer"/>
+                                            <span 
+                                                className="text-xl font-bold text-white tracking-tight font-mono cursor-pointer hover:text-indigo-400 transition-colors"
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                title="点击复制 SKU"
+                                            >
+                                                {item.sku}
+                                            </span>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                className="p-1 hover:bg-white/10 rounded transition-colors group/copy"
+                                                title="复制 SKU"
+                                            >
+                                                <Copy className="w-3 h-3 text-slate-600 group-hover/copy:text-indigo-400" />
+                                            </button>
                                         </div>
                                         <StrategyBadge type={item.lifecycle || 'Stable'} />
                                     </div>

@@ -10,7 +10,7 @@ import {
   AlertCircle, TrendingUp, Target, BarChart3, Zap, 
   Link2, Calendar, User, Scale, Ruler, Truck,
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
-  Plus, Trash2
+  Plus, Trash2, Copy
 } from 'lucide-react';
 
 // --- Components ---
@@ -415,6 +415,11 @@ const Replenishment: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
 
+    const copyToClipboard = (text: string) => {
+        navigator.clipboard.writeText(text);
+        showToast(`SKU ${text} 已复制到剪贴板`, 'success');
+    };
+
     // Transform products to ReplenishmentItems
     const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
         return state.products.map(p => {
@@ -516,8 +521,20 @@ const Replenishment: React.FC = () => {
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
                                             <div className={`w-2 h-2 rounded-full ${item.dailyBurnRate > 5 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-500'}`}></div>
-                                            <span className="text-xl font-bold text-white tracking-tight font-mono">{item.sku}</span>
-                                            <ExternalLink className="w-3 h-3 text-slate-600 hover:text-white cursor-pointer"/>
+                                            <span 
+                                                className="text-xl font-bold text-white tracking-tight font-mono cursor-pointer hover:text-indigo-400 transition-colors"
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                title="点击复制 SKU"
+                                            >
+                                                {item.sku}
+                                            </span>
+                                            <button 
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                className="p-1 hover:bg-white/10 rounded transition-colors group/copy"
+                                                title="复制 SKU"
+                                            >
+                                                <Copy className="w-3 h-3 text-slate-600 group-hover/copy:text-indigo-400" />
+                                            </button>
                                         </div>
                                         <StrategyBadge type={item.lifecycle || 'Stable'} />
                                     </div>
