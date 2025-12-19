@@ -12,7 +12,7 @@ import {
   Link2, Calendar, User, Scale, Ruler, Truck,
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
   Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet,
-  PieChart, FileDown, Copy
+  PieChart, FileDown, Copy, CopyPlus
 } from 'lucide-react';
 
 // --- Components ---
@@ -706,6 +706,7 @@ const Inventory: React.FC = () => {
     const { state, dispatch, showToast } = useTanxing();
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
     useEffect(() => {
         if (state.navParams?.searchQuery) {
@@ -869,6 +870,19 @@ const Inventory: React.FC = () => {
         setEditingItem(newProduct);
     };
 
+    const handleDuplicate = (item: ReplenishmentItem) => {
+        const cloned: ReplenishmentItem = {
+            ...item,
+            id: `CLONE-${Date.now()}`,
+            sku: `${item.sku}-COPY`,
+            name: `${item.name} (副本)`,
+            lingXingId: '', // 清除关联 ID 确保是新条目
+            lastUpdated: new Date().toISOString()
+        };
+        setEditingItem(cloned);
+        showToast(`正在克隆 SKU: ${item.sku}，请修改后保存`, 'info');
+    };
+
     const handleDelete = (id: string) => {
         if(confirm('确定要删除此商品吗？')) {
             dispatch({ type: 'DELETE_PRODUCT', payload: id });
@@ -898,9 +912,23 @@ const Inventory: React.FC = () => {
         showToast('CSV 报表导出完成', 'success');
     };
 
-    const copyToClipboard = (text: string) => {
-        navigator.clipboard.writeText(text);
-        showToast(`SKU ${text} 已复制到剪贴板`, 'success');
+    const copyToClipboard = (text: string, id: string) => {
+        if (!text) return;
+        
+        // 兼容性更好的复制方案
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            setCopiedId(id);
+            setTimeout(() => setCopiedId(null), 1500);
+            showToast(`SKU ${text} 已复制到剪贴板`, 'success');
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+        }
+        document.body.removeChild(textArea);
     };
 
     return (
@@ -957,7 +985,7 @@ const Inventory: React.FC = () => {
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-40">库存数量</th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-32">销售 & 利润</th>
                             <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-48">备注信息</th>
-                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-20 text-right">操作</th>
+                            <th className="px-4 py-3 text-xs font-bold text-slate-400 uppercase w-28 text-right">操作</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-white/5">
@@ -967,17 +995,20 @@ const Inventory: React.FC = () => {
                                 
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 relative">
                                             <div className={`w-2 h-2 rounded-full ${item.dailyBurnRate > 5 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-500'}`}></div>
                                             <span 
                                                 className="text-xl font-bold text-white tracking-tight font-mono cursor-pointer hover:text-indigo-400 transition-colors"
-                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, item.id); }}
                                                 title="点击复制 SKU"
                                             >
                                                 {item.sku}
                                             </span>
+                                            {copiedId === item.id && (
+                                                <span className="absolute -top-6 left-6 text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded shadow-lg animate-in fade-in slide-in-from-bottom-1">COPIED</span>
+                                            )}
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, item.id); }}
                                                 className="p-1 hover:bg-white/10 rounded transition-colors group/copy"
                                                 title="复制 SKU"
                                             >
@@ -1079,11 +1110,26 @@ const Inventory: React.FC = () => {
                                 </td>
 
                                 <td className="px-4 py-4 align-top text-right">
-                                    <div className="flex flex-col gap-2 items-end opacity-40 group-hover:opacity-100 transition-opacity">
-                                        <button onClick={() => setEditingItem(item)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="编辑">
+                                    <div className="flex items-center justify-end gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                                        <button 
+                                            onClick={() => handleDuplicate(item)} 
+                                            className="p-1.5 text-slate-400 hover:text-indigo-400 hover:bg-indigo-500/10 rounded transition-all" 
+                                            title="克隆并新增 SKU"
+                                        >
+                                            <CopyPlus className="w-4 h-4"/>
+                                        </button>
+                                        <button 
+                                            onClick={() => setEditingItem(item)} 
+                                            className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-all" 
+                                            title="编辑"
+                                        >
                                             <Edit2 className="w-4 h-4"/>
                                         </button>
-                                        <button onClick={() => handleDelete(item.id)} className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-white/10 rounded transition-colors" title="删除">
+                                        <button 
+                                            onClick={() => handleDelete(item.id)} 
+                                            className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded transition-all" 
+                                            title="删除"
+                                        >
                                             <Trash2 className="w-4 h-4"/>
                                         </button>
                                     </div>
