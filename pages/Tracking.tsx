@@ -186,7 +186,9 @@ const Tracking: React.FC = () => {
       <div className="flex-1 overflow-hidden flex relative z-10">
           {/* List Side */}
           <div className={`${selectedShipment ? 'hidden lg:block w-[420px]' : 'w-full'} border-r border-white/10 overflow-y-auto p-4 space-y-4 bg-black/20 custom-scrollbar`}>
-              {filteredShipments.map(shipment => (
+              {filteredShipments.map(shipment => {
+                  const statusKey = translateStatus(shipment.status);
+                  return (
                   <div 
                       key={shipment.id}
                       onClick={() => setSelectedShipment(shipment)}
@@ -198,7 +200,7 @@ const Tracking: React.FC = () => {
                             <span className="font-mono text-xs font-black text-slate-400 group-hover:text-white transition-colors">{shipment.trackingNo}</span>
                           </div>
                           <span className={`text-[9px] px-2 py-0.5 rounded-lg border font-black uppercase shadow-sm ${getStatusColor(shipment.status)}`}>
-                            {translateStatus(shipment.status)}
+                            {statusKey}
                           </span>
                       </div>
 
@@ -229,13 +231,23 @@ const Tracking: React.FC = () => {
                           
                           <div className="relative h-2 w-full bg-black/40 rounded-full border border-white/5 shadow-inner">
                                <div 
-                                    className={`absolute left-0 top-0 h-full rounded-full transition-all duration-1000 ease-out z-10 ${translateStatus(shipment.status) === '异常' ? 'bg-red-500' : 'bg-indigo-500'}`}
+                                    className={`absolute left-0 top-0 h-full rounded-full transition-all duration-1000 ease-out z-10 ${
+                                        statusKey === '异常' ? 'bg-red-500' : 
+                                        statusKey === '已送达' ? 'bg-emerald-500' : 'bg-indigo-500'
+                                    }`}
                                     style={{ width: getProgressWidth(shipment.status) }}
                                >
-                                   <div className={`absolute inset-0 rounded-full blur-[4px] opacity-70 animate-pulse ${translateStatus(shipment.status) === '异常' ? 'bg-red-400' : 'bg-indigo-400'}`}></div>
+                                   <div className={`absolute inset-0 rounded-full blur-[4px] opacity-70 animate-pulse ${
+                                       statusKey === '异常' ? 'bg-red-400' : 
+                                       statusKey === '已送达' ? 'bg-emerald-400' : 'bg-indigo-400'
+                                   }`}></div>
                                </div>
                                <div 
-                                    className={`absolute left-0 top-0 h-full rounded-full shadow-[0_0_15px_rgba(79,70,229,0.4)] ${translateStatus(shipment.status) === '异常' ? 'bg-red-600' : 'bg-indigo-600'}`}
+                                    className={`absolute left-0 top-0 h-full rounded-full ${
+                                        statusKey === '异常' ? 'bg-red-600 shadow-[0_0_15px_rgba(239,68,68,0.4)]' : 
+                                        statusKey === '已送达' ? 'bg-emerald-600 shadow-[0_0_15px_rgba(16,185,129,0.4)]' : 
+                                        'bg-indigo-600 shadow-[0_0_15px_rgba(79,70,229,0.4)]'
+                                    }`}
                                     style={{ width: getProgressWidth(shipment.status) }}
                                ></div>
                           </div>
@@ -266,7 +278,8 @@ const Tracking: React.FC = () => {
                           <ExternalLink className="w-4 h-4" />
                       </a>
                   </div>
-              ))}
+                  );
+              })}
           </div>
 
           {/* Details Side */}
