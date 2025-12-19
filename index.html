@@ -39,6 +39,25 @@
       body { transition: background-color 0.4s ease, color 0.4s ease; }
       .ios-glass-panel, .ios-glass-card { transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1); }
 
+      /* 深度修复：彻底移除 Recharts 所有组件点击时的白色范围框/焦点环 */
+      .recharts-wrapper, 
+      .recharts-wrapper *, 
+      .recharts-surface, 
+      .recharts-surface *,
+      .recharts-legend-item,
+      svg,
+      svg * {
+        outline: none !important;
+        box-shadow: none !important;
+        -webkit-tap-highlight-color: transparent;
+      }
+      
+      /* 特别针对 accessibility 设置的 tabindex 焦点 */
+      [tabindex="-1"]:focus, [tabindex="0"]:focus {
+        outline: none !important;
+        box-shadow: none !important;
+      }
+
       /* 默认变量 */
       :root {
         --glass-bg: rgba(18, 18, 23, 0.65);

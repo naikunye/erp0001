@@ -7,7 +7,7 @@ import {
   Search, Activity, Gem, ShoppingBag, BarChart3, ArrowDown, ArrowUp, 
   AlertTriangle, ShieldCheck, ChevronRight, Clock, Filter, CheckCircle2,
   Receipt, ArrowUpRight, ArrowDownLeft, Tag, Download, Zap, MoreHorizontal,
-  Layers, RefreshCw, BarChart4, PieChart, Coins
+  Layers, RefreshCw, BarChart4, PieChart, Coins, Box, Boxes
 } from 'lucide-react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -52,13 +52,14 @@ const Finance: React.FC = () => {
     paymentMethod: 'Bank'
   });
 
-  // --- 核心计算引擎 ---
+  // --- 核心计算引擎 (关联库存与流水) ---
   const stats = useMemo(() => {
     let income = 0;
     let expense = 0;
     let pendingIncome = 0;
     let pendingExpense = 0;
 
+    // 1. 流水计算
     state.transactions.forEach(t => {
       const val = t.currency === 'USD' ? t.amount * EXCHANGE_RATE : t.amount;
       if (t.type === 'income') {
@@ -70,10 +71,42 @@ const Finance: React.FC = () => {
       }
     });
 
-    return { income, expense, balance: income - expense, pendingIncome, pendingExpense };
-  }, [state.transactions]);
+    // 2. 库存资产核算 (关联智能备货数据)
+    let inventoryCostValue = 0;
+    let inventoryLogisticsValue = 0;
 
-  // --- 图表数据准备 ---
+    state.products.filter(p => !p.deletedAt).forEach(p => {
+        const stock = p.stock || 0;
+        // 采购货值
+        inventoryCostValue += stock * (p.costPrice || 0);
+        
+        // 头程物流资产 (已支付运费但在库中)
+        const unitFreight = (p.logistics?.unitFreightCost || 0) * (p.unitWeight || 0.5);
+        inventoryLogisticsValue += stock * unitFreight;
+    });
+
+    const cashBalance = income - expense;
+    const totalAssetValue = cashBalance + inventoryCostValue + inventoryLogisticsValue;
+
+    return { 
+        income, 
+        expense, 
+        cashBalance, 
+        pendingIncome, 
+        pendingExpense,
+        inventoryValue: inventoryCostValue,
+        inventoryLogisticsValue,
+        totalAssetValue
+    };
+  }, [state.transactions, state.products]);
+
+  // --- 资产分配图表数据 ---
+  const assetDistribution = useMemo(() => [
+      { name: '现金余额', value: Math.max(0, stats.cashBalance), color: '#6366f1' },
+      { name: '备货货值', value: stats.inventoryValue, color: '#f59e0b' },
+      { name: '在途/在库运费', value: stats.inventoryLogisticsValue, color: '#3b82f6' }
+  ], [stats]);
+
   const categoryData = useMemo(() => {
     const data: Record<string, number> = {};
     state.transactions.filter(t => t.type === 'expense').forEach(t => {
@@ -89,18 +122,19 @@ const Finance: React.FC = () => {
       .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [state.transactions, searchTerm]);
 
-  // --- AI 财务智能诊断 ---
+  // --- AI 财务智能诊断 (引入库存维度) ---
   const handleAiAudit = async () => {
     setIsAiAnalyzing(true);
     setAiReport(null);
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const prompt = `
-        你是一个资深跨境电商财务官。分析当前数据：
-        现金余额: ¥${stats.balance.toLocaleString()}, 
-        支出大头: ${categoryData.slice(0, 2).map(c => `${c.name}(${c.value})`).join(', ')},
-        挂账/待收: ¥${stats.pendingIncome.toLocaleString()}。
-        请给出简洁的资金链建议，使用 HTML 格式。
+        你是一个资深跨境电商财务官。分析当前财务与库存勾稽数据：
+        现金余额: ¥${stats.cashBalance.toLocaleString()}, 
+        库存资产占用: ¥${stats.inventoryValue.toLocaleString()},
+        在库物流成本: ¥${stats.inventoryLogisticsValue.toLocaleString()},
+        待收账款: ¥${stats.pendingIncome.toLocaleString()}。
+        请评估资金流动性，特别是库存占用是否过高。给出简洁的资金链建议，使用 HTML 格式。
       `;
       const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
       setAiReport(response.text);
@@ -129,10 +163,10 @@ const Finance: React.FC = () => {
         <div>
           <h1 className="text-3xl font-black text-white tracking-widest uppercase flex items-center gap-3 italic">
             <Wallet className="w-9 h-9 text-violet-500" />
-            量子财务中枢 (量子账本)
+            量子财务中枢 (资产全景)
           </h1>
           <p className="text-xs text-slate-500 mt-2 font-mono flex items-center gap-2">
-            <Activity className="w-3 h-3 text-emerald-500" /> 全球实时收支平衡协议已开启 • 汇率: 1:{EXCHANGE_RATE}
+            <Activity className="w-3 h-3 text-emerald-500" /> 财务与库存实时勾稽协议已开启 • 汇率: 1:{EXCHANGE_RATE}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -150,61 +184,76 @@ const Finance: React.FC = () => {
         </div>
       </div>
 
-      {/* 核心资产看板 */}
+      {/* 核心资产看板 - 引入库存资金 */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
         <div className="ios-glass-card p-6 border-l-4 border-l-violet-500 relative overflow-hidden group">
             <div className="absolute right-[-20px] bottom-[-20px] opacity-[0.05] group-hover:scale-110 transition-transform"><Landmark className="w-32 h-32 text-white"/></div>
-            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">现金流净额 (账户余额)</div>
-            <div className="text-3xl font-black text-white font-mono tracking-tight">¥ {stats.balance.toLocaleString()}</div>
+            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">现金账户余额</div>
+            <div className="text-3xl font-black text-white font-mono tracking-tight">¥ {stats.cashBalance.toLocaleString()}</div>
             <div className="mt-4 flex items-center gap-2 text-[10px] text-emerald-400 font-bold bg-emerald-500/10 w-fit px-2 py-0.5 rounded border border-emerald-500/20">
-                <TrendingUp className="w-3 h-3"/> 健康度: A+
+                <Activity className="w-3 h-3"/> 流动性: 正常
             </div>
         </div>
-        <div className="ios-glass-card p-6 border-l-4 border-l-emerald-500">
-            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">累计实际收入 (营收总额)</div>
-            <div className="text-3xl font-black text-emerald-400 font-mono tracking-tight">¥ {stats.income.toLocaleString()}</div>
-            <div className="mt-4 text-[10px] text-slate-500 font-bold">待收入账: <span className="text-white">¥ {stats.pendingIncome.toLocaleString()}</span></div>
-        </div>
-        <div className="ios-glass-card p-6 border-l-4 border-l-rose-500">
-            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">累计实际支出 (支出总额)</div>
-            <div className="text-3xl font-black text-rose-400 font-mono tracking-tight">¥ {stats.expense.toLocaleString()}</div>
-            <div className="mt-4 text-[10px] text-slate-500 font-bold">待结算挂账: <span className="text-white">¥ {stats.pendingExpense.toLocaleString()}</span></div>
+        <div className="ios-glass-card p-6 border-l-4 border-l-amber-500 relative group">
+            <div className="absolute right-[-10px] bottom-[-10px] opacity-[0.05] group-hover:rotate-12 transition-transform"><Boxes className="w-24 h-24 text-white"/></div>
+            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">库存资金占用 (货值)</div>
+            <div className="text-3xl font-black text-amber-400 font-mono tracking-tight">¥ {stats.inventoryValue.toLocaleString()}</div>
+            <div className="mt-4 text-[10px] text-slate-500 font-bold">涉及 SKU: <span className="text-white">{state.products.length} 款</span></div>
         </div>
         <div className="ios-glass-card p-6 border-l-4 border-l-blue-500">
-            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">库存采购资产 (资产价值)</div>
-            <div className="text-3xl font-black text-blue-400 font-mono tracking-tight">
-                ¥ {state.products.reduce((a, b) => a + (b.stock * (b.costPrice || 0)), 0).toLocaleString()}
+            <div className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">已付物流资产 (在库)</div>
+            <div className="text-3xl font-black text-blue-400 font-mono tracking-tight">¥ {stats.inventoryLogisticsValue.toLocaleString()}</div>
+            <div className="mt-4 text-[10px] text-slate-500 font-bold">计费分摊中...</div>
+        </div>
+        <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500 bg-gradient-to-br from-indigo-500/10 to-transparent">
+            <div className="text-[10px] text-indigo-400 font-bold uppercase tracking-widest mb-1">全域资产估值 (Equity)</div>
+            <div className="text-3xl font-black text-white font-mono tracking-tight">
+                ¥ {stats.totalAssetValue.toLocaleString()}
             </div>
-            <div className="mt-4 text-[10px] text-slate-500 font-bold">涉及 SKU: <span className="text-white">{state.products.length} 款</span></div>
+            <div className="mt-4 text-[10px] text-slate-500 font-bold">含待入账: <span className="text-white">¥ {stats.pendingIncome.toLocaleString()}</span></div>
         </div>
       </div>
 
       <div className="flex-1 min-h-0">
         {viewMode === 'overview' && (
           <div className="grid grid-cols-12 gap-6 h-full animate-in fade-in slide-in-from-bottom-4">
-            {/* 支出结构分布 */}
-            <div className="col-span-12 lg:col-span-4 ios-glass-panel p-6 flex flex-col">
-              <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><PieChart className="w-4 h-4 text-pink-500"/> 支出权重分析 (分类占比)</h3>
-              <div className="flex-1 min-h-[300px]">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RePieChart>
-                    <Pie
-                      data={categoryData}
-                      cx="50%" cy="50%"
-                      innerRadius={60}
-                      outerRadius={80}
-                      paddingAngle={5}
-                      dataKey="value"
-                    >
-                      {categoryData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as TransactionCategory] || '#444'} />
-                      ))}
-                    </Pie>
-                    <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
-                    <Legend />
-                  </RePieChart>
-                </ResponsiveContainer>
-              </div>
+            {/* 资产结构与支出结构 */}
+            <div className="col-span-12 lg:col-span-4 space-y-6">
+                <div className="ios-glass-panel p-6 flex flex-col">
+                    <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><PieChart className="w-4 h-4 text-indigo-500"/> 资产分布结构 (Asset Allocation)</h3>
+                    <div className="h-[250px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <RePieChart>
+                                <Pie data={assetDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                    {assetDistribution.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
+                                </Pie>
+                                <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                            </RePieChart>
+                        </ResponsiveContainer>
+                    </div>
+                    <div className="grid grid-cols-1 gap-2 mt-4">
+                        {assetDistribution.map(item => (
+                            <div key={item.name} className="flex items-center justify-between text-[10px]">
+                                <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span> {item.name}</span>
+                                <span className="text-slate-400 font-mono">¥{item.value.toLocaleString()}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+
+                <div className="ios-glass-panel p-6 flex flex-col">
+                    <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><BarChart4 className="w-4 h-4 text-pink-500"/> 累计分类支出 (Expense)</h3>
+                    <div className="flex-1 min-h-[200px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <RePieChart>
+                                <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
+                                    {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as TransactionCategory] || '#444'} />)}
+                                </Pie>
+                                <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                            </RePieChart>
+                        </ResponsiveContainer>
+                    </div>
+                </div>
             </div>
 
             {/* AI 诊断与现金流趋势 */}
@@ -214,12 +263,12 @@ const Finance: React.FC = () => {
                     <div className="flex items-center gap-4">
                       <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg"><Zap className="w-6 h-6 fill-current"/></div>
                       <div>
-                        <h3 className="text-lg font-bold text-white">AI 资金链压力审计</h3>
-                        <p className="text-[10px] text-slate-500 uppercase font-mono tracking-widest">Neural Financial Insight v3.0</p>
+                        <h3 className="text-lg font-bold text-white">AI 智能资产负载审计</h3>
+                        <p className="text-[10px] text-slate-500 uppercase font-mono tracking-widest">Cross-Inventory Financial Analysis v4.0</p>
                       </div>
                     </div>
-                    <button onClick={handleAiAudit} disabled={isAiAnalyzing} className="px-5 py-2 bg-white text-black rounded-xl text-xs font-black uppercase hover:bg-slate-200 transition-all">
-                      {isAiAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : "启动审计指令"}
+                    <button onClick={handleAiAudit} disabled={isAiAnalyzing} className="px-6 py-3 bg-white text-black rounded-xl text-xs font-black uppercase hover:bg-slate-200 transition-all shadow-xl">
+                      {isAiAnalyzing ? <Loader2 className="w-4 h-4 animate-spin" /> : "执行深度勾稽"}
                     </button>
                   </div>
                   {aiReport && (
@@ -230,10 +279,10 @@ const Finance: React.FC = () => {
               </div>
 
               <div className="ios-glass-panel p-6 flex-1 min-h-[300px]">
-                <h3 className="text-sm font-bold text-white mb-6">历史现金流轨迹 (资金流向趋势)</h3>
-                <div className="h-[250px]">
+                <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-400"/> 资金流转轨迹 (流水趋势)</h3>
+                <div className="h-[350px]">
                    <ResponsiveContainer width="100%" height="100%">
-                      <AreaChart data={state.transactions.slice(-10).reverse().map(t => ({ date: t.date, amount: t.amount }))}>
+                      <AreaChart data={state.transactions.slice(-15).reverse().map(t => ({ date: t.date, amount: t.currency === 'USD' ? t.amount * EXCHANGE_RATE : t.amount }))}>
                         <defs>
                           <linearGradient id="colorAmt" x1="0" y1="0" x2="0" y2="1">
                             <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>

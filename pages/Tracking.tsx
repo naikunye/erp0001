@@ -85,7 +85,7 @@ const Tracking: React.FC = () => {
         `;
 
         const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
+            model: 'gemini-3-flash-preview',
             contents: prompt
         });
 
@@ -108,6 +108,7 @@ const Tracking: React.FC = () => {
           productName: '',
           notes: '',
           shipDate: new Date().toISOString().split('T')[0],
+          estimatedDelivery: '',
           events: []
       });
       setShowEditModal(true);
@@ -135,13 +136,13 @@ const Tracking: React.FC = () => {
           // Create new
           const newShipment: Shipment = {
               id: `SH-${Date.now()}`,
-              trackingNo: editForm.trackingNo,
+              trackingNo: editForm.trackingNo!,
               carrier: (editForm.carrier as any) || 'Other',
               status: (editForm.status as any) || '待处理',
               productName: editForm.productName || 'Unspecified Product',
               origin: 'Unknown',
               destination: 'Unknown',
-              estimatedDelivery: 'TBD',
+              estimatedDelivery: editForm.estimatedDelivery || 'TBD',
               shipDate: editForm.shipDate,
               lastUpdate: new Date().toISOString().split('T')[0],
               events: [],
@@ -258,7 +259,7 @@ const Tracking: React.FC = () => {
                                    {selectedShipment.shipDate && (
                                       <span className="flex items-center gap-1"><Calendar className="w-3 h-3"/> 发货: <span className="text-white font-mono">{selectedShipment.shipDate}</span></span>
                                    )}
-                                   <span>预计送达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery}</span></span>
+                                   <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> 预计送达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery || 'TBD'}</span></span>
                                </div>
                                
                                {selectedShipment.notes && (
@@ -403,15 +404,24 @@ const Tracking: React.FC = () => {
                               />
                           </div>
                           <div className="col-span-1">
-                              <label className="text-xs text-slate-400 block mb-1">商品名称 (Product)</label>
+                              <label className="text-xs text-slate-400 block mb-1">预计送达 (ETA)</label>
                               <input 
-                                  type="text" 
-                                  value={editForm.productName || ''} 
-                                  onChange={e => setEditForm({...editForm, productName: e.target.value})}
+                                  type="date" 
+                                  value={editForm.estimatedDelivery || ''} 
+                                  onChange={e => setEditForm({...editForm, estimatedDelivery: e.target.value})}
                                   className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
-                                  placeholder="简要描述..."
                               />
                           </div>
+                      </div>
+                      <div>
+                          <label className="text-xs text-slate-400 block mb-1">商品名称 (Product)</label>
+                          <input 
+                              type="text" 
+                              value={editForm.productName || ''} 
+                              onChange={e => setEditForm({...editForm, productName: e.target.value})}
+                              className="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-sm text-white"
+                              placeholder="简要描述..."
+                          />
                       </div>
                       <div>
                           <label className="text-xs text-slate-400 block mb-1">备注 (Notes)</label>
