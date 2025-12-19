@@ -1,5 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Wallet, TrendingUp, DollarSign, Plus, FileText, 
   PieChart as PieIcon, Landmark, CreditCard, Sparkles, Loader2, X,
@@ -321,8 +322,8 @@ const Finance: React.FC = () => {
         )}
       </div>
 
-      {/* 新增交易侧边面板 (快速入账) */}
-      {isAddModalOpen && (
+      {/* 新增交易侧边面板 (快速入账) - 使用 Portal 挂载到 body 顶层 */}
+      {isAddModalOpen && createPortal(
         <div className="fixed inset-0 z-[100] flex justify-end">
            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setIsAddModalOpen(false)}></div>
            <div className="w-full max-w-md bg-[#0f0f12] border-l border-white/10 h-full relative z-10 flex flex-col shadow-2xl animate-in slide-in-from-right duration-300">
@@ -398,7 +399,8 @@ const Finance: React.FC = () => {
                 </button>
               </div>
            </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

@@ -17,6 +17,7 @@ export interface Task {
   dueDate: string;
   relatedSku?: string;
   category: 'logistics' | 'marketing' | 'procurement' | 'finance';
+  dependsOn?: string[]; // Array of Task IDs that must be completed first
 }
 
 export type ProductStatus = 'active' | 'draft' | 'archived' | 'out_of_stock' | 'low_stock';

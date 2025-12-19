@@ -3,7 +3,8 @@ import React, { useState, useMemo } from 'react';
 import { 
   CheckCircle2, Clock, AlertTriangle, Plus, Search, Filter, 
   User, MoreHorizontal, Calendar, ClipboardList, Zap, Sparkles, 
-  Loader2, X, Save, Trash2, ArrowRight, ArrowLeft, Tag, Briefcase
+  Loader2, X, Save, Trash2, ArrowRight, ArrowLeft, Tag, Briefcase,
+  Link2, Lock, Unlock
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { Task } from '../types';
@@ -38,7 +39,27 @@ const OperationsTasks: React.FC = () => {
       }
   };
 
+  const isBlocked = (task: Task) => {
+    if (!task.dependsOn || task.dependsOn.length === 0) return false;
+    return task.dependsOn.some(depId => {
+      const depTask = state.tasks.find(t => t.id === depId);
+      return depTask && depTask.status !== 'done';
+    });
+  };
+
+  const getBlockedByNames = (task: Task) => {
+    if (!task.dependsOn) return [];
+    return task.dependsOn
+      .map(depId => state.tasks.find(t => t.id === depId)?.title)
+      .filter(Boolean);
+  };
+
   const handleMoveTask = (task: Task, direction: 'forward' | 'backward') => {
+    if (direction === 'forward' && isBlocked(task) && task.status === 'todo') {
+        showToast('前置依赖尚未完成，该任务暂时锁定', 'warning');
+        return;
+    }
+    
     const statusFlow: Task['status'][] = ['todo', 'in_progress', 'review', 'done'];
     const currentIndex = statusFlow.indexOf(task.status);
     const nextIndex = direction === 'forward' ? currentIndex + 1 : currentIndex - 1;
@@ -58,7 +79,8 @@ const OperationsTasks: React.FC = () => {
         status: 'todo',
         assignee: '未分配',
         dueDate: new Date().toISOString().split('T')[0],
-        category: 'procurement'
+        category: 'procurement',
+        dependsOn: []
     };
     setEditingTask(newTask);
     setIsModalOpen(true);
@@ -86,6 +108,16 @@ const OperationsTasks: React.FC = () => {
       }
   };
 
+  const toggleDependency = (taskId: string) => {
+      if (!editingTask) return;
+      const currentDeps = editingTask.dependsOn || [];
+      if (currentDeps.includes(taskId)) {
+          setEditingTask({ ...editingTask, dependsOn: currentDeps.filter(id => id !== taskId) });
+      } else {
+          setEditingTask({ ...editingTask, dependsOn: [...currentDeps, taskId] });
+      }
+  };
+
   const renderColumn = (status: Task['status'], label: string) => (
     <div className="flex-1 min-w-[320px] flex flex-col gap-4">
       <div className="flex items-center justify-between px-3">
@@ -101,16 +133,31 @@ const OperationsTasks: React.FC = () => {
       <div className="flex flex-col gap-3 min-h-[600px] bg-white/2 rounded-2xl p-2 border border-white/5">
         {filteredTasks.filter(t => t.status === status).map(task => {
           const progress = getProgressSpecs(task.status);
+          const blocked = isBlocked(task);
+          const blockList = getBlockedByNames(task);
+
           return (
-            <div key={task.id} className="ios-glass-card p-4 hover:border-indigo-500/40 group relative animate-in fade-in slide-in-from-bottom-2">
+            <div key={task.id} className={`ios-glass-card p-4 hover:border-indigo-500/40 group relative animate-in fade-in slide-in-from-bottom-2 ${blocked && status === 'todo' ? 'opacity-70 grayscale-[0.5]' : ''}`}>
                 <div className="flex justify-between items-start mb-3">
-                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)} uppercase tracking-tighter`}>
-                    {task.priority}
-                </span>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    {status !== 'todo' && <button onClick={() => handleMoveTask(task, 'backward')} className="p-1 hover:bg-white/10 rounded"><ArrowLeft className="w-3 h-3 text-slate-500"/></button>}
-                    {status !== 'done' && <button onClick={() => handleMoveTask(task, 'forward')} className="p-1 hover:bg-white/10 rounded"><ArrowRight className="w-3 h-3 text-slate-500"/></button>}
-                </div>
+                    <div className="flex gap-2">
+                        <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${getPriorityColor(task.priority)} uppercase tracking-tighter`}>
+                            {task.priority}
+                        </span>
+                        {blocked && status === 'todo' && (
+                            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-red-500/30 bg-red-500/10 text-red-400 flex items-center gap-1">
+                                <Lock className="w-2 h-2"/> LOCKED
+                            </span>
+                        )}
+                        {task.dependsOn && task.dependsOn.length > 0 && (
+                             <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border border-indigo-500/30 bg-indigo-500/10 text-indigo-400 flex items-center gap-1">
+                                <Link2 className="w-2 h-2"/> {task.dependsOn.length}
+                            </span>
+                        )}
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {status !== 'todo' && <button onClick={() => handleMoveTask(task, 'backward')} className="p-1 hover:bg-white/10 rounded"><ArrowLeft className="w-3 h-3 text-slate-500"/></button>}
+                        {status !== 'done' && <button onClick={() => handleMoveTask(task, 'forward')} className={`p-1 hover:bg-white/10 rounded ${blocked && status === 'todo' ? 'cursor-not-allowed opacity-50' : ''}`}><ArrowRight className="w-3 h-3 text-slate-500"/></button>}
+                    </div>
                 </div>
                 
                 <h4 
@@ -119,6 +166,15 @@ const OperationsTasks: React.FC = () => {
                 >
                     {task.title}
                 </h4>
+
+                {blocked && status === 'todo' && blockList.length > 0 && (
+                    <div className="mb-3 p-2 bg-red-500/5 border border-red-500/20 rounded-lg">
+                        <div className="text-[8px] font-bold text-red-400 uppercase mb-1">阻塞于:</div>
+                        <ul className="text-[9px] text-red-300/70 space-y-0.5 list-disc list-inside truncate">
+                            {blockList.map((name, i) => <li key={i}>{name}</li>)}
+                        </ul>
+                    </div>
+                )}
 
                 {/* Quantum Progress Bar */}
                 <div className="mb-4">
@@ -135,15 +191,15 @@ const OperationsTasks: React.FC = () => {
                 </div>
                 
                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
-                    {task.assignee.charAt(0)}
+                    <div className="flex items-center gap-2">
+                        <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
+                        {task.assignee.charAt(0)}
+                        </div>
+                        <span className="text-[10px] text-slate-400">{task.assignee}</span>
                     </div>
-                    <span className="text-[10px] text-slate-400">{task.assignee}</span>
-                </div>
-                <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
-                    <Calendar className="w-3 h-3"/> {task.dueDate}
-                </div>
+                    <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-mono">
+                        <Calendar className="w-3 h-3"/> {task.dueDate}
+                    </div>
                 </div>
             </div>
           );
@@ -167,12 +223,12 @@ const OperationsTasks: React.FC = () => {
             运营协作中心 (Operations)
           </h1>
           <p className="text-xs text-slate-500 mt-2 font-mono flex items-center gap-2">
-            <Zap className="w-3 h-3 text-yellow-500"/> 双机实时协同已开启 • 变更即刻广播至全端
+            <Zap className="w-3 h-3 text-yellow-500"/> 双机实时协同已开启 • 任务依赖可视化已激活
           </p>
         </div>
         <div className="flex items-center gap-2 px-4 py-2 bg-indigo-900/20 border border-indigo-500/30 rounded-xl">
              <Sparkles className="w-4 h-4 text-indigo-400 animate-pulse" />
-             <span className="text-[10px] font-bold text-indigo-300 uppercase">AI Task Optimizer Active</span>
+             <span className="text-[10px] font-bold text-indigo-300 uppercase">AI Task Dependencies Active</span>
         </div>
       </div>
 
@@ -206,7 +262,7 @@ const OperationsTasks: React.FC = () => {
       {/* Task Edit Modal */}
       {isModalOpen && editingTask && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/60 animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
-              <div className="ios-glass-panel w-full max-w-lg rounded-3xl shadow-2xl border border-white/20 overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+              <div className="ios-glass-panel w-full max-w-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
                   <div className="px-6 py-5 border-b border-white/10 flex justify-between items-center bg-white/5">
                       <div className="flex items-center gap-3">
                           <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${getPriorityColor(editingTask.priority)}`}>
@@ -220,7 +276,7 @@ const OperationsTasks: React.FC = () => {
                       <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-5 h-5 text-slate-500"/></button>
                   </div>
 
-                  <div className="p-6 space-y-5">
+                  <div className="p-6 space-y-6 overflow-y-auto">
                       <div>
                           <label className="text-[10px] text-slate-500 font-bold uppercase mb-1.5 block">任务标题</label>
                           <input 
@@ -282,9 +338,39 @@ const OperationsTasks: React.FC = () => {
                               />
                           </div>
                       </div>
+
+                      {/* Dependency Management Section */}
+                      <div className="pt-4 border-t border-white/5">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 flex items-center gap-2">
+                             <Link2 className="w-3 h-3 text-indigo-400" /> 设置前置依赖 (Dependencies)
+                          </label>
+                          <div className="bg-black/40 border border-white/10 rounded-2xl p-4 max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
+                              {state.tasks.filter(t => t.id !== editingTask.id).length === 0 && (
+                                  <p className="text-[10px] text-slate-600 text-center py-4 italic uppercase">没有可作为依赖的其他任务</p>
+                              )}
+                              {state.tasks.filter(t => t.id !== editingTask.id).map(t => (
+                                  <div 
+                                    key={t.id}
+                                    onClick={() => toggleDependency(t.id)}
+                                    className={`flex items-center justify-between p-3 rounded-xl border cursor-pointer transition-all ${editingTask.dependsOn?.includes(t.id) ? 'bg-indigo-600/10 border-indigo-500/50 text-indigo-100' : 'bg-white/2 border-white/5 text-slate-500 hover:bg-white/5'}`}
+                                  >
+                                      <div className="flex flex-col gap-1 min-w-0">
+                                          <span className="text-xs font-bold truncate">{t.title}</span>
+                                          <div className="flex items-center gap-2">
+                                              <span className="text-[9px] uppercase font-mono">{t.id}</span>
+                                              <span className={`text-[8px] px-1 rounded-sm border ${t.status === 'done' ? 'text-emerald-400 border-emerald-500/30' : 'text-slate-500 border-white/10'}`}>{t.status.toUpperCase()}</span>
+                                          </div>
+                                      </div>
+                                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${editingTask.dependsOn?.includes(t.id) ? 'bg-indigo-600 border-indigo-600' : 'border-white/10'}`}>
+                                          {editingTask.dependsOn?.includes(t.id) && <CheckCircle2 className="w-3.5 h-3.5 text-white" />}
+                                      </div>
+                                  </div>
+                              ))}
+                          </div>
+                      </div>
                   </div>
 
-                  <div className="px-6 py-5 border-t border-white/10 bg-white/5 flex justify-between gap-3">
+                  <div className="px-6 py-5 border-t border-white/10 bg-white/5 flex justify-between gap-3 shrink-0">
                       <button 
                         onClick={() => handleDelete(editingTask.id)}
                         className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-xs font-bold hover:bg-red-500/10 transition-all flex items-center gap-2"
