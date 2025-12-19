@@ -17,14 +17,20 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handleCloudSync = async () => {
-      if (!state.firebaseConfig?.apiKey || !state.firebaseConfig?.projectId) {
-          showToast('请先在系统设置中配置 Firebase', 'warning');
+      if (state.connectionStatus !== 'connected') {
+          showToast('云端连接未就绪', 'warning');
           return;
       }
       setIsSyncing(true);
       try {
-          await syncToCloud(true);
+          const success = await syncToCloud(true);
+          if (success) {
+              showToast('云端镜像同步成功', 'success');
+          } else {
+              showToast('同步失败，请检查网络或数据体积', 'error');
+          }
       } catch (e) {
+          showToast('同步过程发生异常', 'error');
       } finally {
           setIsSyncing(false);
       }
@@ -136,12 +142,10 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     <span className="text-xs font-mono font-bold text-white">{getUSDate()}</span>
                 </div>
             </div>
-            
             <div className="flex flex-col items-center">
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">纽约 ET</span>
                 <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
             </div>
-
             <div className="flex flex-col items-center">
                 <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">洛杉矶 PT</span>
                 <span className="text-xs font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
@@ -163,12 +167,10 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
-
             <button className={`relative p-2 rounded-full transition-all text-white/60 hover:text-white hover:bg-white/5`}>
                 <Bell className="w-5 h-5" />
                 <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full ring-2 ring-[#121217]"></span>
             </button>
-            
             <div className="relative">
                 <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent hover:border-white/10">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[10px] font-black text-white shadow-inner border border-white/20">ROOT</div>

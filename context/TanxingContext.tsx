@@ -81,7 +81,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
         case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
         case 'HYDRATE_STATE': 
-            // 核心修复 1: 绝对不允许通过数据注入来改变连接状态。状态应由物理链路实时控制。
             const { connectionStatus, ...rest } = action.payload;
             return { ...state, ...rest, isInitialized: true, isDemoMode: false };
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true, connectionStatus: 'disconnected' };
@@ -96,10 +95,10 @@ const TanxingContext = createContext<{
     state: AppState;
     dispatch: React.Dispatch<Action>;
     showToast: (message: string, type: Toast['type']) => void;
-    syncToCloud: (isForce?: boolean) => Promise<void>;
+    syncToCloud: (isForce?: boolean) => Promise<boolean>;
     pullFromCloud: () => Promise<void>;
     bootFirebase: (config: FirebaseConfig) => Promise<void>;
-}>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => {}, pullFromCloud: async () => {}, bootFirebase: async () => {} });
+}>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => false, pullFromCloud: async () => {}, bootFirebase: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
@@ -107,76 +106,58 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const lastSyncFingerprintRef = useRef<string>('');
     const isInternalUpdateRef = useRef(false);
 
-    // 核心启动逻辑：物理链路验证
     const bootFirebase = async (config: FirebaseConfig) => {
         if (!config.apiKey || !config.projectId) {
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
             return;
         }
-        
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
-        
         try {
-            // 清理旧实例
             const apps = getApps();
             for (const app of apps) {
-                try {
-                    const db = getFirestore(app);
-                    await terminate(db);
-                } catch(e) {}
+                try { const db = getFirestore(app); await terminate(db); } catch(e) {}
                 await deleteApp(app).catch(() => {});
             }
-
-            // 初始化
             const app = initializeApp(config);
             const db = getFirestore(app);
             await enableNetwork(db);
             const docRef = doc(db, 'backups', 'quantum_state');
 
-            // 核心修复 2: 执行物理写测试，确认识别到真实的 Rules 配置。
-            // 很多时候 Firebase 虽然 init 了，但 Rules 拒写会导致数据根本传不上去。
+            // 握手测试
             await setDoc(docRef, { 
                 handshake: { ts: new Date().toISOString(), session: SESSION_ID, type: 'heartbeat' } 
             }, { merge: true });
 
-            // 拉取快照
+            // 拉取快照 (仅在没有本地数据或强制同步时)
             const snapshot = await getDoc(docRef);
             if (snapshot.exists() && snapshot.data().payload) {
                 const cloudData = snapshot.data().payload;
-                lastSyncFingerprintRef.current = JSON.stringify(cloudData);
-                // 注入数据，但不改变连接状态
-                dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
+                // 如果本地没有产品数据，才用云端覆盖，防止导入后的本地数据在刷新时被旧云端覆盖
+                if (state.products.length === 0) {
+                    lastSyncFingerprintRef.current = JSON.stringify(cloudData);
+                    dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
+                }
             }
 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-            dispatch({ type: 'ADD_TOAST', payload: { message: 'Firebase 神经连接已激活', type: 'success' } });
-
         } catch (e: any) {
-            console.error("[Firebase Link Error]", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-            let msg = `连接失败: ${e.message}`;
-            if (e.code === 'permission-denied') msg = '权限被拒绝：请检查 Firestore Rules 设置。';
-            dispatch({ type: 'ADD_TOAST', payload: { message: msg, type: 'error' } });
+            throw e;
         }
     };
 
-    // 初始化加载
     useEffect(() => {
         const init = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             const savedDb = localStorage.getItem(DB_KEY);
-            
             if (savedDb) {
-                // 先从本地缓存恢复数据，但初始状态强制设为 disconnected
                 const localData = JSON.parse(savedDb);
                 dispatch({ type: 'HYDRATE_STATE', payload: { ...localData, connectionStatus: 'disconnected' } });
             }
-
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 dispatch({ type: 'SET_FIREBASE_CONFIG', payload: config });
-                // 启动物理连接
-                await bootFirebase(config);
+                await bootFirebase(config).catch(() => {});
             } else if (!savedDb) {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
@@ -185,20 +166,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         init();
     }, []);
 
-    // 监听逻辑
     useEffect(() => {
         if (!isHydrated || state.connectionStatus !== 'connected') return;
-        
         let db;
-        try {
-            db = getFirestore(getApp());
-        } catch(e) { return; }
-
+        try { db = getFirestore(getApp()); } catch(e) { return; }
         const docRef = doc(db, 'backups', 'quantum_state');
         const unsubscribe = onSnapshot(docRef, (snapshot) => {
             if (snapshot.exists()) {
                 const incoming = snapshot.data();
-                // 防止自身回环同步
                 if (incoming.source_session && incoming.source_session !== SESSION_ID && !snapshot.metadata.hasPendingWrites) {
                     const fingerprint = JSON.stringify(incoming.payload);
                     if (fingerprint && fingerprint !== lastSyncFingerprintRef.current) {
@@ -209,52 +184,38 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             }
         });
-
         return () => unsubscribe();
     }, [state.connectionStatus, isHydrated]);
 
-    // 自动持久化与本地保护
     useEffect(() => {
         if (!isHydrated) return;
-        
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.firebaseConfig));
-        
-        // 核心修复 3: 存入 LocalStorage 时强制改写状态为 disconnected。
-        // 这解决了刷新后“虚假在线”的问题，因为下次加载读取的是这个 disconnected 状态。
-        const slimState = { 
-            ...state, 
-            toasts: [], 
-            exportTasks: [], 
-            connectionStatus: 'disconnected' as ConnectionStatus 
-        };
-        try {
-            localStorage.setItem(DB_KEY, JSON.stringify(slimState));
-        } catch(e) {
-            console.warn("Storage quota exceeded, state not persisted locally.");
-        }
-
+        const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
+        try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
         document.body.className = `theme-${state.theme}`;
-
-        // 自动同步到云端
         if (!isInternalUpdateRef.current && state.connectionStatus === 'connected' && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 2000);
+            const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
         isInternalUpdateRef.current = false;
     }, [state.products, state.orders, state.transactions, state.shipments, state.theme, state.connectionStatus]);
 
-    const syncToCloud = async (isForce: boolean = false) => {
-        if (state.connectionStatus !== 'connected' && !isForce) return;
+    const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
+        if (state.connectionStatus !== 'connected' && !isForce) return false;
         
+        // 限制审计日志长度，防止超过 Firestore 1MB 文档限制
+        const safeAuditLogs = state.auditLogs.slice(0, 100);
+        const safeTransactions = state.transactions.slice(0, 500);
+
         const payload = {
             products: state.products, orders: state.orders, tasks: state.tasks,
             customers: state.customers, shipments: state.shipments, suppliers: state.suppliers,
-            transactions: state.transactions, adCampaigns: state.adCampaigns, influencers: state.influencers,
-            inboundShipments: state.inboundShipments, auditLogs: state.auditLogs
+            transactions: safeTransactions, adCampaigns: state.adCampaigns, influencers: state.influencers,
+            inboundShipments: state.inboundShipments, auditLogs: safeAuditLogs
         };
 
         const fingerprint = JSON.stringify(payload);
-        if (!isForce && fingerprint === lastSyncFingerprintRef.current) return;
+        if (!isForce && fingerprint === lastSyncFingerprintRef.current) return true;
 
         try {
             const db = getFirestore(getApp());
@@ -266,9 +227,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-            if (isForce) dispatch({ type: 'ADD_TOAST', payload: { message: '云端镜像已同步', type: 'success' } });
+            return true;
         } catch (e: any) {
             console.error("[Sync Error]", e);
+            if (e.message.includes('too large')) {
+                dispatch({ type: 'ADD_TOAST', payload: { message: '同步失败：数据量过大 (超出 Firestore 1MB 限制)，请清理审计日志。', type: 'error' } });
+            }
+            return false;
         }
     };
 
@@ -286,7 +251,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 dispatch({ type: 'ADD_TOAST', payload: { message: '已从云端拉取最新数据', type: 'success' } });
             }
         } catch (e) {
-            dispatch({ type: 'ADD_TOAST', payload: { message: '拉取失败，请检查网络', type: 'error' } });
+            dispatch({ type: 'ADD_TOAST', payload: { message: '拉取失败', type: 'error' } });
         }
     };
 

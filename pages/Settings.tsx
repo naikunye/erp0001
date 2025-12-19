@@ -45,12 +45,11 @@ const Settings: React.FC = () => {
       }
       setIsSaving(true);
       try {
-          // 1. 保存配置到 Context
           dispatch({ type: 'SET_FIREBASE_CONFIG', payload: fbForm });
-          // 2. 触发真正的物理握手连接
           await bootFirebase(fbForm as any);
-      } catch (e) {
-          showToast('配置应用失败', 'error');
+          showToast('Firebase 连接成功', 'success');
+      } catch (e: any) {
+          showToast(`配置应用失败: ${e.message}`, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -96,17 +95,30 @@ const Settings: React.FC = () => {
                   return;
               }
 
+              // 1. 注入本地
               dispatch({ type: 'HYDRATE_STATE', payload: importedData });
-              showToast('本地数据恢复成功', 'success');
+              showToast('本地数据恢复成功，正在同步至云端...', 'info');
 
+              // 2. 检查连接状态并强制推送到云端
               if (state.connectionStatus === 'connected') {
-                  await syncToCloud(true);
-                  showToast('云端镜像同步完成', 'success');
+                  // 稍微延迟确保 dispatch 完成
+                  setTimeout(async () => {
+                      const success = await syncToCloud(true);
+                      if (success) {
+                          showToast('云端镜像同步完成，数据已安全存证', 'success');
+                      } else {
+                          showToast('数据已恢复到本地，但同步云端失败 (可能由于体积超限)', 'warning');
+                      }
+                      setIsImporting(false);
+                  }, 1000);
+              } else {
+                  showToast('数据已恢复到本地，请连接 Firebase 以同步云端', 'warning');
+                  setIsImporting(false);
               }
           } catch (err) {
               showToast('解析 JSON 失败', 'error');
-          } finally {
               setIsImporting(false);
+          } finally {
               if (fileInputRef.current) fileInputRef.current.value = '';
           }
       };
