@@ -47,7 +47,21 @@ type Action =
     | { type: 'DELETE_PRODUCT'; payload: string }
     | { type: 'ADD_TASK'; payload: Task }
     | { type: 'UPDATE_TASK'; payload: Task }
+    | { type: 'DELETE_TASK'; payload: string }
     | { type: 'ADD_ORDER'; payload: Order }
+    | { type: 'UPDATE_ORDER_STATUS'; payload: { orderId: string, status: Order['status'] } }
+    | { type: 'DELETE_ORDER'; payload: string }
+    | { type: 'ADD_SHIPMENT'; payload: Shipment }
+    | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
+    | { type: 'DELETE_SHIPMENT'; payload: string }
+    | { type: 'ADD_CUSTOMER'; payload: Customer }
+    | { type: 'UPDATE_CUSTOMER'; payload: Customer }
+    | { type: 'DELETE_CUSTOMER'; payload: string }
+    | { type: 'ADD_SUPPLIER'; payload: Supplier }
+    | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
+    | { type: 'DELETE_SUPPLIER'; payload: string }
+    | { type: 'ADD_INFLUENCER'; payload: Influencer }
+    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'FULL_RESTORE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
@@ -89,12 +103,41 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_CONNECTION_STATUS': return { ...state, connectionStatus: action.payload };
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
+        
+        // Products
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
         case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
         case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload), isDemoMode: false };
+        
+        // Tasks
         case 'ADD_TASK': return { ...state, tasks: [action.payload, ...state.tasks], isDemoMode: false };
         case 'UPDATE_TASK': return { ...state, tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t), isDemoMode: false };
+        case 'DELETE_TASK': return { ...state, tasks: state.tasks.filter(t => t.id !== action.payload), isDemoMode: false };
+        
+        // Orders
         case 'ADD_ORDER': return { ...state, orders: [action.payload, ...state.orders], isDemoMode: false };
+        case 'UPDATE_ORDER_STATUS': return { ...state, orders: state.orders.map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o), isDemoMode: false };
+        case 'DELETE_ORDER': return { ...state, orders: state.orders.filter(o => o.id !== action.payload), isDemoMode: false };
+
+        // Shipments (Tracking)
+        case 'ADD_SHIPMENT': return { ...state, shipments: [action.payload, ...state.shipments], isDemoMode: false };
+        case 'UPDATE_SHIPMENT': return { ...state, shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s), isDemoMode: false };
+        case 'DELETE_SHIPMENT': return { ...state, shipments: state.shipments.filter(s => s.id !== action.payload), isDemoMode: false };
+
+        // Customers (CRM)
+        case 'ADD_CUSTOMER': return { ...state, customers: [action.payload, ...state.customers], isDemoMode: false };
+        case 'UPDATE_CUSTOMER': return { ...state, customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c), isDemoMode: false };
+        case 'DELETE_CUSTOMER': return { ...state, customers: state.customers.filter(c => c.id !== action.payload), isDemoMode: false };
+
+        // Suppliers (SRM)
+        case 'ADD_SUPPLIER': return { ...state, suppliers: [action.payload, ...state.suppliers], isDemoMode: false };
+        case 'UPDATE_SUPPLIER': return { ...state, suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s), isDemoMode: false };
+        case 'DELETE_SUPPLIER': return { ...state, suppliers: state.suppliers.filter(s => s.id !== action.payload), isDemoMode: false };
+
+        // Influencers & Inbound
+        case 'ADD_INFLUENCER': return { ...state, influencers: [action.payload, ...state.influencers], isDemoMode: false };
+        case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...state.inboundShipments], isDemoMode: false };
+
         case 'HYDRATE_STATE': return { ...state, ...action.payload, isInitialized: true };
         case 'FULL_RESTORE': 
             SESSION_ID = Math.random().toString(36).substring(7);
@@ -218,7 +261,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.orders, state.transactions, state.theme, isHydrated, state.supabaseConfig]);
+    }, [state.products, state.orders, state.transactions, state.shipments, state.customers, state.suppliers, state.theme, isHydrated, state.supabaseConfig]);
 
     const pullFromCloud = async () => {
         if (!state.supabaseConfig?.url) return;
