@@ -117,6 +117,7 @@ const Analytics: React.FC = () => {
       } catch (e) {
           setAiInsight("AI 诊断服务暂不可用。");
       } finally {
+          // Fixed typo: setIsThinking to setIsAiThinking
           setIsAiThinking(false);
       }
   };
@@ -162,7 +163,11 @@ const Analytics: React.FC = () => {
                             <XAxis type="number" dataKey="x" name="DOS" stroke="#64748b" fontSize={10} domain={[0, 150]} unit="D" />
                             <YAxis type="number" dataKey="y" name="Velocity" stroke="#64748b" fontSize={10} unit="pcs" />
                             <ZAxis type="number" dataKey="z" range={[50, 400]} />
-                            <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                            <Tooltip 
+                                contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px'}}
+                                itemStyle={{color: '#fff'}}
+                                labelStyle={{color: '#fff'}}
+                            />
                             <Scatter name="Inventory" data={analysisData.matrixData}>
                                 {analysisData.matrixData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
                             </Scatter>

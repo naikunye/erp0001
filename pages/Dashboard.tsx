@@ -177,15 +177,19 @@ const Dashboard: React.FC = () => {
                                   <Pie data={assetComposition} cx="50%" cy="50%" innerRadius={45} outerRadius={65} paddingAngle={8} dataKey="value" stroke="none">
                                       {assetComposition.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                                   </Pie>
-                                  <Tooltip contentStyle={{backgroundColor:'#000', border:'none', borderRadius:'12px', fontSize:'10px'}} />
+                                  <Tooltip 
+                                    contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px', fontSize:'12px'}}
+                                    itemStyle={{color: '#fff'}}
+                                    labelStyle={{color: '#fff'}}
+                                  />
                               </RePieChart>
                           </ResponsiveContainer>
                       </div>
                       <div className="flex justify-around text-[9px] font-black uppercase tracking-widest relative z-10">
                           {assetComposition.map(item => (
                               <div key={item.name} className="flex flex-col items-center gap-1">
-                                  <span style={{color: item.color}}>{item.name}</span>
-                                  <span className="text-white font-mono">¥{(item.value / 1000).toFixed(0)}k</span>
+                                  <span className="text-slate-400 font-medium" style={{color: item.color}}>{item.name}</span>
+                                  <span className="text-white font-mono font-bold">¥{(item.value / 1000).toFixed(0)}k</span>
                               </div>
                           ))}
                       </div>
@@ -217,8 +221,8 @@ const Dashboard: React.FC = () => {
                                   <span className="text-[11px] font-black text-white font-mono tracking-tight uppercase">{ship.trackingNo}</span>
                                   <span className={`text-[8px] font-black px-2 py-0.5 rounded border uppercase ${ship.status === '异常' ? 'text-red-400 bg-red-950 border-red-900' : 'text-indigo-300 bg-indigo-950 border-indigo-900'}`}>{ship.status}</span>
                               </div>
-                              <div className="text-[10px] text-slate-500 truncate font-bold">{ship.productName || '未命名资产'}</div>
-                              <div className="text-[9px] text-slate-700 font-mono mt-1.5 uppercase tracking-tighter">{ship.lastUpdate}</div>
+                              <div className="text-xs text-slate-300 truncate font-bold">{ship.productName || '未命名资产'}</div>
+                              <div className="text-[9px] text-slate-600 font-mono mt-1.5 uppercase tracking-tighter">{ship.lastUpdate}</div>
                           </div>
                       ))}
                   </div>

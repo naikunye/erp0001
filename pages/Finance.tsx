@@ -3,7 +3,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Wallet, TrendingUp, DollarSign, Plus, FileText, 
-  PieChart as PieIcon, Landmark, CreditCard, Sparkles, Loader2, X,
+  Landmark, CreditCard, Sparkles, Loader2, X,
   Search, Activity, Gem, ShoppingBag, BarChart3, ArrowDown, ArrowUp, 
   AlertTriangle, ShieldCheck, ChevronRight, Clock, Filter, CheckCircle2,
   Receipt, ArrowUpRight, ArrowDownLeft, Tag, Download, Zap, MoreHorizontal,
@@ -227,15 +227,22 @@ const Finance: React.FC = () => {
                                 <Pie data={assetDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
                                     {assetDistribution.map((entry, index) => <Cell key={`cell-${index}`} fill={entry.color} />)}
                                 </Pie>
-                                <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                                <Tooltip 
+                                    contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px'}}
+                                    itemStyle={{color: '#fff'}}
+                                    labelStyle={{color: '#fff'}}
+                                />
                             </RePieChart>
                         </ResponsiveContainer>
                     </div>
                     <div className="grid grid-cols-1 gap-2 mt-4">
                         {assetDistribution.map(item => (
                             <div key={item.name} className="flex items-center justify-between text-[10px]">
-                                <span className="flex items-center gap-2"><span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span> {item.name}</span>
-                                <span className="text-slate-400 font-mono">¥{item.value.toLocaleString()}</span>
+                                <span className="flex items-center gap-2 text-slate-300 font-medium">
+                                    <span className="w-2 h-2 rounded-full" style={{backgroundColor: item.color}}></span> 
+                                    {item.name}
+                                </span>
+                                <span className="text-slate-200 font-mono font-bold tracking-tight">¥{item.value.toLocaleString()}</span>
                             </div>
                         ))}
                     </div>
@@ -249,9 +256,24 @@ const Finance: React.FC = () => {
                                 <Pie data={categoryData} cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={5} dataKey="value">
                                     {categoryData.map((entry, index) => <Cell key={`cell-${index}`} fill={CATEGORY_COLORS[entry.name as TransactionCategory] || '#444'} />)}
                                 </Pie>
-                                <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                                <Tooltip 
+                                    contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px'}}
+                                    itemStyle={{color: '#fff'}}
+                                    labelStyle={{color: '#fff'}}
+                                />
                             </RePieChart>
                         </ResponsiveContainer>
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-2 mt-4">
+                        {categoryData.map(item => (
+                            <div key={item.name} className="flex items-center justify-between text-[9px]">
+                                <span className="flex items-center gap-1.5 text-slate-400 truncate">
+                                    <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{backgroundColor: CATEGORY_COLORS[item.name as TransactionCategory]}}></span> 
+                                    {item.name}
+                                </span>
+                                <span className="text-slate-300 font-mono">¥{(item.value / 1000).toFixed(1)}k</span>
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>
@@ -292,7 +314,11 @@ const Finance: React.FC = () => {
                         <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false}/>
                         <XAxis dataKey="date" stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}/>
                         <YAxis stroke="#64748b" fontSize={10} axisLine={false} tickLine={false}/>
-                        <Tooltip contentStyle={{backgroundColor:'#000', border:'1px solid #333'}} />
+                        <Tooltip 
+                            contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px'}}
+                            itemStyle={{color: '#fff'}}
+                            labelStyle={{color: '#fff'}}
+                        />
                         <Area type="monotone" dataKey="amount" stroke="#8b5cf6" fillOpacity={1} fill="url(#colorAmt)" strokeWidth={3}/>
                       </AreaChart>
                    </ResponsiveContainer>
