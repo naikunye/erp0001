@@ -5,6 +5,10 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tanxing OS | Quantum ERP</title>
+    <!-- 增加 Meta 标签禁止某些极端缓存 -->
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
@@ -19,6 +23,7 @@
             animation: {
               'glow-slow': 'glow 4s ease-in-out infinite',
               'pulse-soft': 'pulseSoft 3s ease-in-out infinite',
+              'spin-slow': 'spin 8s linear infinite',
             },
             keyframes: {
               glow: {
@@ -164,6 +169,7 @@
   <body class="theme-ios-glass"> 
     <div class="ambient-bg"></div>
     <div id="root" class="h-full w-full relative z-10 antialiased selection:bg-indigo-500/30 selection:text-white font-sans"></div>
-    <script type="module" src="/index.tsx"></script>
+    <!-- 增加随机查询参数强制刷新模块 -->
+    <script type="module" src="/index.tsx?v=20240327"></script>
   </body>
 </html>
