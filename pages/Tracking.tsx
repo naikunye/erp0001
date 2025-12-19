@@ -6,7 +6,7 @@ import { GoogleGenAI } from "@google/genai";
 import { 
   Truck, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, 
   Search, Plus, MoreHorizontal, Globe, Edit2, Loader2, Bot, X, Trash2, Save, ExternalLink,
-  ArrowRight, Navigation, Anchor, Box, Scale, Layers, FileText, StickyNote
+  ArrowRight, Navigation, Anchor, Box, Scale, Layers, FileText, StickyNote, CalendarOff
 } from 'lucide-react';
 
 const Tracking: React.FC = () => {
@@ -122,7 +122,7 @@ const Tracking: React.FC = () => {
               productName: editForm.productName || '未命名货品',
               origin: editForm.origin || '未知',
               destination: editForm.destination || '未知',
-              estimatedDelivery: editForm.estimatedDelivery || 'TBD',
+              estimatedDelivery: editForm.estimatedDelivery || '',
               shipDate: editForm.shipDate,
               lastUpdate: new Date().toISOString().split('T')[0],
               events: [],
@@ -217,8 +217,10 @@ const Tracking: React.FC = () => {
                                </div>
                           </div>
                           <div className="text-right shrink-0">
-                               <div className="text-[9px] text-slate-600 uppercase font-black">ETA 倒计时</div>
-                               <div className="text-[11px] font-mono font-bold text-indigo-400">{shipment.estimatedDelivery || '--'}</div>
+                               <div className="text-[9px] text-slate-600 uppercase font-black">ETA</div>
+                               <div className={`text-[11px] font-mono font-bold ${shipment.estimatedDelivery ? 'text-indigo-400' : 'text-slate-600'}`}>
+                                   {shipment.estimatedDelivery || 'WAITING'}
+                               </div>
                           </div>
                       </div>
 
@@ -303,7 +305,12 @@ const Tracking: React.FC = () => {
                                <div className="flex items-center gap-4">
                                    <span className="bg-indigo-600/20 text-indigo-300 px-3 py-1 rounded-lg border border-indigo-500/30 font-bold text-base flex items-center gap-2"><Box className="w-4 h-4"/> {selectedShipment.productName}</span>
                                    <span className="flex items-center gap-1.5"><Calendar className="w-4 h-4 text-slate-600"/> 发货于: <span className="text-white font-mono">{selectedShipment.shipDate}</span></span>
-                                   <span className="flex items-center gap-1.5 text-indigo-400 font-bold"><Clock className="w-4 h-4"/> 预计到达: <span className="text-white font-mono">{selectedShipment.estimatedDelivery || 'TBD'}</span></span>
+                                   <span className="flex items-center gap-1.5 text-indigo-400 font-bold">
+                                       <Clock className="w-4 h-4"/> 预计到达: 
+                                       <span className={`ml-1 font-mono ${selectedShipment.estimatedDelivery ? 'text-white' : 'text-slate-500'}`}>
+                                           {selectedShipment.estimatedDelivery || '未知 (TBD)'}
+                                       </span>
+                                   </span>
                                </div>
                            </div>
                        </div>
@@ -432,7 +439,23 @@ const Tracking: React.FC = () => {
                       </div>
                       <div className="grid grid-cols-2 gap-6">
                           <div><label className="text-[10px] text-slate-500 font-black block mb-2">起运日</label><input type="date" value={editForm.shipDate || ''} onChange={e => setEditForm({...editForm, shipDate: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white font-mono" /></div>
-                          <div><label className="text-[10px] text-indigo-400 font-black block mb-2 uppercase">预计达 (ETA)</label><input type="date" value={editForm.estimatedDelivery || ''} onChange={e => setEditForm({...editForm, estimatedDelivery: e.target.value})} className="w-full bg-indigo-600/10 border border-indigo-500/30 rounded-xl px-4 py-3 text-sm text-indigo-400 font-mono font-black" /></div>
+                          <div className="relative">
+                              <div className="flex justify-between items-center mb-2">
+                                  <label className="text-[10px] text-indigo-400 font-black uppercase">预计达 (ETA)</label>
+                                  <button 
+                                    onClick={() => setEditForm({...editForm, estimatedDelivery: ''})}
+                                    className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border transition-all ${!editForm.estimatedDelivery ? 'bg-indigo-600 border-indigo-500 text-white' : 'text-slate-600 border-white/10 hover:text-white'}`}
+                                  >
+                                      未知
+                                  </button>
+                              </div>
+                              <input 
+                                type="date" 
+                                value={editForm.estimatedDelivery || ''} 
+                                onChange={e => setEditForm({...editForm, estimatedDelivery: e.target.value})} 
+                                className={`w-full border rounded-xl px-4 py-3 text-sm font-mono font-black transition-all outline-none ${editForm.estimatedDelivery ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400' : 'bg-black/40 border-white/10 text-slate-600'}`} 
+                              />
+                          </div>
                       </div>
                   </div>
 
