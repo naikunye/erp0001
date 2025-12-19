@@ -96,7 +96,6 @@ const OmniChat = () => {
         setLoading(true);
 
         try {
-            if (!process.env.API_KEY) throw new Error("API Key missing");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             let model = 'gemini-3-pro-preview';
             let config: any = {};
@@ -181,7 +180,6 @@ const OmniChat = () => {
     );
 };
 
-// --- 文案工坊 (Copy Lab - Moved from Marketing) ---
 const CopywritingLab = () => {
     const { state, showToast } = useTanxing();
     const [selectedSku, setSelectedSku] = useState(state.products[0]?.sku || '');
@@ -196,7 +194,6 @@ const CopywritingLab = () => {
         setIsGenerating(true);
         setResult('');
         try {
-            if (!process.env.API_KEY) throw new Error("API Key missing");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const prompt = `
                 Role: Senior E-commerce Copywriter & Business Assistant.
@@ -287,7 +284,6 @@ const CreativeStudio = () => {
         setResultUrl(null);
         setStatusMsg('正在初始化创意引擎...');
         try {
-            if (!process.env.API_KEY) throw new Error("API Key missing");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             if (tool === 'image-gen') {
                 setStatusMsg('正在生成图像...');
@@ -373,7 +369,6 @@ const VoiceLab = () => {
     const handleLiveConnect = async () => {
         if (connected) { if (sessionRef.current) sessionRef.current.close(); setConnected(false); return; }
         try {
-            if (!process.env.API_KEY) throw new Error("API Key missing");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             inputAudioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
             outputAudioContext.current = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 24000 });

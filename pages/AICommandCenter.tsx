@@ -88,7 +88,6 @@ const AICommandCenter: React.FC = () => {
         setLogs(prev => [...prev, newLog]);
 
         try {
-            if (!process.env.API_KEY) throw new Error("API Key 未配置");
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
             const response = await ai.models.generateContent({
@@ -103,7 +102,6 @@ const AICommandCenter: React.FC = () => {
             const functionCalls = response.functionCalls;
 
             if (functionCalls && functionCalls.length > 0) {
-                // 更新日志状态为执行中
                 setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: 'executing', aiResponse: '指令解析成功，正在执行原子操作...' } : l));
                 
                 let successDetails = [];
@@ -156,7 +154,6 @@ const AICommandCenter: React.FC = () => {
                 showToast('AI 指令执行成功', 'success');
 
             } else {
-                // 没有函数调用，仅仅是对话
                 setLogs(prev => prev.map(l => l.id === logId ? { ...l, status: 'success', aiResponse: response.text || '解析失败。' } : l));
             }
 
@@ -187,7 +184,6 @@ const AICommandCenter: React.FC = () => {
             </div>
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
-                {/* Log View (Terminal) */}
                 <div className="col-span-12 lg:col-span-8 bg-black/40 border border-white/10 rounded-2xl flex flex-col overflow-hidden backdrop-blur-xl relative">
                     <div className="absolute inset-0 pointer-events-none opacity-[0.03] bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%),linear-gradient(90deg,rgba(255,0,0,0.06),rgba(0,255,0,0.02),rgba(0,0,255,0.06))] z-10 bg-[length:100%_2px,3px_100%]"></div>
                     
@@ -240,7 +236,6 @@ const AICommandCenter: React.FC = () => {
                         )}
                     </div>
 
-                    {/* Input Field Area */}
                     <div className="p-6 bg-black/60 border-t border-white/10 relative z-30">
                         <div className="relative group">
                             <div className="absolute inset-0 bg-indigo-500/5 blur-xl group-focus-within:bg-indigo-500/10 transition-all rounded-2xl"></div>
@@ -273,26 +268,9 @@ const AICommandCenter: React.FC = () => {
                                 </button>
                             </div>
                         </div>
-                        <div className="mt-4 flex gap-4 overflow-x-auto pb-2 scrollbar-none">
-                            {[
-                                "补货 SKU-MA001 50件",
-                                "安排李芳跟进 SKU-BOX2 退款",
-                                "将任务 T-1 标记为已完成",
-                                "总结当前的备货压力"
-                            ].map((suggestion, i) => (
-                                <button 
-                                    key={i} 
-                                    onClick={() => setInput(suggestion)}
-                                    className="shrink-0 text-[10px] font-bold text-slate-500 bg-white/5 border border-white/10 px-3 py-1.5 rounded-full hover:border-indigo-500/40 hover:text-indigo-400 transition-all"
-                                >
-                                    {suggestion}
-                                </button>
-                            ))}
-                        </div>
                     </div>
                 </div>
 
-                {/* Info & Stats */}
                 <div className="hidden lg:col-span-4 flex flex-col gap-6">
                     <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500">
                         <h3 className="text-xs font-bold text-slate-500 uppercase tracking-widest mb-4">指令控制说明</h3>
@@ -310,26 +288,6 @@ const AICommandCenter: React.FC = () => {
                                     <div className="text-xs font-bold text-white mb-1">原子操作</div>
                                     <p className="text-[10px] text-slate-500 leading-relaxed">所有指令都会直接同步到对应的库存、任务或日历模块。</p>
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-2xl p-6 flex flex-col gap-4">
-                        <div className="flex justify-between items-center">
-                            <h3 className="text-[10px] font-bold text-indigo-400 uppercase">实时神经连接状态</h3>
-                            <div className="flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></span>
-                                <span className="text-[9px] text-emerald-400 font-bold">ONLINE</span>
-                            </div>
-                        </div>
-                        <div className="flex-1 space-y-3">
-                            <div className="flex justify-between text-[10px]">
-                                <span className="text-slate-500">已处理指令 (Total)</span>
-                                <span className="text-white font-mono">{logs.length}</span>
-                            </div>
-                            <div className="flex justify-between text-[10px]">
-                                <span className="text-slate-500">平均延迟 (Latency)</span>
-                                <span className="text-white font-mono">1.2s</span>
                             </div>
                         </div>
                     </div>
