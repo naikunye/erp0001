@@ -192,7 +192,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const db = getFirestore(app);
             const docRef = doc(db, 'backups', 'quantum_state');
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
+            
             const unsubscribe = onSnapshot(docRef, (snapshot) => {
+                // 只要监听到，不论文档是否存在，都表示连接协议已建立
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+                
                 if (snapshot.exists()) {
                     const incoming = snapshot.data();
                     if (incoming.source_session !== SESSION_ID) {
@@ -204,8 +208,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         }
                     }
                 }
-                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
             }, (error) => {
+                console.error("[Firebase] Connection error:", error);
                 dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             });
             return () => unsubscribe();
@@ -214,25 +218,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     }, [state.firebaseConfig?.apiKey, isHydrated]);
 
-    // 自动持久化与同步逻辑 (增加了容量异常处理)
+    // 自动本地持久化
     useEffect(() => {
         if (!isHydrated) return;
         
-        // 1. 本地持久化 (增加瘦身策略与错误拦截)
         try {
-            // 瘦身：移除审计日志和通知，这些通常占据大量空间
             const slimState = { 
                 ...state, 
                 toasts: [], 
-                auditLogs: state.auditLogs.slice(0, 10), // 仅保留最后10条
+                auditLogs: state.auditLogs.slice(0, 10),
                 exportTasks: [] 
             };
             localStorage.setItem(DB_KEY, JSON.stringify(slimState));
             localStorage.setItem(CONFIG_KEY, JSON.stringify(state.firebaseConfig));
         } catch (e: any) {
             if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
-                console.warn("[Storage] Local cache full, failing back to memory/cloud only.");
-                // 如果满了，至少尝试保存配置信息，配置信息很小，通常能成功
                 try { localStorage.setItem(CONFIG_KEY, JSON.stringify(state.firebaseConfig)); } catch(e2) {}
             }
         }
@@ -244,11 +244,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
+        // 自动同步：仅在已连接且非 Demo 模式下触发
         if (state.connectionStatus === 'connected' && !state.isDemoMode) {
             const timer = setTimeout(() => syncToCloud(), 5000); 
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.orders, state.transactions, state.shipments, state.theme, isHydrated]);
+    }, [state.products, state.orders, state.transactions, state.shipments, state.theme, isHydrated, state.connectionStatus]);
 
     const syncToCloud = async (isForce: boolean = false) => {
         if (!isHydrated || !state.firebaseConfig?.apiKey || (!isForce && state.isDemoMode)) return;
@@ -274,8 +275,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
+            if (isForce) showToast('云端镜像同步成功', 'success');
         } catch (e: any) {
+            console.error("[Firebase] Sync error:", e);
             if (isForce) showToast(`云端同步失败: ${e.message}`, 'error');
+            throw e;
         }
     };
 
@@ -287,7 +291,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (snapshot.exists()) {
                 const cloudData = snapshot.data().payload;
                 dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
-                showToast('已载入云端镜像', 'success');
+                showToast('已载入最新云端镜像', 'success');
+            } else {
+                showToast('云端暂无镜像，请先同步一次', 'warning');
             }
         } catch (e: any) {
             showToast('拉取镜像失败', 'error');

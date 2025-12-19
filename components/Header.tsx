@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
@@ -18,15 +17,20 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handleCloudSync = async () => {
-      // 增加可选链保护
-      if (!state.supabaseConfig?.url || !state.supabaseConfig?.key) {
-          showToast('请在系统设置中配置云端连接', 'warning');
+      // 核心修复：检查 firebaseConfig 而非旧版的 supabaseConfig
+      if (!state.firebaseConfig?.apiKey || !state.firebaseConfig?.projectId) {
+          showToast('请在系统设置中配置 Firebase 云端连接', 'warning');
           return;
       }
       setIsSyncing(true);
-      await syncToCloud();
-      setIsSyncing(false);
-      showToast('数据已即时广播至所有终端', 'success');
+      try {
+          await syncToCloud(true); // 强制同步
+          showToast('数据已即时广播至 Firebase 矩阵', 'success');
+      } catch (e) {
+          showToast('手动同步失败', 'error');
+      } finally {
+          setIsSyncing(false);
+      }
   };
 
   const formatTime = (tz: string) => {
@@ -73,7 +77,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
               return (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
                     <Loader2 className="w-3 h-3 text-indigo-400 animate-spin" />
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">Linking Protocol...</span>
+                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">Linking Firebase...</span>
                 </div>
               );
           case 'error':
@@ -93,7 +97,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       }
   };
 
-  const isCloudConnected = !!(state.supabaseConfig?.url && state.supabaseConfig?.key);
+  const isCloudConnected = !!(state.firebaseConfig?.apiKey && state.firebaseConfig?.projectId);
 
   return (
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
@@ -147,7 +151,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                 onClick={handleCloudSync}
                 disabled={isSyncing}
                 className={`relative p-2 rounded-full transition-all ${isCloudConnected ? 'text-indigo-400 hover:bg-indigo-500/10' : 'text-slate-600 hover:text-slate-400'}`}
-                title={isCloudConnected ? `同步中 (上次: ${state.supabaseConfig?.lastSync || '待同步'})` : "云端未连接"}
+                title={isCloudConnected ? `Firebase 同步 (上次: ${state.firebaseConfig?.lastSync || '待同步'})` : "云端未配置"}
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
