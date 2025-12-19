@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
@@ -8,7 +7,7 @@ const DB_KEY = 'TANXING_DB_V8_STABLE';
 const CONFIG_KEY = 'TANXING_UPLINK_CONFIG'; 
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
-export type Theme = 'ios-glass' | 'cyber-neon' | 'midnight-dark' | 'titanium-light';
+export type Theme = 'ios-glass' | 'cyber-neon' | 'midnight-dark';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'syncing';
 
 interface AppState {
@@ -105,45 +104,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         
-        case 'UPDATE_PRODUCT': {
-            const oldProduct = state.products.find(p => p.id === action.payload.id);
-            const newAuditLogs = [...state.auditLogs];
-            
-            if (oldProduct) {
-                const changes: string[] = [];
-                if (oldProduct.price !== action.payload.price) changes.push(`价格: $${oldProduct.price} -> $${action.payload.price}`);
-                if (oldProduct.stock !== action.payload.stock) changes.push(`库存: ${oldProduct.stock} -> ${action.payload.stock}`);
-                if (oldProduct.costPrice !== action.payload.costPrice) changes.push(`成本: ¥${oldProduct.costPrice} -> ¥${action.payload.costPrice}`);
-                if (oldProduct.lifecycle !== action.payload.lifecycle) changes.push(`阶段: ${oldProduct.lifecycle} -> ${action.payload.lifecycle}`);
-                
-                if (changes.length > 0) {
-                    newAuditLogs.unshift({
-                        id: `LOG-${Date.now()}`,
-                        timestamp: new Date().toISOString(),
-                        user: '管理员',
-                        action: `更新 SKU: ${action.payload.sku}`,
-                        details: changes.join(' | ')
-                    });
-                }
-            }
-
-            return { 
-                ...state, 
-                products: state.products.map(p => p.id === action.payload.id ? action.payload : p), 
-                auditLogs: newAuditLogs.slice(0, 500),
-                isDemoMode: false // 关键修复：一旦有修改，立即解除 Demo 模式限制
-            };
-        }
-        case 'ADD_PRODUCT': {
-            const log: AuditLog = {
-                id: `LOG-${Date.now()}`,
-                timestamp: new Date().toISOString(),
-                user: '管理员',
-                action: `创建 SKU: ${action.payload.sku}`,
-                details: `初始库存: ${action.payload.stock}, 单价: $${action.payload.price}`
-            };
-            return { ...state, products: [action.payload, ...state.products], auditLogs: [log, ...state.auditLogs], isDemoMode: false };
-        }
+        case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
+        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
         case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload), isDemoMode: false };
         
         case 'ADD_TASK': return { ...state, tasks: [action.payload, ...state.tasks], isDemoMode: false };
@@ -203,6 +165,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isInternalUpdateRef = useRef(false);
     const supabaseRef = useRef<SupabaseClient | null>(null);
 
+    // 系统冷启动初始化
     useEffect(() => {
         const initializeSystem = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
@@ -223,6 +186,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (config?.url && config?.key) {
                 try {
                     const client = createClient(config.url, config.key);
+                    supabaseRef.current = client;
                     const { data, error } = await client.from('app_backups').select('data').order('created_at', { ascending: false }).limit(1);
                     
                     if (!error && data && data.length > 0) {
@@ -249,6 +213,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         initializeSystem();
     }, []);
 
+    // 建立实时监听通道
     useEffect(() => {
         if (!isHydrated || !state.supabaseConfig?.url || !state.supabaseConfig?.key || !state.supabaseConfig?.isRealTime) return;
         const client = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
@@ -274,6 +239,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return () => { channel.unsubscribe(); };
     }, [state.supabaseConfig?.url, state.supabaseConfig?.key, isHydrated]);
 
+    // 状态变动自动触发持久化与同步
     useEffect(() => {
         if (!isHydrated) return;
         try {
@@ -289,9 +255,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
+        // 仅在已连接且非演示模式下触发自动同步
         if (state.connectionStatus === 'connected' && state.supabaseConfig?.isRealTime && !state.isDemoMode) {
-            // 缩短防抖时间到 800ms，提高数据持久化频率
-            const timer = setTimeout(() => syncToCloud(), 800);
+            const timer = setTimeout(() => syncToCloud(), 1200); // 增加防抖时长，减少写入频率
             return () => clearTimeout(timer);
         }
     }, [state.products, state.orders, state.transactions, state.shipments, state.customers, state.suppliers, state.theme, isHydrated, state.supabaseConfig]);
@@ -300,15 +266,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!state.supabaseConfig?.url) return;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'syncing' });
         try {
-            const client = supabaseRef.current || createClient(state.supabaseConfig.url, state.supabaseConfig.key);
-            const { data } = await client.from('app_backups').select('data').order('created_at', { ascending: false }).limit(1);
+            const client = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
+            const { data, error } = await client.from('app_backups').select('data').order('created_at', { ascending: false }).limit(1);
+            if (error) throw error;
             if (data && data.length > 0) {
                 const cloudPayload = data[0].data.payload;
                 lastSyncFingerprintRef.current = JSON.stringify(cloudPayload);
                 isInternalUpdateRef.current = true;
                 dispatch({ type: 'HYDRATE_STATE', payload: cloudPayload });
             }
-        } catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); }
+        } catch (e: any) { 
+            showToast(`同步失败: ${e.message}`, 'error');
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
+        }
     };
 
     const syncToCloud = async (isForce: boolean = false) => {
@@ -326,14 +296,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!isForce && fingerprint === lastSyncFingerprintRef.current) return; 
 
         try {
-            const client = supabaseRef.current || createClient(state.supabaseConfig.url, state.supabaseConfig.key);
-            await client.from('app_backups').insert([{ 
+            // 确保使用最新的凭证创建客户端
+            const client = createClient(state.supabaseConfig.url, state.supabaseConfig.key);
+            const { error } = await client.from('app_backups').insert([{ 
                 data: { source_session: SESSION_ID, payload: payloadToSync, timestamp: new Date().toISOString() } 
             }]);
+            
+            if (error) throw error;
+            
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-        } catch (e) { 
+        } catch (e: any) { 
+            console.error("[Matrix Sync Error]", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
+            // 只有手动触发(isForce)时才弹窗报错，静默失败不打扰用户
+            if (isForce) showToast(`云端保存失败: ${e.message || '未知错误'}`, 'error');
         }
     };
 
