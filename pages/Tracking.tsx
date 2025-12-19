@@ -255,6 +255,16 @@ const Tracking: React.FC = () => {
                           </div>
                       </div>
 
+                      {/* 缩略栏备注预览 (Highlighted Note Preview) */}
+                      {shipment.notes && (
+                          <div className="mt-1 px-3 py-1.5 bg-amber-500/10 border border-dashed border-amber-500/30 rounded-lg flex items-center gap-2">
+                              <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />
+                              <span className="text-[10px] text-amber-200/80 font-medium truncate line-clamp-1 italic">
+                                  {shipment.notes}
+                              </span>
+                          </div>
+                      )}
+
                       <div className="flex justify-between items-end pt-2 border-t border-white/5 mt-1">
                           <div className="flex items-center gap-3">
                               <div className="flex flex-col">
@@ -267,7 +277,7 @@ const Tracking: React.FC = () => {
                                   <span className="text-[10px] text-indigo-300 font-bold max-w-[120px] truncate">{shipment.lastUpdate || '处理中...'}</span>
                               </div>
                           </div>
-                          {shipment.notes && <AlertCircle className="w-4 h-4 text-amber-500" />}
+                          <ExternalLink className="w-3.5 h-3.5 text-slate-700 group-hover:text-white transition-colors" />
                       </div>
 
                       <a 
@@ -325,7 +335,7 @@ const Tracking: React.FC = () => {
                   </div>
 
                   <div className="p-8 space-y-8">
-                      {/* Highlighted Notes Block */}
+                      {/* Highlighted Notes Block (Main Panel) */}
                       {selectedShipment.notes && (
                           <div className="bg-amber-500/10 border-2 border-dashed border-amber-500/40 rounded-3xl p-6 relative overflow-hidden group animate-in slide-in-from-top-4">
                               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform">
