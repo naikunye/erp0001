@@ -5,10 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tanxing OS | Quantum ERP</title>
-    <!-- 增加 Meta 标签禁止某些极端缓存 -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
-    <meta http-equiv="Pragma" content="no-cache" />
-    <meta http-equiv="Expires" content="0" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
@@ -19,162 +16,119 @@
             fontFamily: {
               sans: ['"Inter"', 'sans-serif'],
               mono: ['"JetBrains Mono"', 'monospace'],
-            },
-            animation: {
-              'glow-slow': 'glow 4s ease-in-out infinite',
-              'pulse-soft': 'pulseSoft 3s ease-in-out infinite',
-              'spin-slow': 'spin 8s linear infinite',
-              'pulse': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            },
-            keyframes: {
-              glow: {
-                '0%, 100%': { opacity: 0.3, transform: 'scale(1)' },
-                '50%': { opacity: 0.6, transform: 'scale(1.05)' },
-              },
-              pulseSoft: {
-                '0%, 100%': { opacity: 1 },
-                '50%': { opacity: 0.7 },
-              },
-              pulse: {
-                '0%, 100%': { opacity: 1 },
-                '50%': { opacity: .5 },
-              }
             }
           }
         }
       }
     </script>
     <style>
-      /* 全局平滑切换 */
-      body { transition: background-color 0.4s ease, color 0.4s ease; }
-      .ios-glass-panel, .ios-glass-card { transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1); }
+      /* 全局平滑切换效果 */
+      body, .ambient-bg { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
+      .ios-glass-panel, .ios-glass-card { transition: background 0.3s ease, border 0.3s ease; }
 
-      /* 深度修复：彻底移除 Recharts 所有组件点击时的白色范围框/焦点环 */
-      .recharts-wrapper, 
-      .recharts-wrapper *, 
-      .recharts-surface, 
-      .recharts-surface *,
-      .recharts-legend-item,
-      svg,
-      svg * {
-        outline: none !important;
-        box-shadow: none !important;
-        -webkit-tap-highlight-color: transparent;
-      }
-      
-      /* 特别针对 accessibility 设置的 tabindex 焦点 */
-      [tabindex="-1"]:focus, [tabindex="0"]:focus {
-        outline: none !important;
-        box-shadow: none !important;
-      }
-
-      /* 默认变量 */
       :root {
-        --glass-bg: rgba(18, 18, 23, 0.65);
-        --glass-border: rgba(255, 255, 255, 0.08);
-        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.36);
-        --accent-color: #6366f1;
-        --page-bg: #050506;
-        --text-primary: #f8fafc;
-        --text-secondary: #94a3b8;
-      }
-
-      /* 1. Obsidian Vision (Default Dark Glass) */
-      body.theme-ios-glass {
-        --glass-bg: rgba(22, 22, 28, 0.7);
+        --glass-bg: rgba(255, 255, 255, 0.05);
         --glass-border: rgba(255, 255, 255, 0.1);
-        --page-bg: #0a0a0f;
-        background-color: var(--page-bg);
+        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
       }
-      body.theme-ios-glass .ambient-bg { background: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #050506 100%); }
 
-      /* 2. Titanium Light (Business White) */
-      body.theme-titanium-light {
-        --glass-bg: rgba(255, 255, 255, 0.85);
-        --glass-border: rgba(0, 0, 0, 0.06);
-        --glass-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.1);
-        --accent-color: #4f46e5;
-        --page-bg: #f3f4f6;
-        --text-primary: #111827;
-        --text-secondary: #6b7280;
-        background-color: var(--page-bg);
+      /* --- 核心背景矩阵算法 (Apple-style Mesh Gradients) --- */
+      
+      .ambient-bg {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: -1;
+        overflow: hidden;
       }
-      body.theme-titanium-light .ambient-bg { background: linear-gradient(135deg, #e5e7eb 0%, #ffffff 100%); }
-      body.theme-titanium-light .text-white { color: #111827 !important; }
-      body.theme-titanium-light .text-slate-400, body.theme-titanium-light .text-slate-500 { color: #6b7280 !important; }
-      body.theme-titanium-light .bg-black\/20, body.theme-titanium-light .bg-black\/40, body.theme-titanium-light .bg-black\/60 { background-color: rgba(0,0,0,0.03); }
-      body.theme-titanium-light .border-white\/5, body.theme-titanium-light .border-white\/10 { border-color: rgba(0,0,0,0.06); }
 
-      /* 3. Midnight OLED (Deep Black) */
-      body.theme-midnight-dark {
-        --glass-bg: rgba(10, 10, 10, 0.95);
-        --glass-border: rgba(255, 255, 255, 0.05);
-        --glass-shadow: none;
-        --accent-color: #ffffff;
-        --page-bg: #000000;
-        background-color: var(--page-bg);
+      /* 1. Obsidian Vision (深邃弥散) - 替代黑背景 */
+      body.theme-ios-glass .ambient-bg {
+        background-color: #0f172a;
+        background-image: 
+          radial-gradient(at 0% 0%, #1e1b4b 0px, transparent 50%),
+          radial-gradient(at 100% 0%, #2e1065 0px, transparent 50%),
+          radial-gradient(at 100% 100%, #1e293b 0px, transparent 50%),
+          radial-gradient(at 0% 100%, #312e81 0px, transparent 50%),
+          radial-gradient(at 50% 50%, #020617 0px, transparent 80%);
       }
-      body.theme-midnight-dark .ambient-bg { background: #000000; }
-      body.theme-midnight-dark .ios-glass-card { background: #0a0a0a; border: 1px solid #1a1a1a; }
-      body.theme-midnight-dark .ios-glass-card:hover { border-color: #333; }
 
-      /* 4. Cyber Neon (Matrix) */
-      body.theme-cyber-neon {
-        --glass-bg: rgba(2, 6, 23, 0.9);
-        --glass-border: rgba(34, 211, 238, 0.2);
-        --glass-shadow: 0 0 20px rgba(34, 211, 238, 0.1);
-        --accent-color: #22d3ee;
-        --page-bg: #020617;
-        background-color: var(--page-bg);
+      /* 2. Titanium Light (精致钛白) */
+      body.theme-titanium-light .ambient-bg {
+        background-color: #f8fafc;
+        background-image: 
+          radial-gradient(at 10% 20%, #eff6ff 0px, transparent 40%),
+          radial-gradient(at 90% 80%, #fff1f2 0px, transparent 40%),
+          radial-gradient(at 50% 50%, #f1f5f9 0px, transparent 60%);
       }
-      body.theme-cyber-neon .ambient-bg { 
-        background: linear-gradient(to bottom, #020617, #0f172a);
-        background-image: linear-gradient(rgba(34, 211, 238, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(34, 211, 238, 0.05) 1px, transparent 1px);
-        background-size: 40px 40px;
-      }
-      body.theme-cyber-neon .ios-glass-card { border-color: rgba(34, 211, 238, 0.1); }
-      body.theme-cyber-neon .ios-glass-card:hover { border-color: #22d3ee; box-shadow: 0 0 15px rgba(34, 211, 238, 0.2); }
+      body.theme-titanium-light { color: #1e293b; --glass-bg: rgba(255, 255, 255, 0.6); --glass-border: rgba(0, 0, 0, 0.05); }
 
+      /* 3. Midnight OLED (液态有机发光) */
+      body.theme-midnight-dark .ambient-bg {
+        background-color: #020617;
+        background-image: 
+          radial-gradient(at 20% 30%, #1e1b4b 0px, transparent 30%),
+          radial-gradient(at 80% 70%, #4c0519 0px, transparent 30%),
+          radial-gradient(at 50% 50%, #000000 0px, transparent 70%);
+      }
+
+      /* 4. Cyber Neon (电激发背景) */
+      body.theme-cyber-neon .ambient-bg {
+        background-color: #020617;
+        background-image: 
+          radial-gradient(at 0% 0%, #083344 0px, transparent 40%),
+          radial-gradient(at 100% 100%, #4c1d95 0px, transparent 40%),
+          radial-gradient(at 50% 10%, #164e63 0px, transparent 30%),
+          linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
+        background-size: 100%, 100%, 100%, 40px 40px, 40px 40px;
+      }
+
+      /* --- 苹果级磨砂面板 --- */
       .ios-glass-panel {
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
+        backdrop-filter: blur(40px) saturate(180%);
+        -webkit-backdrop-filter: blur(40px) saturate(180%);
         box-shadow: var(--glass-shadow);
-        backdrop-filter: blur(16px);
       }
+
       .ios-glass-card {
-        background: var(--glass-bg);
-        border: 1px solid var(--glass-border);
-        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(20px) saturate(140%);
+        -webkit-backdrop-filter: blur(20px) saturate(140%);
+      }
+
+      body.theme-titanium-light .ios-glass-card {
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid rgba(0, 0, 0, 0.05);
       }
 
       html, body { height: 100%; overflow: hidden; -webkit-font-smoothing: antialiased; }
-      .ambient-bg { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; }
-      
-      /* 自定义滚动条 */
       .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.1/",
-    "react": "https://aistudiocdn.com/react@^19.2.1",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.556.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.1",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.1/",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.1",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.32.0",
-    "@supabase/supabase-js": "https://aistudiocdn.com/@supabase/supabase-js@2.45.0"
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom": "https://esm.sh/react-dom@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0"
   }
 }
 </script>
 </head>
   <body class="theme-ios-glass"> 
     <div class="ambient-bg"></div>
-    <div id="root" class="h-full w-full relative z-10 antialiased selection:bg-indigo-500/30 selection:text-white font-sans"></div>
-    <!-- 增加随机查询参数强制刷新模块 -->
-    <script type="module" src="/index.tsx?v=20240327v2"></script>
+    <div id="root" class="h-full w-full relative z-10 antialiased selection:bg-indigo-500/30"></div>
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
