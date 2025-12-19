@@ -59,7 +59,7 @@ const Settings: React.FC = () => {
           const client = createClient(cleanUrl, cleanKey);
           const { error } = await client.from('app_backups').select('id').limit(1);
           if (error && error.code === 'PGRST116') {
-              // Auth success but table empty
+              // Auth success
           } else if (error && error.message.includes("failed to fetch")) {
               throw new Error("FAILED_TO_FETCH");
           } else if (error) {

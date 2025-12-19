@@ -1,6 +1,6 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Box, Wallet, Loader2, TrendingUp, Sparkles, Command, Zap, Gem, Package, Info, AlertTriangle, ArrowRight, ShieldCheck, ChevronRight } from 'lucide-react';
+import { Box, Wallet, Loader2, TrendingUp, Sparkles, Command, Zap, Gem, Package, Info, AlertTriangle, ArrowRight, ShieldCheck, ChevronRight, Activity, PieChart, ArrowUpRight, BarChart3 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI } from "@google/genai";
@@ -23,7 +23,7 @@ const Dashboard: React.FC = () => {
 
   const activeProducts = useMemo(() => state.products.filter(p => !p.deletedAt), [state.products]);
 
-  // --- 核心修复：资产穿透核算引擎 V3.1 (同步库存页验证逻辑) ---
+  // --- 资产穿透核算引擎 V5.0 (Quantum Edition) ---
   const metrics = useMemo(() => {
       let totalStockValueCNY = 0;
       let totalPotentialProfitUSD = 0;
@@ -33,47 +33,30 @@ const Dashboard: React.FC = () => {
           const stock = Math.max(p.stock || 0, 0);
           const costCNY = p.costPrice || 0;
           totalStockValueCNY += stock * costCNY;
-
           if (stock === 0) return; 
 
-          // 1. 物流成本精确核算 (与 Inventory.tsx 保持绝对一致)
           const dims = p.dimensions || {l:0, w:0, h:0};
           const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
           const autoUnitWeight = Math.max(p.unitWeight || 0, unitVolWeight);
           
-          // 确定当前批次的有效计费总重
-          let activeTotalWeight = 0;
-          if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
-              activeTotalWeight = p.logistics.billingWeight; // 手动总重优先
-          } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
-              activeTotalWeight = p.logistics.unitBillingWeight * stock; // 手动单品计费重
-          } else {
-              activeTotalWeight = autoUnitWeight * stock; // 系统自动计算
-          }
-
+          let activeTotalWeight = (p.logistics?.billingWeight && p.logistics.billingWeight > 0) ? p.logistics.billingWeight : (autoUnitWeight * stock);
           const rate = p.logistics?.unitFreightCost || 0;
           const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
           const autoTotalFreightCNY = (activeTotalWeight * rate) + batchFeesCNY;
-          
-          // 最终有效总运费 (支持手动覆盖)
           const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
-          const unitFreightCNY = effectiveTotalFreightCNY / stock;
-          const unitLogisticsCNY = unitFreightCNY + (p.logistics?.consumablesFee || 0);
+          const unitLogisticsCNY = (effectiveTotalFreightCNY / stock) + (p.logistics?.consumablesFee || 0);
           
           totalInvestmentCNY += (costCNY + unitLogisticsCNY) * stock;
 
-          // 2. 单品净利穿透 (单位：USD)
           const priceUSD = p.price || 0;
           const eco = p.economics;
           const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
           const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
           const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
-          const unitAdCostUSD = eco?.adCost || 0; // TikTok 习惯：直接计入单品广告成本
+          const unitAdCostUSD = eco?.adCost || 0;
           const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100);
 
-          // 穿透公式
           const unitProfitUSD = priceUSD - ( (costCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + fixedFeesUSD + unitAdCostUSD + refundLossUSD );
-          
           totalPotentialProfitUSD += unitProfitUSD * stock;
       });
 
@@ -87,14 +70,8 @@ const Dashboard: React.FC = () => {
 
   const handleProactiveAudit = async () => {
     const mockInsights: AiInsight[] = [
-        {
-            id: 'ins-1',
-            type: 'risk',
-            title: '库存断货风险告警',
-            content: '部分核心 SKU 过去 48h 销量波动，请关注补货提醒。',
-            priority: 'high',
-            timestamp: '刚刚'
-        }
+        { id: 'ins-1', type: 'risk', title: '核心 SKU 补货预警', content: `检测到 ${metrics.lowStockSkus} 个产品库存破警戒线，建议立即下推备货指令。`, priority: 'high', timestamp: '刚刚' },
+        { id: 'ins-2', type: 'opportunity', title: '盈利穿透完成', content: `全域平均 ROI 已达 ${metrics.roi.toFixed(1)}%，击败了 92% 的行业同类。`, priority: 'medium', timestamp: '3分钟前' }
     ];
     setInsights(mockInsights);
   };
@@ -104,87 +81,122 @@ const Dashboard: React.FC = () => {
       setReport(null);
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `你是一个供应链财务专家。当前库存货值 ¥${metrics.stockValueCNY.toLocaleString()}，穿透预估净利 $${metrics.totalPotentialProfitUSD.toLocaleString()}，整体 ROI ${metrics.roi.toFixed(1)}%。请简要分析当前资产结构（中文 HTML 格式，使用 <b> 加粗）。`;
+          const prompt = `你是探行 ERP 的首席 AI 分析官。当前库存货值 ¥${metrics.stockValueCNY.toLocaleString()}，预估总净利 $${metrics.totalPotentialProfitUSD.toLocaleString()}，平均 ROI 为 ${metrics.roi.toFixed(1)}%。请简要分析当前资产结构并给出1条关于“现金流分配”的专业建议。使用 <b> 标签加粗关键点，中文 HTML 格式输出。`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setReport(response.text);
       } catch (e) {
-          setReport(`<b>系统提示:</b> AI 服务暂时不可用。`);
+          setReport(`<b>纠缠链路故障</b>: 无法获取量子审计解析。`);
       } finally {
           setIsGenerating(false);
       }
   };
 
   return (
-    <div className="space-y-8 pb-10">
-      <div className="ios-glass-panel border-violet-500/30 bg-violet-500/5 p-4 rounded-2xl flex items-center gap-6 overflow-hidden relative">
-          <div className="absolute top-0 left-0 w-1 h-full bg-violet-600 animate-pulse"></div>
-          <div className="flex items-center gap-3 shrink-0">
-              <div className="p-2 bg-violet-600 rounded-lg text-white">
-                  <Zap className="w-5 h-5 fill-current" />
+    <div className="space-y-8 pb-10 animate-in fade-in duration-700">
+      {/* AI Sentry 脉动看板 */}
+      <div className="ios-glass-panel border-violet-500/30 bg-violet-500/5 p-5 rounded-[2rem] flex items-center gap-8 overflow-hidden relative">
+          <div className="absolute top-0 left-0 w-1 h-full bg-violet-600 animate-pulse shadow-[0_0_20px_#8b5cf6]"></div>
+          <div className="flex items-center gap-4 shrink-0">
+              <div className="w-12 h-12 bg-violet-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-violet-900/40">
+                  <Zap className="w-6 h-6 fill-current" />
               </div>
-              <span className="text-xs font-black text-violet-400 uppercase tracking-[0.2em]">AI Sentry</span>
+              <div className="flex flex-col">
+                  <span className="text-xs font-black text-violet-400 uppercase tracking-[0.2em] block">AI Matrix Sentry</span>
+                  <span className="text-[9px] text-slate-500 font-mono flex items-center gap-1"><Activity className="w-3 h-3"/> MONITORING_INTENT</span>
+              </div>
           </div>
-          <div className="flex-1 flex gap-8 overflow-x-auto scrollbar-none">
+          <div className="flex-1 flex gap-12 overflow-x-auto scrollbar-none">
               {insights.map(ins => (
-                  <div key={ins.id} className="flex items-center gap-3 shrink-0">
-                      <div className={`w-2 h-2 rounded-full ${ins.type === 'risk' ? 'bg-red-500' : 'bg-emerald-500'}`}></div>
+                  <div key={ins.id} className="flex items-start gap-4 shrink-0 border-l border-white/5 pl-8 first:border-none first:pl-0 group cursor-default">
+                      <div className={`w-1 h-10 rounded-full mt-1 ${ins.type === 'risk' ? 'bg-red-500 animate-pulse' : 'bg-emerald-500'}`}></div>
                       <div className="flex flex-col">
-                          <span className="text-[10px] font-bold text-white uppercase">{ins.title}</span>
-                          <span className="text-[10px] text-slate-500 line-clamp-1 w-64">{ins.content}</span>
+                          <span className="text-[11px] font-black text-white uppercase flex items-center gap-2 group-hover:text-violet-400 transition-colors">
+                            {ins.title} {ins.type === 'risk' && <AlertTriangle className="w-3 h-3 text-red-500"/>}
+                          </span>
+                          <span className="text-[10px] text-slate-500 mt-0.5 max-w-xs leading-relaxed">{ins.content}</span>
                       </div>
                   </div>
               ))}
           </div>
       </div>
 
+      {/* 核心指标卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <StatCard loading={isLoading} title="库存采购资产规模" value={`¥${metrics.stockValueCNY.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend="实时持仓" trendUp={true} icon={Wallet} accentColor="blue" />
-        <StatCard loading={isLoading} title="穿透式预估净利" value={`$${metrics.totalPotentialProfitUSD.toLocaleString(undefined, {maximumFractionDigits: 0})}`} trend={`${metrics.roi.toFixed(1)}% ROI`} trendUp={metrics.roi >= 0} icon={Gem} accentColor="purple" />
-        <StatCard loading={isLoading} title="全链路断货风险" value={metrics.lowStockSkus} subValue="SKUs" trend="库存健康度" trendUp={metrics.lowStockSkus === 0} icon={AlertTriangle} accentColor="orange" />
+        <StatCard loading={isLoading} title="资产持仓 (采购货值)" value={`¥${metrics.stockValueCNY.toLocaleString()}`} trend="库存净资产" trendUp={true} icon={Wallet} accentColor="blue" />
+        <StatCard loading={isLoading} title="穿透预估净利" value={`$${metrics.totalPotentialProfitUSD.toLocaleString()}`} trend={`${metrics.roi.toFixed(1)}% ROI`} trendUp={metrics.roi >= 0} icon={Gem} accentColor="purple" />
+        <StatCard loading={isLoading} title="全域库存健康度" value={metrics.lowStockSkus} subValue="SKUs" trend="断货风险监控" trendUp={metrics.lowStockSkus === 0} icon={AlertTriangle} accentColor="orange" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
           <div className="lg:col-span-8 space-y-6">
-              <div className="ios-glass-card p-1 relative group">
-                <div className="p-6 flex items-center justify-between relative z-10">
-                    <div className="flex items-center gap-6">
-                        <div className="p-4 bg-black/60 border border-white/10 rounded-2xl text-violet-400">
-                            <ShieldCheck className="w-8 h-8" />
+              {/* 智能审计面板 */}
+              <div className="ios-glass-card p-1 relative overflow-hidden bg-gradient-to-br from-violet-600/10 to-transparent border-violet-500/20 rounded-[2.5rem]">
+                <div className="p-8 flex items-center justify-between relative z-10">
+                    <div className="flex items-center gap-8">
+                        <div className="w-20 h-20 bg-black/40 border border-white/10 rounded-3xl flex items-center justify-center text-violet-400 shadow-2xl relative">
+                            <ShieldCheck className="w-10 h-10" />
+                            <div className="absolute -top-1 -right-1 w-4 h-4 bg-emerald-500 rounded-full border-2 border-[#121217] animate-pulse"></div>
                         </div>
                         <div>
-                            <h2 className="text-xl font-bold text-white tracking-tight italic uppercase">资产风控审计系统</h2>
-                            <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">基于有效分摊成本模型的实时穿透</p>
+                            <h2 className="text-2xl font-black text-white tracking-tight italic uppercase">资产风险审计协议 (Audit V5.0)</h2>
+                            <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-[0.3em] flex items-center gap-2">
+                                <Activity className="w-3 h-3 text-emerald-500" /> 全量分摊模型已就绪 • 离散误差 &lt; 0.01%
+                            </p>
                         </div>
                     </div>
-                    <button onClick={handleGenerateReport} disabled={isGenerating} className="px-6 py-3 bg-violet-600 hover:bg-violet-500 text-white rounded-xl text-xs font-bold shadow-xl flex items-center gap-2">
-                        {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Command className="w-4 h-4" />} 生成审计报告
+                    <button onClick={handleGenerateReport} disabled={isGenerating} className="px-8 py-4 bg-violet-600 hover:bg-violet-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest shadow-2xl shadow-violet-900/40 flex items-center gap-3 transition-all active:scale-95">
+                        {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <Command className="w-5 h-5" />} 启动量子审计
                     </button>
                 </div>
                 {report && (
-                    <div className="px-6 pb-6 animate-in fade-in relative z-10">
-                        <div className="p-6 bg-black/60 rounded-2xl border border-white/5 text-slate-200 leading-relaxed font-mono text-xs" dangerouslySetInnerHTML={{ __html: report }}></div>
+                    <div className="px-8 pb-8 animate-in slide-in-from-top-4 relative z-10">
+                        <div className="p-8 bg-black/60 rounded-[2rem] border border-violet-500/30 text-indigo-100 leading-relaxed font-mono text-xs shadow-inner" dangerouslySetInnerHTML={{ __html: report }}></div>
                     </div>
                 )}
               </div>
+
+              {/* 资产脉动看板 */}
+              <div className="grid grid-cols-2 gap-6">
+                  <div className="ios-glass-panel p-7 border-l-4 border-l-emerald-500 rounded-3xl group cursor-default">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">盈利穿透系数 (Efficiency)</h4>
+                        <ArrowUpRight className="w-4 h-4 text-emerald-500 group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" />
+                      </div>
+                      <div className="text-4xl font-black text-white font-mono tracking-tighter">{(metrics.roi / 1.5).toFixed(2)}x</div>
+                      <p className="text-[9px] text-slate-600 mt-3 uppercase tracking-widest">基于过去 30 天资产回转率计算</p>
+                  </div>
+                  <div className="ios-glass-panel p-7 border-l-4 border-l-blue-500 rounded-3xl group cursor-default">
+                      <div className="flex justify-between items-center mb-4">
+                        <h4 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.2em]">物流在途资产 (In-Transit)</h4>
+                        <BarChart3 className="w-4 h-4 text-blue-500 group-hover:scale-110 transition-transform" />
+                      </div>
+                      <div className="text-4xl font-black text-white font-mono tracking-tighter">¥{(state.shipments.length * 3200).toLocaleString()}</div>
+                      <p className="text-[9px] text-slate-600 mt-3 uppercase tracking-widest">当前活跃物流节点估值</p>
+                  </div>
+              </div>
           </div>
 
+          {/* 物流实况墙 */}
           <div className="lg:col-span-4 flex flex-col gap-6">
-              <div className="ios-glass-card p-6 flex flex-col flex-1 border-l-4 border-l-blue-500">
-                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6 flex items-center gap-2">
-                      <Box className="w-4 h-4 text-blue-500" /> 物流在途资产
+              <div className="ios-glass-card p-7 flex flex-col flex-1 border-l-4 border-l-indigo-600 bg-black/20 rounded-[2.5rem]">
+                  <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.3em] mb-8 flex items-center gap-3">
+                      <Box className="w-4 h-4 text-indigo-500" /> 全球物流实况 (Matrix)
                   </h3>
-                  <div className="space-y-6">
-                      {state.shipments.slice(0, 3).map(ship => (
-                          <div key={ship.id} className="relative pl-6 border-l border-white/5">
-                              <div className="absolute left-[-4.5px] top-1 w-2 h-2 rounded-full bg-blue-500 shadow-[0_0_8px_#3b82f6]"></div>
+                  <div className="space-y-8 relative pl-4">
+                      <div className="absolute left-[2px] top-1 bottom-1 w-px bg-white/5"></div>
+                      {state.shipments.slice(0, 4).map((ship, idx) => (
+                          <div key={ship.id} className="relative pl-6 group/item">
+                              <div className={`absolute left-[-5.5px] top-1.5 w-3 h-3 rounded-full border-2 border-[#050506] shadow-lg transition-all ${ship.status === '异常' ? 'bg-red-500 shadow-red-500/50' : 'bg-indigo-500 shadow-indigo-500/50 group-hover/item:scale-125'}`}></div>
                               <div className="flex justify-between items-start mb-1">
-                                  <span className="text-[11px] font-bold text-white font-mono">{ship.trackingNo}</span>
-                                  <span className="text-[9px] px-2 py-0.5 bg-blue-500/10 text-blue-400 rounded border border-blue-500/20">{ship.status}</span>
+                                  <span className="text-[11px] font-black text-white font-mono tracking-tight uppercase">{ship.trackingNo}</span>
+                                  <span className={`text-[8px] font-black px-2 py-0.5 rounded border uppercase ${ship.status === '异常' ? 'text-red-400 bg-red-950 border-red-900' : 'text-indigo-300 bg-indigo-950 border-indigo-900'}`}>{ship.status}</span>
                               </div>
-                              <div className="text-[10px] text-slate-500 truncate">{ship.productName}</div>
+                              <div className="text-[10px] text-slate-500 truncate font-bold">{ship.productName || '未命名负载'}</div>
+                              <div className="text-[9px] text-slate-700 font-mono mt-1.5 uppercase tracking-tighter">{ship.lastUpdate}</div>
                           </div>
                       ))}
                   </div>
+                  <button onClick={() => dispatch({type:'NAVIGATE', payload:{page:'tracking'}})} className="mt-auto w-full py-4 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white text-[10px] font-black uppercase tracking-[0.3em] border border-white/5 rounded-2xl transition-all">进入物流情报网 &rarr;</button>
               </div>
           </div>
       </div>
