@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -262,7 +263,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const adSpendUSD = formData.economics?.adCost || 0;
     const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
     
-    // Fix: replaced undefined variable 'lastLeg' with 'lastLegUSD'
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
@@ -829,8 +829,9 @@ const Inventory: React.FC = () => {
             const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
             
             let activeTotalBillingWeight = 0;
+            // 核心修复：列表总重量显示优先采用计算后的计费总重
             if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
-                activeTotalBillingWeight = p.logistics.billingWeight;
+                activeTotalBillingWeight = p.logistics.billingWeight; // 优先手动覆盖的整批计费重
             } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
                 activeTotalBillingWeight = p.logistics.unitBillingWeight * p.stock;
             } else {
@@ -842,8 +843,7 @@ const Inventory: React.FC = () => {
             const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
             const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
             
-            const manualTotalFreightCNY = p.logistics?.totalFreightCost;
-            const effectiveTotalFreightCNY = manualTotalFreightCNY ?? autoTotalFreightCNY;
+            const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
             
             const effectiveUnitFreightCNY = p.stock > 0 
                 ? effectiveTotalFreightCNY / p.stock 
@@ -883,7 +883,6 @@ const Inventory: React.FC = () => {
                 profit: unitProfit,
                 totalPotentialProfit: totalPotentialProfit,
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0,
-                // 核心修复：列表总重量显示优先采用计算后的计费总重 (activeTotalBillingWeight)
                 totalWeight: activeTotalBillingWeight, 
                 boxes: p.boxCount || 0
             };
@@ -944,7 +943,7 @@ const Inventory: React.FC = () => {
             id: `CLONE-${Date.now()}`,
             sku: `${item.sku}-COPY`,
             name: `${item.name} (副本)`,
-            lingXingId: '', // 清除关联 ID 确保是新条目
+            lingXingId: '', 
             lastUpdated: new Date().toISOString()
         };
         setEditingItem(cloned);
@@ -982,8 +981,6 @@ const Inventory: React.FC = () => {
 
     const copyToClipboard = (text: string, id: string) => {
         if (!text) return;
-        
-        // 兼容性更好的复制方案
         const textArea = document.createElement("textarea");
         textArea.value = text;
         document.body.appendChild(textArea);
@@ -1120,7 +1117,6 @@ const Inventory: React.FC = () => {
                                             {item.logistics?.trackingNo || 'N/A'}
                                         </a>
                                         <div className="text-[10px] text-slate-500 font-mono">
-                                            {/* 核心显示修改：显示计费总重，因为这是用户最关心的物流成本依据 */}
                                             计费: {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
                                         </div>
                                     </div>
