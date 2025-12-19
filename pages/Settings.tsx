@@ -1,88 +1,55 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
     Settings as SettingsIcon, Database, Save, Shield, Cloud, 
-    RefreshCw, Eye, EyeOff, Globe, Trash2, Wifi, 
-    ArrowUpCircle, ArrowDownCircle, Download, Upload, Info,
-    Palette, Monitor, Layout, Sparkles, Check, Moon, Sun, MonitorDot, AlertCircle,
-    Code, Copy
+    RefreshCw, Eye, EyeOff, Trash2, Wifi, 
+    ArrowUpCircle, ArrowDownCircle, Download, Upload,
+    Palette, Monitor, Sparkles, Check, Moon, MonitorDot, AlertCircle,
+    ExternalLink, FileJson, ArrowRight, Eraser
 } from 'lucide-react';
-import { useTanxing, SESSION_ID, Theme } from '../context/TanxingContext';
-import { createClient } from '@supabase/supabase-js';
+import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, syncToCloud, pullFromCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'general' | 'theme' | 'cloud' | 'data'>('cloud');
+  const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [isForcePushing, setIsForcePushing] = useState(false);
-  const [isPulling, setIsPulling] = useState(false);
-  const [showSchema, setShowSchema] = useState(false);
+  const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [supabaseForm, setSupabaseForm] = useState({
-      url: '',
-      key: '',
-      isRealTime: true
+  const [fbForm, setFbForm] = useState({
+      apiKey: '',
+      authDomain: '',
+      projectId: '',
+      storageBucket: '',
+      messagingSenderId: '',
+      appId: ''
   });
 
   useEffect(() => {
-    if (state.supabaseConfig) {
-        setSupabaseForm({
-            url: state.supabaseConfig.url || '',
-            key: state.supabaseConfig.key || '',
-            isRealTime: state.supabaseConfig.isRealTime ?? true
+    if (state.firebaseConfig) {
+        setFbForm({
+            apiKey: state.firebaseConfig.apiKey || '',
+            authDomain: state.firebaseConfig.authDomain || '',
+            projectId: state.firebaseConfig.projectId || '',
+            storageBucket: state.firebaseConfig.storageBucket || '',
+            messagingSenderId: state.firebaseConfig.messagingSenderId || '',
+            appId: state.firebaseConfig.appId || ''
         });
     }
-  }, [state.supabaseConfig]);
+  }, [state.firebaseConfig]);
 
-  const handleNukeSystem = () => {
-      if (confirm('🆘 终极警告：这将彻底清除浏览器中的本地数据和连接配置。确定继续？')) {
-          dispatch({ type: 'RESET_DATA' });
-          showToast('系统已彻底重置', 'success');
-          setTimeout(() => window.location.reload(), 500);
-      }
-  };
-
-  const handleSupabaseSave = async () => {
-      let cleanUrl = supabaseForm.url.trim().replace(/\/$/, "");
-      if (cleanUrl && !cleanUrl.startsWith('http')) {
-          cleanUrl = `https://${cleanUrl}`;
-      }
-      const cleanKey = supabaseForm.key.trim();
-
-      if (!cleanUrl || !cleanKey) {
-          showToast('请填写完整的连接参数 (URL & Key)', 'warning');
+  const handleSaveConfig = async () => {
+      if (!fbForm.apiKey || !fbForm.projectId) {
+          showToast('请至少填写 API Key 和 Project ID', 'warning');
           return;
       }
-
       setIsSaving(true);
       try {
-          const client = createClient(cleanUrl, cleanKey);
-          // 尝试测试读写
-          const { error } = await client.from('app_backups').select('id').limit(1);
-          
-          if (error) {
-              if (error.code === '42P01') {
-                throw new Error("TABLE_NOT_FOUND");
-              }
-              if (error.message.includes("failed to fetch")) {
-                throw new Error("CORS_OR_NETWORK_ERROR");
-              }
-              throw error;
-          }
-
-          dispatch({ type: 'SET_SUPABASE_CONFIG', payload: { ...supabaseForm, url: cleanUrl, key: cleanKey } });
-          showToast('云端协议已激活', 'success');
-          await pullFromCloud();
-      } catch (e: any) {
-          if (e.message === "TABLE_NOT_FOUND") {
-              showToast('连接失败：未在数据库中检测到 app_backups 表。请执行初始化脚本。', 'error');
-              setShowSchema(true);
-          } else if (e.message === "CORS_OR_NETWORK_ERROR") {
-              showToast('连接失败：请在 Supabase 后台 API 设置中将当前域名添加至 Allow Origins。', 'error');
-          } else {
-              showToast(`鉴权失败: ${e.message || '未知协议错误'}`, 'error');
-          }
+          dispatch({ type: 'SET_FIREBASE_CONFIG', payload: fbForm });
+          showToast('Firebase 协议已激活，系统正在握手...', 'success');
+          setTimeout(() => window.location.reload(), 1000); 
+      } catch (e) {
+          showToast('配置解析失败', 'error');
       } finally {
           setIsSaving(false);
       }
@@ -93,43 +60,46 @@ const Settings: React.FC = () => {
       showToast(`视觉主题已切换`, 'info');
   };
 
-  const handleManualPull = async () => {
-      setIsPulling(true);
-      try {
-          await pullFromCloud();
-          showToast('云端镜像同步成功', 'success');
-      } catch (e: any) {
-          showToast(`同步失败: ${e.message}`, 'error');
-      } finally {
-          setIsPulling(false);
+  const handleClearLocalOnly = () => {
+      if (confirm('⚠️ 该操作仅清除浏览器本地缓存以释放空间，不影响 Firebase 云端数据。确定继续？')) {
+          localStorage.removeItem('TANXING_DB_V9_FIREBASE');
+          showToast('本地缓存已清理，请刷新页面从云端重新拉取', 'success');
+          setTimeout(() => window.location.reload(), 800);
       }
   };
 
-  const handleForcePush = async () => {
-      setIsForcePushing(true);
-      try {
-          await syncToCloud(true);
-          showToast('本地数据已强制覆盖云端', 'success');
-      } catch (e: any) {
-          showToast(`推送失败: ${e.message}`, 'error');
-      } finally {
-          setIsForcePushing(false);
-      }
-  };
+  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
 
-  const schemaSql = `-- 在 Supabase SQL Editor 中运行此脚本以初始化云端存储
-CREATE TABLE IF NOT EXISTS app_backups (
-  id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()) NOT NULL,
-  data JSONB NOT NULL
-);
+      setIsImporting(true);
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+          try {
+              const content = event.target?.result as string;
+              const importedData = JSON.parse(content);
+              
+              if (!importedData.products && !importedData.orders && !importedData.transactions) {
+                  showToast('导入失败：文件格式不符合 Tanxing 备份规范', 'error');
+                  setIsImporting(false);
+                  return;
+              }
 
--- 开启实时推送支持
-ALTER PUBLICATION supabase_realtime ADD TABLE app_backups;`;
+              dispatch({ type: 'HYDRATE_STATE', payload: importedData });
+              showToast('本地数据恢复成功，正在同步云端...', 'success');
 
-  const copySchema = () => {
-    navigator.clipboard.writeText(schemaSql);
-    showToast('SQL 脚本已复制', 'success');
+              if (state.connectionStatus === 'connected') {
+                  await syncToCloud(true);
+                  showToast('云端镜像已完成同步', 'success');
+              }
+          } catch (err) {
+              showToast('解析 JSON 失败，请确保文件未损坏', 'error');
+          } finally {
+              setIsImporting(false);
+              if (fileInputRef.current) fileInputRef.current.value = '';
+          }
+      };
+      reader.readAsText(file);
   };
 
   return (
@@ -139,143 +109,184 @@ ALTER PUBLICATION supabase_realtime ADD TABLE app_backups;`;
           <h2 className="text-2xl font-bold text-white flex items-center gap-3 italic">
               <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与同步协议
           </h2>
-          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Control Matrix Interface v8.6</p>
+          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Control Matrix Interface v9.2</p>
         </div>
-        <div className="flex gap-3">
-            <button onClick={handleNukeSystem} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统注销</button>
-        </div>
+        <button onClick={() => confirm('确定重置系统？这会清空所有数据！') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
       </div>
 
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
           {[
             { id: 'theme', label: '外观主题', icon: Palette },
-            { id: 'cloud', label: '云端同步', icon: Cloud },
-            { id: 'data', label: '离线归档', icon: Database }
+            { id: 'cloud', label: 'Firebase 云端', icon: Cloud },
+            { id: 'data', label: '本地管理', icon: Database }
           ].map(tab => (
               <button 
                 key={tab.id} 
                 onClick={() => setActiveTab(tab.id as any)} 
-                className={`px-6 py-2.5 text-[10px] font-bold rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/40' : 'text-slate-500 hover:text-white'}`}
+                className={`px-6 py-2.5 text-[10px] font-bold rounded-xl transition-all flex items-center gap-2 uppercase tracking-widest ${activeTab === tab.id ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}
               >
                   <tab.icon className="w-4 h-4" /> {tab.label}
               </button>
           ))}
       </div>
 
+      {activeTab === 'cloud' && (
+          <div className="ios-glass-panel p-10 space-y-10 animate-in fade-in duration-500">
+              <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-3xl p-8 flex items-center justify-between">
+                  <div className="flex items-center gap-6">
+                      <div className={`p-4 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : 'bg-slate-800 text-slate-500'}`}>
+                        <Wifi className="w-8 h-8" />
+                      </div>
+                      <div>
+                          <h4 className="text-white font-bold uppercase tracking-tighter">Firebase 实时矩阵状态</h4>
+                          <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">当前节点: <span className={state.connectionStatus === 'connected' ? 'text-emerald-400 font-black' : 'text-amber-500'}>{state.connectionStatus.toUpperCase()}</span></p>
+                          <p className="text-[10px] text-slate-600 font-mono mt-1">SESSION: {SESSION_ID}</p>
+                      </div>
+                  </div>
+                  <div className="flex gap-3">
+                      <button onClick={pullFromCloud} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-white/10 uppercase transition-all"><ArrowDownCircle className="w-4 h-4"/> 拉取快照</button>
+                      <button onClick={() => syncToCloud(true)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center gap-2 shadow-lg uppercase active:scale-95 transition-all"><ArrowUpCircle className="w-4 h-4"/> 强行同步</button>
+                  </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+                  <div className="space-y-4">
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                              <label className="text-[10px] text-slate-500 font-bold uppercase">Project ID</label>
+                              <input type="text" value={fbForm.projectId} onChange={e=>setFbForm({...fbForm, projectId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="my-erp-project" />
+                          </div>
+                          <div className="space-y-2">
+                              <label className="text-[10px] text-slate-500 font-bold uppercase">API Key</label>
+                              <div className="relative">
+                                  <input type={showKey ? "text" : "password"} value={fbForm.apiKey} onChange={e=>setFbForm({...fbForm, apiKey: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" />
+                                  <button onClick={()=>setShowKey(!showKey)} className="absolute right-3 top-3 text-slate-600">{showKey ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}</button>
+                              </div>
+                          </div>
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Auth Domain</label>
+                          <input type="text" value={fbForm.authDomain} onChange={e=>setFbForm({...fbForm, authDomain: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="xxx.firebaseapp.com" />
+                      </div>
+                      <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                              <label className="text-[10px] text-slate-500 font-bold uppercase">App ID</label>
+                              <input type="text" value={fbForm.appId} onChange={e=>setFbForm({...fbForm, appId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" />
+                          </div>
+                          <div className="space-y-2">
+                              <label className="text-[10px] text-slate-500 font-bold uppercase">Msg Sender ID</label>
+                              <input type="text" value={fbForm.messagingSenderId} onChange={e=>setFbForm({...fbForm, messagingSenderId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" />
+                          </div>
+                      </div>
+                      <button onClick={handleSaveConfig} className="w-full py-5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
+                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />} 启动 Firebase 神经连接
+                      </button>
+                  </div>
+
+                  <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
+                      <div className="flex items-center gap-3">
+                          <AlertCircle className="w-5 h-5 text-emerald-400" />
+                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">快速配置指南</h5>
+                      </div>
+                      <div className="space-y-4">
+                          <p className="text-[11px] text-slate-500 leading-relaxed font-mono">
+                              1. 在 <a href="https://console.firebase.google.com" target="_blank" className="text-indigo-400 underline">Firebase 控制台</a> 创建项目。<br/>
+                              2. 开启 <b>Firestore Database</b>。<br/>
+                              3. 在 Project Settings 中注册 Web App 获取密钥。<br/>
+                              4. 设置数据库 Rules 允许公开读写（仅限测试环境）。
+                          </p>
+                          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
+                              <p className="text-[10px] text-indigo-300 font-bold uppercase">提示：如果您从旧版 Supabase 迁移，请先将数据导出为 JSON，然后使用旁边的“本地管理”导入。</p>
+                          </div>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
       {activeTab === 'theme' && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in">
               {[
                 { id: 'ios-glass', name: 'Obsidian Vision', desc: '经典深色磨砂玻璃', preview: 'bg-slate-900', icon: Moon },
                 { id: 'midnight-dark', name: 'Midnight OLED', desc: '极致纯黑 OLED 模式', preview: 'bg-black', icon: MonitorDot },
                 { id: 'cyber-neon', name: 'Cyber Neon', desc: '赛博霓虹，未来黑客', preview: 'bg-blue-950', icon: Sparkles }
               ].map(t => (
-                  <div key={t.id} onClick={() => handleThemeChange(t.id as Theme)} className={`ios-glass-card cursor-pointer group transition-all relative overflow-hidden flex flex-col border ${state.theme === t.id ? 'border-indigo-500 ring-2 ring-indigo-500' : 'border-white/10 hover:border-white/30'}`}>
-                      <div className={`h-24 ${t.preview} p-4 flex flex-col gap-2 relative transition-transform group-hover:scale-105`}>
-                          <div className="w-1/2 h-1.5 bg-white/10 rounded"></div>
-                          <div className="w-1/3 h-1.5 bg-white/5 rounded"></div>
-                          <t.icon className="absolute bottom-3 right-3 w-6 h-6 opacity-40 group-hover:opacity-100 transition-opacity text-indigo-400" />
+                  <div key={t.id} onClick={() => handleThemeChange(t.id as Theme)} className={`ios-glass-card cursor-pointer border ${state.theme === t.id ? 'border-indigo-500 ring-2 ring-indigo-500' : 'border-white/10 hover:border-white/30'}`}>
+                      <div className={`h-24 ${t.preview} p-4 relative`}>
+                          <t.icon className="absolute bottom-3 right-3 w-6 h-6 text-indigo-400 opacity-40" />
                       </div>
-                      <div className="p-4 bg-black/40 border-t border-white/5">
-                          <div className="flex justify-between items-center mb-1">
-                              <h4 className="font-bold text-white text-xs">{t.name}</h4>
-                              {state.theme === t.id && <Check className="w-3.5 h-3.5 text-emerald-400" />}
-                          </div>
-                          <p className="text-[9px] text-slate-500 leading-relaxed uppercase tracking-tight">{t.desc}</p>
+                      <div className="p-4 bg-black/40">
+                          <h4 className="font-bold text-white text-xs">{t.name}</h4>
+                          <p className="text-[9px] text-slate-500 uppercase">{t.desc}</p>
                       </div>
                   </div>
               ))}
           </div>
       )}
 
-      {activeTab === 'cloud' && (
-          <div className="ios-glass-panel p-10 space-y-10 animate-in fade-in duration-500">
-              <div className="flex flex-col gap-6 p-7 bg-indigo-900/10 border border-indigo-500/20 rounded-2xl">
-                  <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-5">
-                        <div className={`p-4 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.15)]' : 'bg-slate-800 text-slate-500'}`}>
-                            <Wifi className="w-8 h-8" />
+      {activeTab === 'data' && (
+          <div className="ios-glass-panel p-10 animate-in fade-in duration-500 space-y-10">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                  {/* Export Block */}
+                  <div className="space-y-6 p-6 bg-white/5 rounded-3xl border border-white/5">
+                      <div className="flex items-center gap-4 text-white">
+                        <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400 border border-blue-500/20">
+                            <Download className="w-6 h-6" />
                         </div>
                         <div>
-                            <h4 className="text-white font-bold flex items-center gap-2 uppercase tracking-tighter">核心连接状态 (Realtime)</h4>
-                            <p className="text-[10px] text-slate-500 mt-1 uppercase tracking-tight font-mono">矩阵状态: <span className={state.connectionStatus === 'connected' ? 'text-emerald-400 font-black' : 'text-amber-500'}>{state.connectionStatus.toUpperCase()}</span></p>
-                            <p className="text-[10px] text-slate-600 font-mono mt-1 uppercase">Terminal ID: {SESSION_ID}</p>
+                            <h4 className="font-bold italic uppercase tracking-tighter">导出数据 (Export JSON)</h4>
+                            <p className="text-[10px] text-slate-500 uppercase font-mono">Create an offline backup</p>
                         </div>
                       </div>
-                      <div className="flex gap-3">
-                          <button onClick={handleManualPull} disabled={isPulling} className="px-5 py-2.5 bg-white/5 hover:bg-white/10 text-slate-300 rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 border border-white/10">
-                              {isPulling ? <RefreshCw className="w-3 h-3 animate-spin"/> : <ArrowDownCircle className="w-4 h-4"/>} 拉取云端镜像
-                          </button>
-                          <button onClick={handleForcePush} disabled={isForcePushing} className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-[10px] font-bold uppercase flex items-center gap-2 shadow-lg shadow-indigo-900/40">
-                              {isForcePushing ? <RefreshCw className="w-3 h-3 animate-spin"/> : <ArrowUpCircle className="w-4 h-4"/>} 强制覆盖云端
-                          </button>
-                      </div>
-                  </div>
-              </div>
-
-              {showSchema && (
-                  <div className="bg-amber-500/5 border border-amber-500/30 rounded-2xl p-6 space-y-4 animate-in slide-in-from-top-4">
-                      <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-bold text-amber-500 flex items-center gap-2 uppercase"><Code className="w-4 h-4"/> 数据库表结构初始化脚本</h4>
-                          <button onClick={copySchema} className="flex items-center gap-1.5 text-[10px] font-bold text-amber-400 bg-amber-500/10 px-3 py-1.5 rounded-lg hover:bg-amber-500/20 transition-all"><Copy className="w-3 h-3"/> 复制 SQL</button>
-                      </div>
-                      <pre className="bg-black/60 rounded-xl p-4 text-[10px] text-amber-200/70 font-mono overflow-x-auto border border-amber-500/10 leading-relaxed">
-                          {schemaSql}
-                      </pre>
-                      <p className="text-[10px] text-amber-500/60 italic font-medium">请将上述代码粘贴至 Supabase 仪表盘的 SQL Editor 中执行，随后重新保存配置。</p>
-                  </div>
-              )}
-
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                  <div className="space-y-6">
-                      <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Supabase URL (Uplink)</label>
-                          <input type="text" value={supabaseForm.url} onChange={e => setSupabaseForm({...supabaseForm, url: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="https://xxx.supabase.co" />
-                      </div>
-                      <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Access Secret Key</label>
-                          <div className="relative">
-                              <input type={showKey ? "text" : "password"} value={supabaseForm.key} onChange={e => setSupabaseForm({...supabaseForm, key: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" />
-                              <button onClick={() => setShowKey(!showKey)} className="absolute right-4 top-4 text-slate-600">{showKey ? <EyeOff className="w-5 h-5"/> : <Eye className="w-5 h-5"/>}</button>
-                          </div>
-                      </div>
-                      <button onClick={handleSupabaseSave} disabled={isSaving} className="w-full py-5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.2em] shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
-                          {isSaving ? <RefreshCw className="w-6 h-6 animate-spin" /> : <Shield className="w-6 h-6" />} 建立加密上行链路
+                      <p className="text-xs text-slate-500 font-mono leading-relaxed">
+                          将当前系统的全量数据打包。建议定期冷备份。
+                      </p>
+                      <button onClick={() => {
+                          const dataStr = JSON.stringify(state);
+                          const blob = new Blob([dataStr], {type: "application/json"});
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement('a'); a.href = url; a.download = `tanxing_v9_${new Date().toISOString().slice(0,10)}.json`; a.click();
+                      }} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 shadow-lg active:scale-95 transition-all">
+                          <Download className="w-4 h-4"/> 生成导出
                       </button>
                   </div>
-                  <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
-                      <div className="flex items-center gap-3">
-                          <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-400"><AlertCircle className="w-5 h-5"/></div>
-                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">常见连接故障诊断</h5>
+
+                  {/* Import Block */}
+                  <div className="space-y-6 p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
+                      <div className="flex items-center gap-4 text-white">
+                        <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20">
+                            <Upload className="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h4 className="font-bold italic uppercase tracking-tighter">恢复数据 (Import JSON)</h4>
+                            <p className="text-[10px] text-slate-500 uppercase font-mono">Restore from backup</p>
+                        </div>
                       </div>
-                      <div className="space-y-5">
-                          <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
-                              <span className="text-indigo-500 font-black">01</span>
-                              <span><b>CORS Blocked</b>：请在 Supabase 的 <b>Settings &rarr; API &rarr; Allow Origins</b> 中添加当前域名。</span>
-                          </p>
-                          <p className="text-[11px] text-slate-500 leading-relaxed font-mono flex gap-3">
-                              <span className="text-indigo-500 font-black">02</span>
-                              <span><b>Schema Missing</b>：如果点击“建立链路”无反应，通常是数据库中缺少表，请点击页面上方的“SQL 脚本”进行初始化。</span>
-                          </p>
-                      </div>
+                      <p className="text-xs text-slate-500 font-mono leading-relaxed">
+                          从本地文件恢复数据。<b>警告：</b>将覆盖本地所有内容。
+                      </p>
+                      <input type="file" ref={fileInputRef} onChange={handleImportJson} accept=".json" className="hidden" />
+                      <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="px-8 py-3 bg-white text-black hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 shadow-lg transition-all disabled:opacity-50">
+                          {isImporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileJson className="w-4 h-4"/>}
+                          导入备份文件
+                      </button>
                   </div>
               </div>
-          </div>
-      )}
 
-      {activeTab === 'data' && (
-          <div className="ios-glass-panel p-10 grid grid-cols-1 md:grid-cols-2 gap-10 animate-in fade-in duration-500">
-              <div className="space-y-6">
-                  <div className="flex items-center gap-3">
-                    <Download className="w-6 h-6 text-blue-400" />
-                    <h4 className="text-white font-bold italic">导出 JSON 归档</h4>
+              {/* NEW: Cache Fixer Block */}
+              <div className="p-8 bg-rose-500/5 border border-rose-500/20 rounded-3xl flex items-center justify-between">
+                  <div className="flex items-start gap-4">
+                      <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500"><Eraser className="w-6 h-6" /></div>
+                      <div>
+                          <h4 className="text-sm font-bold text-white uppercase italic">清理本地溢出缓存 (Reset Local Cache)</h4>
+                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">
+                              如果遇到 "Setting value of TANXING_DB... exceeded the quota" 报错，说明浏览器空间已满。该操作将安全清理本地冗余数据，系统会在刷新后自动从 Firebase 同步最新数据。
+                          </p>
+                      </div>
                   </div>
-                  <p className="text-xs text-slate-500 font-mono leading-relaxed">生成当前系统完整快照。用于手动冷备份或在不同账号间快速迁移全量业务数据。</p>
-                  <button onClick={() => {
-                      const dataStr = JSON.stringify(state);
-                      const blob = new Blob([dataStr], {type: "application/json"});
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a'); a.href = url; a.download = `tanxing_snapshot_${new Date().toISOString().slice(0,10)}.json`; a.click();
-                  }} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black shadow-lg transition-all active:scale-95 flex items-center gap-2 font-mono uppercase tracking-widest"><Download className="w-4 h-4"/> 立即生成导出</button>
+                  <button onClick={handleClearLocalOnly} className="px-8 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-900/20 transition-all flex items-center gap-2">
+                      <Eraser className="w-4 h-4"/> 释放本地空间
+                  </button>
               </div>
           </div>
       )}
