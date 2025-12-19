@@ -17,17 +17,16 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handleCloudSync = async () => {
-      // 核心修复：检查 firebaseConfig 而非旧版的 supabaseConfig
       if (!state.firebaseConfig?.apiKey || !state.firebaseConfig?.projectId) {
-          showToast('请在系统设置中配置 Firebase 云端连接', 'warning');
+          showToast('请先在系统设置中配置 Firebase', 'warning');
           return;
       }
       setIsSyncing(true);
       try {
-          await syncToCloud(true); // 强制同步
-          showToast('数据已即时广播至 Firebase 矩阵', 'success');
+          await syncToCloud(true);
+          showToast('已强制同步至云端', 'success');
       } catch (e) {
-          showToast('手动同步失败', 'error');
+          showToast('同步失败', 'error');
       } finally {
           setIsSyncing(false);
       }
@@ -59,45 +58,55 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     }).format(now);
   };
 
-  const getConnectionPill = () => {
+  const getStatusUI = () => {
       switch(state.connectionStatus) {
           case 'connected':
-              return (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full shadow-[0_0_15px_rgba(16,185,129,0.1)]">
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter flex items-center gap-1.5">
-                        <Wifi className="w-3 h-3" /> Realtime Active
-                    </span>
-                </div>
-              );
+              return {
+                  pill: (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                        <span className="relative flex h-2 w-2">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                        </span>
+                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">Realtime Active</span>
+                    </div>
+                  ),
+                  iconClass: "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+              };
           case 'connecting':
-              return (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-500/10 border border-indigo-500/20 rounded-full">
-                    <Loader2 className="w-3 h-3 text-indigo-400 animate-spin" />
-                    <span className="text-[10px] font-bold text-indigo-400 uppercase tracking-tighter">Linking Firebase...</span>
-                </div>
-              );
+              return {
+                  pill: (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full">
+                        <Loader2 className="w-3 h-3 text-amber-400 animate-spin" />
+                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-tighter">Linking...</span>
+                    </div>
+                  ),
+                  iconClass: "text-amber-400 animate-pulse"
+              };
           case 'error':
-              return (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full animate-pulse">
-                    <AlertCircle className="w-3 h-3 text-red-400" />
-                    <span className="text-[10px] font-bold text-red-400 uppercase tracking-tighter">Link Failed</span>
-                </div>
-              );
+              return {
+                  pill: (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
+                        <AlertCircle className="w-3 h-3 text-red-400" />
+                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-tighter">Link Error</span>
+                    </div>
+                  ),
+                  iconClass: "text-red-500 animate-bounce"
+              };
           default:
-              return (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
-                    <WifiOff className="w-3 h-3 text-slate-500" />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Offline Mode</span>
-                </div>
-              );
+              return {
+                  pill: (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
+                        <WifiOff className="w-3 h-3 text-slate-500" />
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Offline Mode</span>
+                    </div>
+                  ),
+                  iconClass: "text-slate-600"
+              };
       }
   };
 
-  const isCloudConnected = !!(state.firebaseConfig?.apiKey && state.firebaseConfig?.projectId);
+  const statusUI = getStatusUI();
 
   return (
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
@@ -143,15 +152,15 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         </div>
 
         <div className="hidden md:block">
-            {getConnectionPill()}
+            {statusUI.pill}
         </div>
 
         <div className="flex items-center space-x-4">
             <button 
                 onClick={handleCloudSync}
                 disabled={isSyncing}
-                className={`relative p-2 rounded-full transition-all ${isCloudConnected ? 'text-indigo-400 hover:bg-indigo-500/10' : 'text-slate-600 hover:text-slate-400'}`}
-                title={isCloudConnected ? `Firebase 同步 (上次: ${state.firebaseConfig?.lastSync || '待同步'})` : "云端未配置"}
+                className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${statusUI.iconClass}`}
+                title={state.connectionStatus === 'connected' ? `Firebase 已连接 (上次同步: ${state.firebaseConfig?.lastSync || '未知'})` : "云端连接未就绪"}
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
@@ -162,7 +171,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </button>
             
             <div className="relative">
-                <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent">
+                <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all">
                     <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">AD</div>
                     <div className="text-left hidden md:block">
                         <div className="text-xs font-bold text-white leading-none mb-0.5">管理员</div>

@@ -184,17 +184,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         boot();
     }, []);
 
-    // 建立实时监听
+    // 建立实时监听 (当 Config 改变时自动重启)
     useEffect(() => {
-        if (!isHydrated || !state.firebaseConfig?.apiKey) return;
+        if (!isHydrated || !state.firebaseConfig?.apiKey || !state.firebaseConfig?.projectId) return;
+        
+        let unsubscribe: (() => void) | null = null;
+
         try {
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
+            
             const app = !getApps().length ? initializeApp(state.firebaseConfig) : getApp();
             const db = getFirestore(app);
             const docRef = doc(db, 'backups', 'quantum_state');
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
             
-            const unsubscribe = onSnapshot(docRef, (snapshot) => {
-                // 只要监听到，不论文档是否存在，都表示连接协议已建立
+            unsubscribe = onSnapshot(docRef, (snapshot) => {
+                // 成功握手
                 dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
                 
                 if (snapshot.exists()) {
@@ -209,14 +213,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     }
                 }
             }, (error) => {
-                console.error("[Firebase] Connection error:", error);
+                console.error("[Firebase] Realtime listener error:", error);
                 dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             });
-            return () => unsubscribe();
         } catch (e) {
+            console.error("[Firebase] App initialization error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
         }
-    }, [state.firebaseConfig?.apiKey, isHydrated]);
+
+        return () => {
+            if (unsubscribe) unsubscribe();
+        };
+    }, [state.firebaseConfig.apiKey, state.firebaseConfig.projectId, isHydrated]);
 
     // 自动本地持久化
     useEffect(() => {
@@ -249,7 +257,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const timer = setTimeout(() => syncToCloud(), 5000); 
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.orders, state.transactions, state.shipments, state.theme, isHydrated, state.connectionStatus]);
+    }, [state.products, state.orders, state.transactions, state.shipments, state.theme, isHydrated, state.connectionStatus, state.firebaseConfig]);
 
     const syncToCloud = async (isForce: boolean = false) => {
         if (!isHydrated || !state.firebaseConfig?.apiKey || (!isForce && state.isDemoMode)) return;
@@ -265,8 +273,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!isForce && fingerprint === lastSyncFingerprintRef.current) return;
 
         try {
-            const app = getApp();
-            const db = getFirestore(app);
+            const db = getFirestore(getApp());
             await setDoc(doc(db, 'backups', 'quantum_state'), {
                 source_session: SESSION_ID,
                 payload: payload,
@@ -275,10 +282,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-            if (isForce) showToast('云端镜像同步成功', 'success');
+            if (isForce) showToast('云端数据节点已同步', 'success');
         } catch (e: any) {
             console.error("[Firebase] Sync error:", e);
-            if (isForce) showToast(`云端同步失败: ${e.message}`, 'error');
+            if (isForce) showToast(`同步失败: ${e.message}`, 'error');
             throw e;
         }
     };
@@ -291,12 +298,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (snapshot.exists()) {
                 const cloudData = snapshot.data().payload;
                 dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
-                showToast('已载入最新云端镜像', 'success');
+                showToast('已从云端恢复数据镜像', 'success');
             } else {
-                showToast('云端暂无镜像，请先同步一次', 'warning');
+                showToast('云端尚无备份文件', 'warning');
             }
         } catch (e: any) {
-            showToast('拉取镜像失败', 'error');
+            showToast('数据拉取失败', 'error');
         }
     };
 
