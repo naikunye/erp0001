@@ -2,7 +2,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef, useSta
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
 import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableNetwork, terminate } from 'firebase/firestore';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
-import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_CUSTOMERS as MOCK_CUSTOMERS_LIST, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
+import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
 const DB_KEY = 'TANXING_DB_V9_FIREBASE'; 
 const CONFIG_KEY = 'TANXING_FIREBASE_CONFIG'; 
@@ -81,8 +81,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
         case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
         case 'HYDRATE_STATE': 
-            // 修复点：不再强制覆盖 connectionStatus，允许外部传入或保持当前状态
-            return { ...state, ...action.payload, isInitialized: true, isDemoMode: false };
+            // 核心修复：注入数据时，必须保护当前的 connectionStatus 不被缓存数据覆盖
+            const { connectionStatus, ...incomingData } = action.payload;
+            return { ...state, ...incomingData, isInitialized: true, isDemoMode: false };
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true, connectionStatus: 'disconnected' };
         case 'SET_FIREBASE_CONFIG': return { ...state, firebaseConfig: { ...state.firebaseConfig, ...action.payload } };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
@@ -97,7 +98,8 @@ const TanxingContext = createContext<{
     showToast: (message: string, type: Toast['type']) => void;
     syncToCloud: (isForce?: boolean) => Promise<void>;
     pullFromCloud: () => Promise<void>;
-}>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => {}, pullFromCloud: async () => {} });
+    bootFirebase: (config: FirebaseConfig) => Promise<void>;
+}>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => {}, pullFromCloud: async () => {}, bootFirebase: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
@@ -109,50 +111,59 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const bootFirebase = async (config: FirebaseConfig) => {
         if (!config.apiKey || !config.projectId) return;
         
+        // 1. 立即设置状态为连接中
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         
         try {
-            // 1. 清理
+            // 2. 清理所有现有的 Firebase 实例，防止多实例冲突
             const apps = getApps();
             for (const app of apps) {
-                try { const db = getFirestore(app); await terminate(db); } catch(e) {}
+                try {
+                    const db = getFirestore(app);
+                    await terminate(db);
+                } catch(e) {}
                 await deleteApp(app).catch(() => {});
             }
 
-            // 2. 初始化
+            // 3. 初始化新连接
             const app = initializeApp(config);
             const db = getFirestore(app);
             await enableNetwork(db);
             const docRef = doc(db, 'backups', 'quantum_state');
 
-            // 3. 物理写测试：如果 Rules 配置不正确，这里会直接崩掉进入 catch
+            // 4. 物理握手：执行一次真实的写入测试
+            // 如果 API Key 错误或 Rules 配置不正确，这里会直接抛出错误进入 catch
             await setDoc(docRef, { 
-                handshake: { ts: new Date().toISOString(), session: SESSION_ID, status: 'online' }
+                handshake: {
+                    ts: new Date().toISOString(),
+                    session: SESSION_ID,
+                    status: 'active_check'
+                }
             }, { merge: true });
 
-            // 4. 读取云端镜像
+            // 5. 尝试拉取一次云端镜像
             const snapshot = await getDoc(docRef);
             
-            // 5. 注入数据 (注意：这步之后我们要明确点亮绿灯)
             if (snapshot.exists() && snapshot.data().payload) {
                 const cloudData = snapshot.data().payload;
                 lastSyncFingerprintRef.current = JSON.stringify(cloudData);
-                // 注入数据，但不改变连接状态
                 dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
             }
 
-            // 6. 最终确认：点亮绿灯
+            // 6. 全部成功后，再亮绿灯
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-            dispatch({ type: 'ADD_TOAST', payload: { message: 'Firebase 连接成功，数据已完成同步', type: 'success' } });
+            dispatch({ type: 'ADD_TOAST', payload: { message: '云端同步链路已激活', type: 'success' } });
 
         } catch (e: any) {
             console.error("[Firebase Link Error]", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-            let errMsg = `连接失败: ${e.code === 'permission-denied' ? 'Firebase Rules 权限被拒绝，请检查配置' : e.message}`;
-            dispatch({ type: 'ADD_TOAST', payload: { message: errMsg, type: 'error' } });
+            let msg = `连接失败: ${e.message}`;
+            if (e.code === 'permission-denied') msg = '权限拒绝：请检查 Firestore Rules 是否允许读写。';
+            dispatch({ type: 'ADD_TOAST', payload: { message: msg, type: 'error' } });
         }
     };
 
+    // 初始化加载
     useEffect(() => {
         const init = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
@@ -161,11 +172,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 dispatch({ type: 'SET_FIREBASE_CONFIG', payload: config });
-                // 刷新后首先启动连接逻辑
+                // 刷新页面后，强制重新启动连接流程
                 await bootFirebase(config);
             } else if (savedDb) {
-                // 如果没有配置，加载本地缓存，但强制设为 disconnected
-                dispatch({ type: 'HYDRATE_STATE', payload: { ...JSON.parse(savedDb), connectionStatus: 'disconnected' } });
+                const data = JSON.parse(savedDb);
+                // 强制重置状态为 disconnected
+                dispatch({ type: 'HYDRATE_STATE', payload: { ...data, connectionStatus: 'disconnected' } });
             } else {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
@@ -174,12 +186,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         init();
     }, []);
 
-    // 监听逻辑
+    // 实时监听
     useEffect(() => {
         if (!isHydrated || state.connectionStatus !== 'connected') return;
-        const db = getFirestore(getApp());
-        const docRef = doc(db, 'backups', 'quantum_state');
+        
+        let db;
+        try {
+            db = getFirestore(getApp());
+        } catch(e) { return; }
 
+        const docRef = doc(db, 'backups', 'quantum_state');
         const unsubscribe = onSnapshot(docRef, (snapshot) => {
             if (snapshot.exists()) {
                 const incoming = snapshot.data();
@@ -193,16 +209,23 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             }
         });
+
         return () => unsubscribe();
     }, [state.connectionStatus, isHydrated]);
 
-    // 自动持久化
+    // 自动保存逻辑
     useEffect(() => {
         if (!isHydrated) return;
+        
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.firebaseConfig));
         
-        // 关键点：存入 LocalStorage 时，状态始终标记为 disconnected，防止下次刷新时产生“假在线”
-        const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
+        // 关键点：存入本地缓存时，强制标记 connectionStatus 为 disconnected
+        const slimState = { 
+            ...state, 
+            toasts: [], 
+            exportTasks: [], 
+            connectionStatus: 'disconnected' as ConnectionStatus 
+        };
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
 
         document.body.className = `theme-${state.theme}`;
@@ -216,12 +239,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (isForce: boolean = false) => {
         if (state.connectionStatus !== 'connected' && !isForce) return;
+        
         const payload = {
             products: state.products, orders: state.orders, tasks: state.tasks,
             customers: state.customers, shipments: state.shipments, suppliers: state.suppliers,
             transactions: state.transactions, adCampaigns: state.adCampaigns, influencers: state.influencers,
             inboundShipments: state.inboundShipments, auditLogs: state.auditLogs
         };
+
         const fingerprint = JSON.stringify(payload);
         if (!isForce && fingerprint === lastSyncFingerprintRef.current) return;
 
@@ -232,9 +257,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 payload: payload,
                 timestamp: new Date().toISOString()
             }, { merge: true });
+            
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-            if (isForce) dispatch({ type: 'ADD_TOAST', payload: { message: '云端镜像已同步', type: 'success' } });
+            if (isForce) dispatch({ type: 'ADD_TOAST', payload: { message: '云端备份同步成功', type: 'success' } });
         } catch (e: any) {
             console.error("[Sync Error]", e);
         }
@@ -242,7 +268,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const pullFromCloud = async () => {
         if (state.connectionStatus !== 'connected') {
-            dispatch({ type: 'ADD_TOAST', payload: { message: '请先启动连接', type: 'warning' } });
+            dispatch({ type: 'ADD_TOAST', payload: { message: '请先连接云端', type: 'warning' } });
             return;
         }
         try {
@@ -259,7 +285,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
 
     return (
-        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud }}>
+        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootFirebase }}>
             {children}
         </TanxingContext.Provider>
     );

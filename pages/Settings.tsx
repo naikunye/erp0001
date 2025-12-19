@@ -4,12 +4,12 @@ import {
     RefreshCw, Eye, EyeOff, Trash2, Wifi, 
     ArrowUpCircle, ArrowDownCircle, Download, Upload,
     Palette, Monitor, Sparkles, Check, Moon, MonitorDot, AlertCircle,
-    ExternalLink, FileJson, ArrowRight, Eraser
+    ExternalLink, FileJson, ArrowRight, Eraser, LogOut
 } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootFirebase } = useTanxing();
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -45,14 +45,24 @@ const Settings: React.FC = () => {
       }
       setIsSaving(true);
       try {
+          // 1. 保存配置到 Context
           dispatch({ type: 'SET_FIREBASE_CONFIG', payload: fbForm });
-          showToast('Firebase 协议已激活，系统正在握手...', 'success');
-          // 给一点时间让状态更新
-          setTimeout(() => window.location.reload(), 1000); 
+          // 2. 触发真正的物理握手连接
+          await bootFirebase(fbForm as any);
       } catch (e) {
-          showToast('配置解析失败', 'error');
+          showToast('配置应用失败', 'error');
       } finally {
           setIsSaving(false);
+      }
+  };
+
+  const handleClearConfig = () => {
+      if (confirm('确定要清除 Firebase 配置并断开云端连接吗？')) {
+          localStorage.removeItem('TANXING_FIREBASE_CONFIG');
+          dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { apiKey: '', projectId: '', authDomain: '', appId: '', lastSync: null } });
+          dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
+          showToast('配置已清除，已恢复离线模式', 'info');
+          setTimeout(() => window.location.reload(), 500);
       }
   };
 
@@ -87,14 +97,14 @@ const Settings: React.FC = () => {
               }
 
               dispatch({ type: 'HYDRATE_STATE', payload: importedData });
-              showToast('本地数据恢复成功，正在同步云端...', 'success');
+              showToast('本地数据恢复成功', 'success');
 
               if (state.connectionStatus === 'connected') {
                   await syncToCloud(true);
-                  showToast('云端镜像已完成同步', 'success');
+                  showToast('云端镜像同步完成', 'success');
               }
           } catch (err) {
-              showToast('解析 JSON 失败，请确保文件未损坏', 'error');
+              showToast('解析 JSON 失败', 'error');
           } finally {
               setIsImporting(false);
               if (fileInputRef.current) fileInputRef.current.value = '';
@@ -103,7 +113,6 @@ const Settings: React.FC = () => {
       reader.readAsText(file);
   };
 
-  // 生成直达 Rules 页面的链接
   const rulesUrl = fbForm.projectId 
     ? `https://console.firebase.google.com/project/${fbForm.projectId}/firestore/rules`
     : 'https://console.firebase.google.com/';
@@ -117,7 +126,7 @@ const Settings: React.FC = () => {
           </h2>
           <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Control Matrix Interface v9.2</p>
         </div>
-        <button onClick={() => confirm('确定重置系统？这会清空所有数据！') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
+        <button onClick={() => confirm('确定重置全系统数据？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
       </div>
 
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
@@ -140,18 +149,18 @@ const Settings: React.FC = () => {
           <div className="ios-glass-panel p-10 space-y-10 animate-in fade-in duration-500">
               <div className="bg-indigo-900/10 border border-indigo-500/20 rounded-3xl p-8 flex items-center justify-between">
                   <div className="flex items-center gap-6">
-                      <div className={`p-4 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : 'bg-slate-800 text-slate-500'}`}>
+                      <div className={`p-4 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-[0_0_20px_rgba(16,185,129,0.2)]' : state.connectionStatus === 'error' ? 'bg-red-500/10 text-red-500' : 'bg-slate-800 text-slate-500'}`}>
                         <Wifi className="w-8 h-8" />
                       </div>
                       <div>
                           <h4 className="text-white font-bold uppercase tracking-tighter">Firebase 实时矩阵状态</h4>
-                          <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">当前节点: <span className={state.connectionStatus === 'connected' ? 'text-emerald-400 font-black' : 'text-amber-500'}>{state.connectionStatus.toUpperCase()}</span></p>
+                          <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">当前节点: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : state.connectionStatus === 'error' ? 'text-red-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span></p>
                           <p className="text-[10px] text-slate-600 font-mono mt-1">SESSION: {SESSION_ID}</p>
                       </div>
                   </div>
                   <div className="flex gap-3">
-                      <button onClick={pullFromCloud} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-white/10 uppercase transition-all"><ArrowDownCircle className="w-4 h-4"/> 拉取快照</button>
-                      <button onClick={() => syncToCloud(true)} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center gap-2 shadow-lg uppercase active:scale-95 transition-all"><ArrowUpCircle className="w-4 h-4"/> 强行同步</button>
+                      <button onClick={pullFromCloud} disabled={state.connectionStatus !== 'connected'} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-white/10 uppercase transition-all disabled:opacity-20"><ArrowDownCircle className="w-4 h-4"/> 拉取快照</button>
+                      <button onClick={() => syncToCloud(true)} disabled={state.connectionStatus !== 'connected'} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center gap-2 shadow-lg uppercase active:scale-95 transition-all disabled:opacity-20"><ArrowUpCircle className="w-4 h-4"/> 强行同步</button>
                   </div>
               </div>
 
@@ -174,19 +183,15 @@ const Settings: React.FC = () => {
                           <label className="text-[10px] text-slate-500 font-bold uppercase">Auth Domain</label>
                           <input type="text" value={fbForm.authDomain} onChange={e=>setFbForm({...fbForm, authDomain: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="xxx.firebaseapp.com" />
                       </div>
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase">App ID</label>
-                              <input type="text" value={fbForm.appId} onChange={e=>setFbForm({...fbForm, appId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" />
-                          </div>
-                          <div className="space-y-2">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase">Msg Sender ID</label>
-                              <input type="text" value={fbForm.messagingSenderId} onChange={e=>setFbForm({...fbForm, messagingSenderId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" />
-                          </div>
+                      
+                      <div className="flex gap-4 pt-4">
+                        <button onClick={handleSaveConfig} disabled={isSaving} className="flex-1 py-5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
+                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />} 启动 Firebase 神经连接
+                        </button>
+                        <button onClick={handleClearConfig} className="p-5 bg-white/5 border border-white/10 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-2xl transition-all" title="断开并清除配置">
+                            <LogOut className="w-6 h-6" />
+                        </button>
                       </div>
-                      <button onClick={handleSaveConfig} className="w-full py-5 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
-                          {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />} 启动 Firebase 神经连接
-                      </button>
                   </div>
 
                   <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
@@ -196,22 +201,15 @@ const Settings: React.FC = () => {
                       </div>
                       <div className="space-y-4">
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono">
-                              1. 在 <a href="https://console.firebase.google.com" target="_blank" className="text-indigo-400 underline">Firebase 控制台</a> 创建项目。<br/>
-                              2. 开启 <b>Firestore Database</b>。<br/>
-                              3. 在页面顶部找到 <b>Rules (规则)</b> 选项卡。<br/>
-                              4. 设置允许读写（测试期间：allow read, write: if true;）。
+                              1. 在 Firebase 控制台创建项目。<br/>
+                              2. 开启 Firestore Database。<br/>
+                              3. 在 Rules 选项卡设置允许读写：<br/>
+                              <code className="text-indigo-300 block py-2">allow read, write: if true;</code>
                           </p>
                           <div className="pt-2">
-                              <a 
-                                href={rulesUrl} 
-                                target="_blank" 
-                                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all"
-                              >
+                              <a href={rulesUrl} target="_blank" className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all">
                                 <ExternalLink className="w-3 h-3"/> 直达 Rules 配置页面
                               </a>
-                          </div>
-                          <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
-                              <p className="text-[10px] text-indigo-300 font-bold uppercase">提示：如果您从旧版迁移，请先将数据导出为 JSON，然后使用旁边的“本地管理”导入。</p>
                           </div>
                       </div>
                   </div>
@@ -242,7 +240,6 @@ const Settings: React.FC = () => {
       {activeTab === 'data' && (
           <div className="ios-glass-panel p-10 animate-in fade-in duration-500 space-y-10">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                  {/* Export Block */}
                   <div className="space-y-6 p-6 bg-white/5 rounded-3xl border border-white/5">
                       <div className="flex items-center gap-4 text-white">
                         <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400 border border-blue-500/20">
@@ -250,23 +247,18 @@ const Settings: React.FC = () => {
                         </div>
                         <div>
                             <h4 className="font-bold italic uppercase tracking-tighter">导出数据 (Export JSON)</h4>
-                            <p className="text-[10px] text-slate-500 uppercase font-mono">Create an offline backup</p>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500 font-mono leading-relaxed">
-                          将当前系统的全量数据打包。建议定期冷备份。
-                      </p>
                       <button onClick={() => {
                           const dataStr = JSON.stringify(state);
                           const blob = new Blob([dataStr], {type: "application/json"});
                           const url = URL.createObjectURL(blob);
-                          const a = document.createElement('a'); a.href = url; a.download = `tanxing_v9_${new Date().toISOString().slice(0,10)}.json`; a.click();
-                      }} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 shadow-lg active:scale-95 transition-all">
+                          const a = document.createElement('a'); a.href = url; a.download = `tanxing_backup.json`; a.click();
+                      }} className="px-8 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3">
                           <Download className="w-4 h-4"/> 生成导出
                       </button>
                   </div>
 
-                  {/* Import Block */}
                   <div className="space-y-6 p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
                       <div className="flex items-center gap-4 text-white">
                         <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400 border border-indigo-500/20">
@@ -274,12 +266,8 @@ const Settings: React.FC = () => {
                         </div>
                         <div>
                             <h4 className="font-bold italic uppercase tracking-tighter">恢复数据 (Import JSON)</h4>
-                            <p className="text-[10px] text-slate-500 uppercase font-mono">Restore from backup</p>
                         </div>
                       </div>
-                      <p className="text-xs text-slate-500 font-mono leading-relaxed">
-                          从本地文件恢复数据。<b>警告：</b>将覆盖本地所有内容。
-                      </p>
                       <input type="file" ref={fileInputRef} onChange={handleImportJson} accept=".json" className="hidden" />
                       <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="px-8 py-3 bg-white text-black hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 shadow-lg transition-all disabled:opacity-50">
                           {isImporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileJson className="w-4 h-4"/>}
@@ -288,20 +276,15 @@ const Settings: React.FC = () => {
                   </div>
               </div>
 
-              {/* Cache Fixer Block */}
               <div className="p-8 bg-rose-500/5 border border-rose-500/20 rounded-3xl flex items-center justify-between">
                   <div className="flex items-start gap-4">
                       <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500"><Eraser className="w-6 h-6" /></div>
                       <div>
-                          <h4 className="text-sm font-bold text-white uppercase italic">清理本地溢出缓存 (Reset Local Cache)</h4>
-                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">
-                              如果遇到 "Setting value of TANXING_DB... exceeded the quota" 报错，说明浏览器空间已满。该操作将安全清理本地冗余数据，系统会在刷新后自动从 Firebase 同步最新数据。
-                          </p>
+                          <h4 className="text-sm font-bold text-white uppercase italic">清理本地空间 (Free Storage)</h4>
+                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">如果遇到数据溢出或卡顿，此操作将安全清理本地缓存。刷新后系统将自动从云端重新拉取。</p>
                       </div>
                   </div>
-                  <button onClick={handleClearLocalOnly} className="px-8 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-rose-900/20 transition-all flex items-center gap-2">
-                      <Eraser className="w-4 h-4"/> 释放本地空间
-                  </button>
+                  <button onClick={handleClearLocalOnly} className="px-8 py-3 bg-rose-600 hover:bg-rose-500 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">释放本地空间</button>
               </div>
           </div>
       )}
