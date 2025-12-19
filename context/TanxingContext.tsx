@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableNetwork } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableNetwork, terminate } from 'firebase/firestore';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
@@ -80,8 +80,10 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
         case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
-        case 'HYDRATE_STATE': return { ...state, ...action.payload, isInitialized: true, isDemoMode: false };
-        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true };
+        case 'HYDRATE_STATE': 
+            // 关键修复：从缓存恢复数据时，强制连接状态为 disconnected
+            return { ...state, ...action.payload, connectionStatus: 'disconnected', isInitialized: true, isDemoMode: false };
+        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true, connectionStatus: 'disconnected' };
         case 'SET_FIREBASE_CONFIG': return { ...state, firebaseConfig: { ...state.firebaseConfig, ...action.payload } };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true };
@@ -103,7 +105,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const lastSyncFingerprintRef = useRef<string>('');
     const isInternalUpdateRef = useRef(false);
 
-    // 核心启动逻辑：物理连接校验
+    // 核心启动逻辑
     const bootFirebase = async (config: FirebaseConfig) => {
         if (!config.apiKey || !config.projectId) return;
         
@@ -113,17 +115,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             // 清理旧实例
             const apps = getApps();
             for (const app of apps) {
+                try {
+                    const db = getFirestore(app);
+                    await terminate(db);
+                } catch(e) {}
                 await deleteApp(app).catch(() => {});
             }
 
             const app = initializeApp(config);
             const db = getFirestore(app);
-            await enableNetwork(db); // 强制启用网络层
+            await enableNetwork(db);
             
             const docRef = doc(db, 'backups', 'quantum_state');
 
-            // 物理握手测试：尝试向云端写入一个小指纹
-            // 如果 Rules 没开，此处会立即报错 permission-denied
+            // 真正的物理握手测试：尝试向云端写入一个小指纹
             await setDoc(docRef, { 
                 handshake: {
                     ts: new Date().toISOString(),
@@ -132,27 +137,23 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             }, { merge: true });
 
-            // 获取云端存量数据
+            // 尝试读取
             const snapshot = await getDoc(docRef);
             
+            // 只有成功走到这一步，才变绿
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
 
             if (snapshot.exists() && snapshot.data().payload) {
                 const cloudData = snapshot.data().payload;
                 lastSyncFingerprintRef.current = JSON.stringify(cloudData);
-                dispatch({ type: 'HYDRATE_STATE', payload: { ...cloudData, firebaseConfig: config } });
-                dispatch({ type: 'ADD_TOAST', payload: { message: '云端镜像同步成功', type: 'success' } });
-            } else {
-                dispatch({ type: 'ADD_TOAST', payload: { message: '已建立连接，等待首次同步', type: 'info' } });
+                dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
             }
         } catch (e: any) {
             console.error("[Firebase Physical Link Fault]", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             
             let errMsg = `连接失败: ${e.code || e.message}`;
-            if (e.code === 'permission-denied') {
-              errMsg = '权限拒绝：虽然你修改了 Rules，但 Google 服务器可能还没生效（通常需等待30秒），或者 Project ID 填写错误。';
-            }
+            if (e.code === 'permission-denied') errMsg = 'Firebase 权限拒绝：请在控制台 Rules 开启读写权限。';
             dispatch({ type: 'ADD_TOAST', payload: { message: errMsg, type: 'error' } });
         }
     };
@@ -165,6 +166,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 dispatch({ type: 'SET_FIREBASE_CONFIG', payload: config });
+                // 刷新后会重新启动 bootFirebase，在此之前状态是 disconnected
                 await bootFirebase(config);
             } else if (savedDb) {
                 dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) });
@@ -186,7 +188,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const unsubscribe = onSnapshot(docRef, (snapshot) => {
             if (snapshot.exists()) {
                 const incoming = snapshot.data();
-                // 排除自己的写操作反馈
                 if (incoming.source_session && incoming.source_session !== SESSION_ID && !snapshot.metadata.hasPendingWrites) {
                     const fingerprint = JSON.stringify(incoming.payload);
                     if (fingerprint && fingerprint !== lastSyncFingerprintRef.current) {
@@ -197,21 +198,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             }
         }, (err) => {
-            if (err.code === 'permission-denied') {
-                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-                dispatch({ type: 'ADD_TOAST', payload: { message: '云端连接已被服务器强制断开 (Permission Revoked)', type: 'error' } });
-            }
+            if (err.code === 'permission-denied') dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
         });
 
         return () => unsubscribe();
     }, [state.connectionStatus, isHydrated]);
 
-    // 自动持久化与同步
+    // 自动持久化
     useEffect(() => {
         if (!isHydrated) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.firebaseConfig));
         
-        const slimState = { ...state, toasts: [], exportTasks: [] };
+        // 关键修复：保存到本地缓存时，将连接状态重置为 disconnected
+        const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' };
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
 
         document.body.className = `theme-${state.theme}`;
@@ -226,8 +225,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncToCloud = async (isForce: boolean = false) => {
         if (state.connectionStatus !== 'connected' && !isForce) return;
         
-        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'syncing' });
-
         const payload = {
             products: state.products, orders: state.orders, tasks: state.tasks,
             customers: state.customers, shipments: state.shipments, suppliers: state.suppliers,
@@ -236,10 +233,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
 
         const fingerprint = JSON.stringify(payload);
-        if (!isForce && fingerprint === lastSyncFingerprintRef.current) {
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-            return;
-        }
+        if (!isForce && fingerprint === lastSyncFingerprintRef.current) return;
 
         try {
             const db = getFirestore(getApp());
@@ -251,18 +245,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-            if (isForce) dispatch({ type: 'ADD_TOAST', payload: { message: '强制同步成功', type: 'success' } });
+            if (isForce) dispatch({ type: 'ADD_TOAST', payload: { message: '云端同步成功', type: 'success' } });
         } catch (e: any) {
             console.error("[Sync Fault]", e);
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             if (isForce) dispatch({ type: 'ADD_TOAST', payload: { message: `同步失败: ${e.message}`, type: 'error' } });
         }
     };
 
     const pullFromCloud = async () => {
         if (state.connectionStatus !== 'connected') {
-            dispatch({ type: 'ADD_TOAST', payload: { message: '请先完成握手连接', type: 'warning' } });
+            dispatch({ type: 'ADD_TOAST', payload: { message: '请先连接云端', type: 'warning' } });
             return;
         }
         try {
@@ -271,7 +263,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (snapshot.exists()) {
                 const cloudData = snapshot.data().payload;
                 dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
-                dispatch({ type: 'ADD_TOAST', payload: { message: '已从云端恢复数据', type: 'success' } });
+                dispatch({ type: 'ADD_TOAST', payload: { message: '已拉取最新数据', type: 'success' } });
             }
         } catch (e) { dispatch({ type: 'ADD_TOAST', payload: { message: '拉取失败', type: 'error' } }); }
     };
