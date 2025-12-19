@@ -47,6 +47,7 @@ const Settings: React.FC = () => {
       try {
           dispatch({ type: 'SET_FIREBASE_CONFIG', payload: fbForm });
           showToast('Firebase 协议已激活，系统正在握手...', 'success');
+          // 给一点时间让状态更新
           setTimeout(() => window.location.reload(), 1000); 
       } catch (e) {
           showToast('配置解析失败', 'error');
@@ -101,6 +102,11 @@ const Settings: React.FC = () => {
       };
       reader.readAsText(file);
   };
+
+  // 生成直达 Rules 页面的链接
+  const rulesUrl = fbForm.projectId 
+    ? `https://console.firebase.google.com/project/${fbForm.projectId}/firestore/rules`
+    : 'https://console.firebase.google.com/';
 
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-10">
@@ -192,11 +198,20 @@ const Settings: React.FC = () => {
                           <p className="text-[11px] text-slate-500 leading-relaxed font-mono">
                               1. 在 <a href="https://console.firebase.google.com" target="_blank" className="text-indigo-400 underline">Firebase 控制台</a> 创建项目。<br/>
                               2. 开启 <b>Firestore Database</b>。<br/>
-                              3. 在 Project Settings 中注册 Web App 获取密钥。<br/>
-                              4. 设置数据库 Rules 允许公开读写（仅限测试环境）。
+                              3. 在页面顶部找到 <b>Rules (规则)</b> 选项卡。<br/>
+                              4. 设置允许读写（测试期间：allow read, write: if true;）。
                           </p>
+                          <div className="pt-2">
+                              <a 
+                                href={rulesUrl} 
+                                target="_blank" 
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-lg text-[10px] font-black uppercase tracking-widest hover:bg-indigo-500 hover:text-white transition-all"
+                              >
+                                <ExternalLink className="w-3 h-3"/> 直达 Rules 配置页面
+                              </a>
+                          </div>
                           <div className="p-4 bg-indigo-500/5 border border-indigo-500/20 rounded-xl">
-                              <p className="text-[10px] text-indigo-300 font-bold uppercase">提示：如果您从旧版 Supabase 迁移，请先将数据导出为 JSON，然后使用旁边的“本地管理”导入。</p>
+                              <p className="text-[10px] text-indigo-300 font-bold uppercase">提示：如果您从旧版迁移，请先将数据导出为 JSON，然后使用旁边的“本地管理”导入。</p>
                           </div>
                       </div>
                   </div>
@@ -273,7 +288,7 @@ const Settings: React.FC = () => {
                   </div>
               </div>
 
-              {/* NEW: Cache Fixer Block */}
+              {/* Cache Fixer Block */}
               <div className="p-8 bg-rose-500/5 border border-rose-500/20 rounded-3xl flex items-center justify-between">
                   <div className="flex items-start gap-4">
                       <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500"><Eraser className="w-6 h-6" /></div>

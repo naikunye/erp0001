@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -24,9 +24,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       setIsSyncing(true);
       try {
           await syncToCloud(true);
-          showToast('已强制同步至云端', 'success');
       } catch (e) {
-          showToast('同步失败', 'error');
       } finally {
           setIsSyncing(false);
       }
@@ -51,34 +49,37 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     }).format(now);
   };
 
-  const getUSWeekday = () => {
-    return new Intl.DateTimeFormat('zh-CN', {
-      timeZone: 'America/Los_Angeles',
-      weekday: 'long',
-    }).format(now);
-  };
-
   const getStatusUI = () => {
       switch(state.connectionStatus) {
+          case 'syncing':
+              return {
+                  pill: (
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-500/40 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.2)]">
+                        <RefreshCw className="w-3 h-3 text-blue-400 animate-spin" />
+                        <span className="text-[10px] font-black text-blue-300 uppercase tracking-tighter">Syncing...</span>
+                    </div>
+                  ),
+                  iconClass: "text-blue-400 animate-spin"
+              };
           case 'connected':
               return {
                   pill: (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full">
+                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full ring-1 ring-emerald-500/20">
                         <span className="relative flex h-2 w-2">
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-tighter">Realtime Active</span>
+                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Quantum Active</span>
                     </div>
                   ),
-                  iconClass: "text-emerald-400 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                  iconClass: "text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.6)]"
               };
           case 'connecting':
               return {
                   pill: (
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full">
                         <Loader2 className="w-3 h-3 text-amber-400 animate-spin" />
-                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-tighter">Linking...</span>
+                        <span className="text-[10px] font-bold text-amber-400 uppercase tracking-tighter">Handshaking...</span>
                     </div>
                   ),
                   iconClass: "text-amber-400 animate-pulse"
@@ -88,7 +89,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                   pill: (
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
                         <AlertCircle className="w-3 h-3 text-red-400" />
-                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-tighter">Link Error</span>
+                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-tighter">Auth Failure</span>
                     </div>
                   ),
                   iconClass: "text-red-500 animate-bounce"
@@ -117,7 +118,10 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         >
             <Menu className="w-6 h-6" />
         </button>
-        <h1 className="text-xl font-bold text-white tracking-wide">{title}</h1>
+        <h1 className="text-xl font-bold text-white tracking-wide flex items-center gap-2">
+            {title}
+            {state.connectionStatus === 'connected' && <Zap className="w-4 h-4 text-emerald-500 animate-pulse" />}
+        </h1>
       </div>
 
       <div className="flex items-center space-x-6">
@@ -128,23 +132,18 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     US DATE (PT)
                 </div>
                 <div className="flex items-baseline gap-1.5">
-                    <span className="text-[10px] text-slate-500 font-bold">{getUSWeekday()}</span>
+                    <span className="text-[10px] text-slate-500 font-bold font-mono">PT</span>
                     <span className="text-xs font-mono font-bold text-white">{getUSDate()}</span>
                 </div>
             </div>
             
             <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美东 ET</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">纽约 ET</span>
                 <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
             </div>
 
             <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">美中 CT</span>
-                <span className="text-xs font-mono text-white/70">{formatTime('America/Chicago')}</span>
-            </div>
-
-            <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美西 PT</span>
+                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">洛杉矶 PT</span>
                 <span className="text-xs font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
                     {formatTime('America/Los_Angeles')}
                 </span>
@@ -158,9 +157,9 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         <div className="flex items-center space-x-4">
             <button 
                 onClick={handleCloudSync}
-                disabled={isSyncing}
-                className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${statusUI.iconClass}`}
-                title={state.connectionStatus === 'connected' ? `Firebase 已连接 (上次同步: ${state.firebaseConfig?.lastSync || '未知'})` : "云端连接未就绪"}
+                disabled={isSyncing || state.connectionStatus !== 'connected'}
+                className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${statusUI.iconClass} disabled:opacity-20`}
+                title={state.connectionStatus === 'connected' ? `上次同步: ${state.firebaseConfig?.lastSync || '未知'}` : "云端连接未就绪"}
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
@@ -171,11 +170,11 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             </button>
             
             <div className="relative">
-                <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 flex items-center justify-center text-xs font-bold text-white shadow-inner">AD</div>
+                <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent hover:border-white/10">
+                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[10px] font-black text-white shadow-inner border border-white/20">ROOT</div>
                     <div className="text-left hidden md:block">
-                        <div className="text-xs font-bold text-white leading-none mb-0.5">管理员</div>
-                        <div className="text-[9px] text-white/40 font-mono leading-none uppercase">Session: {SESSION_ID}</div>
+                        <div className="text-[10px] font-black text-white leading-none mb-0.5 uppercase italic">Admin.Matrix</div>
+                        <div className="text-[8px] text-white/40 font-mono leading-none uppercase">ID: {SESSION_ID.toUpperCase()}</div>
                     </div>
                 </button>
             </div>
