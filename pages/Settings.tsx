@@ -1,15 +1,14 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { 
-    Settings as SettingsIcon, Database, Save, Shield, Cloud, 
-    RefreshCw, Eye, EyeOff, Trash2, Wifi, 
-    ArrowUpCircle, ArrowDownCircle, Download, Upload,
-    Palette, Monitor, Sparkles, Check, Moon, MonitorDot, AlertCircle,
-    ExternalLink, FileJson, ArrowRight, Eraser, LogOut, Zap, Loader2
+    Settings as SettingsIcon, Database, Cloud, 
+    RefreshCw, Eye, EyeOff, Wifi, 
+    Download, Upload, Palette, Sparkles, Moon, MonitorDot,
+    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, ExternalLink
 } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootFirebase } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa } = useTanxing();
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -17,72 +16,50 @@ const Settings: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [fbForm, setFbForm] = useState({
-      apiKey: '',
-      authDomain: '',
-      projectId: '',
-      storageBucket: '',
-      messagingSenderId: '',
-      appId: ''
+  const [supaForm, setSupaForm] = useState({
+      url: '',
+      anonKey: ''
   });
 
   useEffect(() => {
-    if (state.firebaseConfig) {
-        setFbForm({
-            apiKey: state.firebaseConfig.apiKey || '',
-            authDomain: state.firebaseConfig.authDomain || '',
-            projectId: state.firebaseConfig.projectId || '',
-            storageBucket: state.firebaseConfig.storageBucket || '',
-            messagingSenderId: state.firebaseConfig.messagingSenderId || '',
-            appId: state.firebaseConfig.appId || ''
+    if (state.supaConfig) {
+        setSupaForm({
+            url: state.supaConfig.url || '',
+            anonKey: state.supaConfig.anonKey || ''
         });
     }
-  }, [state.firebaseConfig]);
+  }, [state.supaConfig]);
 
   const handleSaveConfig = async () => {
-      if (!fbForm.apiKey || !fbForm.projectId) {
-          showToast('请至少填写 API Key 和 Project ID', 'warning');
+      if (!supaForm.url || !supaForm.anonKey) {
+          showToast('请提供 Supabase URL 和 Anon Key', 'warning');
           return;
       }
       setIsSaving(true);
       try {
-          dispatch({ type: 'SET_FIREBASE_CONFIG', payload: fbForm });
-          await bootFirebase(fbForm as any);
-          showToast('量子链路初始化完成', 'success');
+          dispatch({ type: 'SET_SUPA_CONFIG', payload: supaForm });
+          await bootSupa(supaForm.url, supaForm.anonKey);
+          showToast('Supabase 量子链路已就绪', 'success');
       } catch (e: any) {
-          showToast(`配置激活失败: ${e.message}`, 'error');
+          showToast(`激活失败: 请确认 Table 是否已创建并关闭 RLS`, 'error');
       } finally {
           setIsSaving(false);
       }
   };
 
   const handleManualSync = async () => {
-      if (!fbForm.apiKey) {
-          showToast('请先配置并保存 Firebase 参数', 'warning');
-          return;
-      }
       setIsSyncingNow(true);
-      try {
-          const success = await syncToCloud(true);
-          if (success) {
-              showToast('云端 5.4MB+ 大文件分片同步成功', 'success');
-          } else {
-              showToast('同步失败：可能是 Firestore Rules 权限未开启', 'error');
-          }
-      } catch (e: any) {
-          showToast(`传输异常: ${e.message}`, 'error');
-      } finally {
-          setIsSyncingNow(false);
-      }
+      const success = await syncToCloud(true);
+      if (success) showToast('5.4MB+ 全量镜像已推送到 Supabase', 'success');
+      setIsSyncingNow(false);
   };
 
   const handleClearConfig = () => {
-      if (confirm('确定要清除 Firebase 配置并断开云端连接吗？')) {
-          localStorage.removeItem('TANXING_FIREBASE_CONFIG');
-          dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { apiKey: '', projectId: '', authDomain: '', appId: '', lastSync: null } });
+      if (confirm('确定要清除云端连接吗？')) {
+          localStorage.removeItem('TANXING_SUPA_CONFIG');
+          dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } });
           dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
-          showToast('配置已清除，系统切换至离线模式', 'info');
-          setTimeout(() => window.location.reload(), 500);
+          showToast('连接已断开', 'info');
       }
   };
 
@@ -93,40 +70,10 @@ const Settings: React.FC = () => {
 
   const handleClearLocalOnly = () => {
       if (confirm('⚠️ 该操作仅清除浏览器本地缓存以释放空间，不影响云端数据。确定继续？')) {
-          localStorage.removeItem('TANXING_DB_V9_FIREBASE');
-          showToast('本地缓存已清理，刷新后将从云端重构镜像', 'success');
+          localStorage.removeItem('TANXING_DB_V10_SUPA');
+          showToast('本地缓存已清理', 'success');
           setTimeout(() => window.location.reload(), 800);
       }
-  };
-
-  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-
-      setIsImporting(true);
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-          try {
-              const content = event.target?.result as string;
-              const importedData = JSON.parse(content);
-              
-              if (!importedData.products && !importedData.orders) {
-                  showToast('导入失败：非 Tanxing 标准备份格式', 'error');
-                  setIsImporting(false);
-                  return;
-              }
-
-              dispatch({ type: 'HYDRATE_STATE', payload: importedData });
-              showToast('本地重构成功', 'info');
-              setIsImporting(false);
-          } catch (err) {
-              showToast('解析 JSON 失败', 'error');
-              setIsImporting(false);
-          } finally {
-              if (fileInputRef.current) fileInputRef.current.value = '';
-          }
-      };
-      reader.readAsText(file);
   };
 
   return (
@@ -134,17 +81,17 @@ const Settings: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-3 italic">
-              <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与量子同步协议
+              <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与 Supabase 云协议
           </h2>
-          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Sharding Matrix Interface v9.7</p>
+          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">PostgreSQL Cloud Interface v10.1</p>
         </div>
-        <button onClick={() => confirm('确定重置全系统数据？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
+        <button onClick={() => confirm('重置全部？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
       </div>
 
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
           {[
             { id: 'theme', label: '外观主题', icon: Palette },
-            { id: 'cloud', label: '云端同步 (免费)', icon: Cloud },
+            { id: 'cloud', label: '云端同步 (Supabase)', icon: Cloud },
             { id: 'data', label: '本地数据', icon: Database }
           ].map(tab => (
               <button 
@@ -166,49 +113,47 @@ const Settings: React.FC = () => {
                       </div>
                       <div>
                           <h4 className="text-white font-bold uppercase tracking-tighter flex items-center gap-2">
-                              量子分片同步 (Quantum Sharding)
-                              <span className="bg-emerald-500 text-[8px] text-black px-1.5 py-0.5 rounded font-black">FREE FOREVER</span>
+                              Supabase 无限制同步 (Large Field Support)
+                              <span className="bg-emerald-500 text-[8px] text-black px-1.5 py-0.5 rounded font-black">UNLIMITED SIZE</span>
                           </h4>
                           <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">
-                              当前状态: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span>
-                              {state.firebaseConfig.lastSync && <span className="ml-3 text-slate-600">上次同步: {state.firebaseConfig.lastSync}</span>}
+                              状态: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span>
+                              {state.supaConfig.lastSync && <span className="ml-3 text-slate-600">Sync: {state.supaConfig.lastSync}</span>}
                           </p>
                           <p className="text-[10px] text-indigo-400/60 font-mono mt-1">
-                              方案原理: 已自动适配 500KB 安全分片，绕过 Firestore 1MB 限制，支持 5.4MB+ 大文件。
+                              优势: 完美支持 5.4MB+ 单次同步，基于 PostgreSQL 强一致性，无需分片，免费且更稳健。
                           </p>
                       </div>
                   </div>
                   <div className="flex gap-3">
-                      <button onClick={pullFromCloud} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-white/10 transition-all">拉取重构</button>
+                      <button onClick={pullFromCloud} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold hover:bg-white/10 transition-all">拉取重构</button>
                       <button 
                         onClick={handleManualSync} 
-                        disabled={isSyncingNow}
+                        disabled={isSyncingNow || state.connectionStatus !== 'connected'}
                         className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/40 disabled:opacity-50"
                       >
-                          {isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4" />} 分片上传
+                          {isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4" />} 立即同步
                       </button>
                   </div>
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                   <div className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-2">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase">Project ID</label>
-                              <input type="text" value={fbForm.projectId} onChange={e=>setFbForm({...fbForm, projectId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="my-erp-123" />
-                          </div>
-                          <div className="space-y-2">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase">API Key</label>
-                              <div className="relative">
-                                  <input type={showKey ? "text" : "password"} value={fbForm.apiKey} onChange={e=>setFbForm({...fbForm, apiKey: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
-                                  <button onClick={()=>setShowKey(!showKey)} className="absolute right-3 top-3 text-slate-600">{showKey ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}</button>
-                              </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Supabase URL</label>
+                          <input type="text" value={supaForm.url} onChange={e=>setSupaForm({...supaForm, url: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="https://xxx.supabase.co" />
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">Anon Key</label>
+                          <div className="relative">
+                              <input type={showKey ? "text" : "password"} value={supaForm.anonKey} onChange={e=>setSupaForm({...supaForm, anonKey: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
+                              <button onClick={()=>setShowKey(!showKey)} className="absolute right-3 top-3 text-slate-600">{showKey ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}</button>
                           </div>
                       </div>
                       
                       <div className="flex gap-4 pt-4">
                         <button onClick={handleSaveConfig} disabled={isSaving} className="flex-1 py-5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
-                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />} 初始化链路
+                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />} 启动 Supabase 协议
                         </button>
                         <button onClick={handleClearConfig} className="p-5 bg-white/5 border border-white/10 text-slate-500 hover:text-red-400 rounded-2xl transition-all" title="断开连接">
                             <LogOut className="w-6 h-6" />
@@ -217,19 +162,22 @@ const Settings: React.FC = () => {
                   </div>
 
                   <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
-                      <div className="flex items-center gap-3">
-                          <Zap className="w-5 h-5 text-indigo-400" />
-                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">同步排障指南</h5>
+                      <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-3">
+                              <Zap className="w-5 h-5 text-indigo-400" />
+                              <h5 className="text-xs font-bold text-white uppercase tracking-widest">初始化脚本 (SQL Editor)</h5>
+                          </div>
+                          <a href="https://supabase.com/dashboard" target="_blank" className="text-[10px] text-indigo-400 flex items-center gap-1 hover:underline">去控制台 <ExternalLink className="w-3 h-3"/></a>
                       </div>
                       <div className="space-y-4">
-                          <div className="text-[11px] text-slate-400 leading-relaxed font-mono">
-                              <p className="text-indigo-400 font-bold mb-2">如果点击分片上传无反应，请确认：</p>
-                              1. 您的 <b>Firestore</b> 数据库是否已启用？<br/>
-                              2. <b>Cloud Firestore Rules</b> 是否允许写入？<br/>
-                              <code className="text-indigo-300 block py-2 whitespace-pre-wrap mt-2 bg-black/40 p-2 rounded">
-{`allow read, write: if true;`}
+                          <div className="text-[10px] text-slate-400 leading-relaxed font-mono">
+                              <p className="text-indigo-400 font-bold mb-2">请在 SQL Editor 执行以下代码以开启大文件同步支持：</p>
+                              <code className="text-indigo-300 block py-2 whitespace-pre-wrap mt-2 bg-black/40 p-3 rounded border border-white/5 select-all">
+{`CREATE TABLE backups (id int8 PRIMARY KEY DEFAULT 1, data text, updated_at timestamptz DEFAULT now());
+INSERT INTO backups (id, data) VALUES (1, '{}');
+ALTER TABLE backups ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow All" ON backups FOR ALL USING (true);`}
                               </code>
-                              3. 您的 Project ID 是否填写的纯文本（无空格/网址）？
                           </div>
                       </div>
                   </div>
@@ -262,9 +210,7 @@ const Settings: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                   <div className="space-y-6 p-6 bg-white/5 rounded-3xl border border-white/5">
                       <div className="flex items-center gap-4 text-white">
-                        <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400">
-                            <Download className="w-6 h-6" />
-                        </div>
+                        <div className="p-3 bg-blue-500/10 rounded-2xl text-blue-400"><Download className="w-6 h-6" /></div>
                         <h4 className="font-bold uppercase tracking-tighter">导出本地备份</h4>
                       </div>
                       <button onClick={() => {
@@ -279,15 +225,26 @@ const Settings: React.FC = () => {
 
                   <div className="space-y-6 p-6 bg-indigo-500/5 rounded-3xl border border-indigo-500/10">
                       <div className="flex items-center gap-4 text-white">
-                        <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400">
-                            <Upload className="w-6 h-6" />
-                        </div>
+                        <div className="p-3 bg-indigo-500/10 rounded-2xl text-indigo-400"><Upload className="w-6 h-6" /></div>
                         <h4 className="font-bold uppercase tracking-tighter">重构本地数据</h4>
                       </div>
-                      <input type="file" ref={fileInputRef} onChange={handleImportJson} accept=".json" className="hidden" />
+                      <input type="file" ref={fileInputRef} onChange={e => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          setIsImporting(true);
+                          const reader = new FileReader();
+                          reader.onload = (event) => {
+                              try {
+                                  const imported = JSON.parse(event.target?.result as string);
+                                  dispatch({ type: 'HYDRATE_STATE', payload: imported });
+                                  showToast('本地重构成功', 'info');
+                              } catch (err) { showToast('解析失败', 'error'); }
+                              setIsImporting(false);
+                          };
+                          reader.readAsText(file);
+                      }} accept=".json" className="hidden" />
                       <button disabled={isImporting} onClick={() => fileInputRef.current?.click()} className="px-8 py-3 bg-white text-black hover:bg-slate-200 rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 transition-all">
-                          {isImporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileJson className="w-4 h-4"/>}
-                          导入备份文件
+                          {isImporting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <FileJson className="w-4 h-4"/>} 导入备份文件
                       </button>
                   </div>
               </div>
@@ -297,7 +254,7 @@ const Settings: React.FC = () => {
                       <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500"><Eraser className="w-6 h-6" /></div>
                       <div>
                           <h4 className="text-sm font-bold text-white uppercase italic">清理本地缓存</h4>
-                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">仅清除本地暂存，用于解决浏览器卡顿或 5MB+ 数据溢出报错。刷新后可从云端拉取。</p>
+                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">仅清除本地暂存。完成后刷新页面可从 Supabase 全量拉取最新镜像。</p>
                       </div>
                   </div>
                   <button onClick={handleClearLocalOnly} className="px-8 py-3 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">释放本地空间</button>
