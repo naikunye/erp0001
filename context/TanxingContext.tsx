@@ -103,8 +103,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!appId || !appKey) return;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         try {
-            AV.init({ appId, appKey, serverURL });
-            // 不进行强制读取测试，防止因为云端为空而报错阻断
+            // 如果 serverURL 以 slash 结尾则去掉，防止请求 404
+            const cleanUrl = serverURL?.trim().replace(/\/$/, "");
+            AV.init({ appId, appKey, serverURL: cleanUrl });
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
         } catch (e: any) {
             console.error("LeanCloud Init Failed", e);
@@ -140,7 +141,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
         
         if (!isInternalUpdateRef.current && state.connectionStatus === 'connected' && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 20000);
+            const timer = setTimeout(() => syncToCloud(), 30000);
             return () => clearTimeout(timer);
         }
         isInternalUpdateRef.current = false;
@@ -148,6 +149,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
         if (state.connectionStatus !== 'connected' && !isForce) return false;
+        if (!state.leanConfig.serverURL) {
+            showToast('同步被拦截: 未配置服务器地址 URL', 'error');
+            return false;
+        }
         
         try {
             const fullPayload = {
@@ -183,6 +188,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const pullFromCloud = async () => {
+        if (!state.leanConfig.serverURL) return showToast('请先配置服务器地址', 'warning');
         try {
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
@@ -191,7 +197,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (backupObj) {
                 const payloadStr = backupObj.get('payload');
                 const session = backupObj.get('session');
-                if (session === SESSION_ID) return;
+                if (session === SESSION_ID && !confirm('检测到云端数据由当前会话产生，确定要覆盖本地吗？')) return;
 
                 const parsed = JSON.parse(payloadStr);
                 isInternalUpdateRef.current = true;
@@ -200,9 +206,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             } else {
                 showToast('云端尚无备份记录', 'info');
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("[LeanCloud Pull Failed]", e);
-            showToast('拉取镜像失败', 'error');
+            showToast(`拉取失败: ${e.message}`, 'error');
         }
     };
 

@@ -24,21 +24,19 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       
       setIsSyncing(true);
       
-      // 增加强行超时保护：15秒不返回则视为阻塞
       const timeout = setTimeout(() => {
           if (isSyncing) {
               setIsSyncing(false);
-              showToast('同步超时：数据量过大或网络波动', 'error');
+              showToast('同步响应超时，请检查服务器 URL', 'error');
           }
-      }, 15000);
+      }, 30000);
 
       try {
           const success = await syncToCloud(true);
           if (success) {
-              showToast('量子镜像同步成功', 'success');
-          } else {
-              showToast('同步被系统拦截（1MB限制），正在尝试自动分段...', 'warning');
+              showToast('云端镜像同步成功', 'success');
           }
+          // 如果失败，已经在 TanxingContext 里的 try-catch 弹窗提示具体原因了
       } catch (e) {
           showToast('核心链路发生异常', 'error');
       } finally {
@@ -76,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                             <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                         </span>
-                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Quantum Active</span>
+                        <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Cloud Linked</span>
                     </div>
                   ),
                   iconClass: "text-emerald-400"
@@ -106,7 +104,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                   pill: (
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
                         <WifiOff className="w-3 h-3 text-slate-500" />
-                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Offline Mode</span>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Local Cache</span>
                     </div>
                   ),
                   iconClass: "text-slate-600"
@@ -164,7 +162,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                 onClick={handleCloudSync}
                 disabled={isSyncing || state.connectionStatus !== 'connected'}
                 className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${isSyncing ? 'text-indigo-400' : statusUI.iconClass} disabled:opacity-20`}
-                title={state.connectionStatus === 'connected' ? `上次同步: ${state.firebaseConfig?.lastSync || '未知'}` : "云端未连接"}
+                title={state.connectionStatus === 'connected' ? `上次同步: ${state.leanConfig?.lastSync || '未知'}` : "云端未连接"}
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>

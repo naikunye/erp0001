@@ -3,7 +3,7 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
-    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2
+    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink
 } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 
@@ -33,8 +33,8 @@ const Settings: React.FC = () => {
   }, [state.leanConfig]);
 
   const handleSaveConfig = async () => {
-      if (!leanForm.appId || !leanForm.appKey) {
-          showToast('请提供 LeanCloud App ID 和 Key', 'warning');
+      if (!leanForm.appId || !leanForm.appKey || !leanForm.serverURL) {
+          showToast('请完整填写 App ID, Key 和服务器 URL', 'warning');
           return;
       }
       setIsSaving(true);
@@ -43,7 +43,7 @@ const Settings: React.FC = () => {
           await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
           showToast('LeanCloud 镜像链路已就绪', 'success');
       } catch (e: any) {
-          showToast(`激活失败: 请确认 App ID 是否正确`, 'error');
+          showToast(`激活失败: ${e.message}`, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -53,7 +53,7 @@ const Settings: React.FC = () => {
       setIsSyncingNow(true);
       try {
           const success = await syncToCloud(true);
-          if (success) showToast('5.4MB+ 数据已成功压缩并同步至云端', 'success');
+          if (success) showToast('5.4MB+ 数据已成功同步至云端', 'success');
       } finally {
           setIsSyncingNow(false);
       }
@@ -88,7 +88,7 @@ const Settings: React.FC = () => {
           <h2 className="text-2xl font-bold text-white flex items-center gap-3 italic">
               <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与 LeanCloud 协议
           </h2>
-          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">No-SQL Quantum Interface v11.0</p>
+          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Enterprise No-SQL Sync v11.1</p>
         </div>
         <button onClick={() => confirm('重置全部？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
       </div>
@@ -118,15 +118,11 @@ const Settings: React.FC = () => {
                       </div>
                       <div>
                           <h4 className="text-white font-bold uppercase tracking-tighter flex items-center gap-2">
-                              LeanCloud 自动建表同步 (Auto-Schema)
-                              <span className="bg-emerald-500 text-[8px] text-black px-1.5 py-0.5 rounded font-black">AUTO SETUP</span>
+                              LeanCloud 全量镜像同步 (Managed Schema)
                           </h4>
                           <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">
                               状态: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span>
-                              {state.leanConfig.lastSync && <span className="ml-3 text-slate-600 font-bold tracking-tighter">LAST: {state.leanConfig.lastSync}</span>}
-                          </p>
-                          <p className="text-[10px] text-indigo-400/60 font-mono mt-1">
-                              特点: 无需手动 SQL。填入 Key 后点击同步，系统将自动在云端创建名为 "Backup" 的数据类并保存。
+                              {state.leanConfig.lastSync && <span className="ml-3 text-slate-600 font-bold tracking-tighter">上次成功: {state.leanConfig.lastSync}</span>}
                           </p>
                       </div>
                   </div>
@@ -146,7 +142,7 @@ const Settings: React.FC = () => {
                   <div className="space-y-4">
                       <div className="space-y-2">
                           <label className="text-[10px] text-slate-500 font-bold uppercase">App ID</label>
-                          <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="从 LeanCloud 控制台复制..." />
+                          <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="从控制台复制..." />
                       </div>
                       <div className="space-y-2">
                           <label className="text-[10px] text-slate-500 font-bold uppercase">App Key</label>
@@ -156,8 +152,12 @@ const Settings: React.FC = () => {
                           </div>
                       </div>
                       <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase">REST API 服务器地址 (可选)</label>
-                          <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="https://your-api-url.com (国际版可不填)" />
+                          <div className="flex justify-between items-center">
+                              <label className="text-[10px] text-indigo-400 font-bold uppercase">REST API 服务器地址 (必填)</label>
+                              <a href="https://leancloud.app/dashboard/applist.html#/apps" target="_blank" className="text-[9px] text-slate-500 flex items-center gap-1 hover:text-white transition-colors">去控制台获取 <ExternalLink className="w-2.5 h-2.5"/></a>
+                          </div>
+                          <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value})} className="w-full bg-black/40 border border-indigo-500/30 rounded-xl p-3 text-sm text-indigo-100 font-mono focus:border-indigo-500 outline-none" placeholder="https://your-app-prefix.example.com" />
+                          <p className="text-[9px] text-slate-600 italic mt-1">注：设置 -> 应用凭证 -> 服务器地址 (API 地址)</p>
                       </div>
                       
                       <div className="flex gap-4 pt-4">
@@ -173,14 +173,18 @@ const Settings: React.FC = () => {
                   <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
                       <div className="flex items-center gap-3">
                           <Zap className="w-5 h-5 text-indigo-400" />
-                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">为什么这次能点动？</h5>
+                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">排障建议</h5>
                       </div>
                       <div className="space-y-4">
                           <div className="text-[11px] text-slate-400 leading-relaxed font-mono">
-                              <p className="text-indigo-400 font-bold mb-2">架构优化点：</p>
-                              1. <b>零检测初始化</b>：只要填了 Key，系统就认为已连接。只有在点击“同步”的那一刻，才会尝试与云端通信。<br/><br/>
-                              2. <b>自动扩容字段</b>：LeanCloud 默认支持大文本字段，无需担心 5.4MB 数据溢出。<br/><br/>
-                              3. <b>无表运行</b>：即便你没在 LeanCloud 手动建表，系统第一次同步时会自动为你创建名为 <span className="text-white">Backup</span> 的表。
+                              <p className="text-indigo-400 font-bold mb-2 underline decoration-indigo-500/30 underline-offset-4">关于 "undefined server URL" 错误：</p>
+                              LeanCloud 自 2020 年起强制要求开发者通过绑定域名或官方分配的 API 域名进行访问。请务必在左侧填入 <span className="text-white">API 服务器地址</span>。
+                              <br/><br/>
+                              <p className="text-indigo-400 font-bold mb-2">如何查找：</p>
+                              1. 登录 LeanCloud 控制台。<br/>
+                              2. 进入您的应用。<br/>
+                              3. 设置 -> 应用凭证 -> 服务器地址。<br/>
+                              4. 复制 <span className="text-white">API</span> 栏位对应的 HTTPS 链接。
                           </div>
                       </div>
                   </div>
