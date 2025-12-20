@@ -103,7 +103,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!appId || !appKey) return;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         try {
-            // 如果 serverURL 以 slash 结尾则去掉，防止请求 404
             const cleanUrl = serverURL?.trim().replace(/\/$/, "");
             AV.init({ appId, appKey, serverURL: cleanUrl });
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
@@ -166,7 +165,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const Backup = AV.Object.extend('Backup');
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
-            let backupObj = await query.first();
+            
+            let backupObj = null;
+            try {
+                // 核心修复：更鲁棒地处理 404/Class 不存在的情况
+                backupObj = await query.first();
+            } catch (queryErr: any) {
+                // 兼容不同 LeanCloud 版本/环境下的 404 返回
+                const isNotFound = queryErr.code === 101 || 
+                                   queryErr.message?.includes("doesn't exist") || 
+                                   queryErr.status === 404;
+                if (!isNotFound) {
+                    throw queryErr;
+                }
+                // 如果是 101/404，保持 backupObj 为 null，后续会执行新建逻辑
+            }
             
             if (!backupObj) {
                 backupObj = new Backup();
@@ -182,6 +195,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return true;
         } catch (e: any) {
             console.error("[LeanCloud Sync Failed]", e);
+            // 只有当不是 404 导致的失败时，才通过 UI 报错（因为 404 应该在内部捕获）
             showToast(`同步异常: ${e.message}`, 'error');
             return false;
         }
@@ -192,7 +206,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
-            const backupObj = await query.first();
+            
+            let backupObj = null;
+            try {
+                backupObj = await query.first();
+            } catch (queryErr: any) {
+                const isNotFound = queryErr.code === 101 || 
+                                   queryErr.message?.includes("doesn't exist") || 
+                                   queryErr.status === 404;
+                if (!isNotFound) throw queryErr;
+            }
             
             if (backupObj) {
                 const payloadStr = backupObj.get('payload');
