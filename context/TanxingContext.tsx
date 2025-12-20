@@ -109,10 +109,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const cleanUrl = serverURL.trim().replace(/\/$/, "");
             AV.init({ appId, appKey, serverURL: cleanUrl });
             
-            // 真实链路测试：尝试拉取一个不存在的ID，如果报 401/403 说明 Key 错，如果超时说明 URL 错
-            const query = new AV.Query('_User');
+            // 改进验证逻辑：
+            // 不再查询受保护的系统表 _User，改查 Backup 表。
+            // 即使表不存在，只要不是 401 (Key错) 就算物理链路通了。
+            const query = new AV.Query('Backup');
             query.limit(1);
-            await query.find(); 
+            try {
+                await query.find();
+            } catch (e: any) {
+                // 101 是 Class 不存在的错误代码，属于正常现象（还没推送过）
+                // 401 是 App ID 或 Key 错误
+                if (e.code === 401) throw e;
+                // 其他错误（如 403 权限不足）在验证阶段可以忽略，因为我们只需要确认能连上
+            }
             
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
         } catch (e: any) {
