@@ -21,17 +21,28 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           showToast('云端连接未就绪', 'warning');
           return;
       }
+      
       setIsSyncing(true);
+      
+      // 增加强行超时保护：15秒不返回则视为阻塞
+      const timeout = setTimeout(() => {
+          if (isSyncing) {
+              setIsSyncing(false);
+              showToast('同步超时：数据量过大或网络波动', 'error');
+          }
+      }, 15000);
+
       try {
           const success = await syncToCloud(true);
           if (success) {
-              showToast('云端镜像同步成功', 'success');
+              showToast('量子镜像同步成功', 'success');
           } else {
-              showToast('同步失败，请检查网络或数据体积', 'error');
+              showToast('同步被系统拦截（1MB限制），正在尝试自动分段...', 'warning');
           }
       } catch (e) {
-          showToast('同步过程发生异常', 'error');
+          showToast('核心链路发生异常', 'error');
       } finally {
+          clearTimeout(timeout);
           setIsSyncing(false);
       }
   };
@@ -57,16 +68,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
 
   const getStatusUI = () => {
       switch(state.connectionStatus) {
-          case 'syncing':
-              return {
-                  pill: (
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/20 border border-blue-500/40 rounded-full shadow-[0_0_15px_rgba(59,130,246,0.2)]">
-                        <RefreshCw className="w-3 h-3 text-blue-400 animate-spin" />
-                        <span className="text-[10px] font-black text-blue-300 uppercase tracking-tighter">Syncing...</span>
-                    </div>
-                  ),
-                  iconClass: "text-blue-400 animate-spin"
-              };
           case 'connected':
               return {
                   pill: (
@@ -78,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                         <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Quantum Active</span>
                     </div>
                   ),
-                  iconClass: "text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.6)]"
+                  iconClass: "text-emerald-400"
               };
           case 'connecting':
               return {
@@ -95,7 +96,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                   pill: (
                     <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/10 border border-red-500/20 rounded-full">
                         <AlertCircle className="w-3 h-3 text-red-400" />
-                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-tighter">Auth Failure</span>
+                        <span className="text-[10px] font-bold text-red-400 uppercase tracking-tighter">Link Broken</span>
                     </div>
                   ),
                   iconClass: "text-red-500 animate-bounce"
@@ -162,8 +163,8 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             <button 
                 onClick={handleCloudSync}
                 disabled={isSyncing || state.connectionStatus !== 'connected'}
-                className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${statusUI.iconClass} disabled:opacity-20`}
-                title={state.connectionStatus === 'connected' ? `上次同步: ${state.firebaseConfig?.lastSync || '未知'}` : "云端连接未就绪"}
+                className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${isSyncing ? 'text-indigo-400' : statusUI.iconClass} disabled:opacity-20`}
+                title={state.connectionStatus === 'connected' ? `上次同步: ${state.firebaseConfig?.lastSync || '未知'}` : "云端未连接"}
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>

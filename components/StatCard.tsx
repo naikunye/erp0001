@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LucideIcon, ArrowUpRight, ArrowDownRight, Activity } from 'lucide-react';
 
@@ -63,7 +62,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subValue, trend, tren
                         {title}
                     </span>
                     <div className="flex items-baseline gap-2 mt-1">
-                        <h3 className="text-4xl font-display font-bold text-white tracking-tight drop-shadow-md">
+                        <h3 className="text-3xl font-mono font-black text-white tracking-tighter drop-shadow-md">
                             {value}
                         </h3>
                         {subValue && <span className="text-xs text-slate-500 font-mono self-end mb-1.5">{subValue}</span>}

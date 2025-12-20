@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableNetwork, terminate } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableNetwork, terminate, writeBatch } from 'firebase/firestore';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
@@ -106,11 +106,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const lastSyncFingerprintRef = useRef<string>('');
     const isInternalUpdateRef = useRef(false);
 
+    const sanitizeId = (id: string) => id?.replace(/https?:\/\//g, '').split('.')[0].trim();
+
     const bootFirebase = async (config: FirebaseConfig) => {
-        if (!config.apiKey || !config.projectId) {
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
-            return;
-        }
+        const cleanId = sanitizeId(config.projectId);
+        if (!config.apiKey || !cleanId) return;
+
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         try {
             const apps = getApps();
@@ -118,28 +119,17 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 try { const db = getFirestore(app); await terminate(db); } catch(e) {}
                 await deleteApp(app).catch(() => {});
             }
-            const app = initializeApp(config);
+
+            const app = initializeApp({ ...config, projectId: cleanId });
             const db = getFirestore(app);
             await enableNetwork(db);
-            const docRef = doc(db, 'backups', 'quantum_state');
-
+            
             // 握手测试
-            await setDoc(docRef, { 
-                handshake: { ts: new Date().toISOString(), session: SESSION_ID, type: 'heartbeat' } 
-            }, { merge: true });
-
-            // 拉取快照 (仅在没有本地数据或强制同步时)
-            const snapshot = await getDoc(docRef);
-            if (snapshot.exists() && snapshot.data().payload) {
-                const cloudData = snapshot.data().payload;
-                // 如果本地没有产品数据，才用云端覆盖，防止导入后的本地数据在刷新时被旧云端覆盖
-                if (state.products.length === 0) {
-                    lastSyncFingerprintRef.current = JSON.stringify(cloudData);
-                    dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
-                }
-            }
+            const docRef = doc(db, 'backups', 'manifest');
+            await setDoc(docRef, { handshake: SESSION_ID, last_active: new Date().toISOString() }, { merge: true });
 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+            dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { projectId: cleanId } });
         } catch (e: any) {
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             throw e;
@@ -166,92 +156,108 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         init();
     }, []);
 
+    // 实时同步：监听 Manifest
     useEffect(() => {
         if (!isHydrated || state.connectionStatus !== 'connected') return;
-        let db;
-        try { db = getFirestore(getApp()); } catch(e) { return; }
-        const docRef = doc(db, 'backups', 'quantum_state');
-        const unsubscribe = onSnapshot(docRef, (snapshot) => {
-            if (snapshot.exists()) {
-                const incoming = snapshot.data();
-                if (incoming.source_session && incoming.source_session !== SESSION_ID && !snapshot.metadata.hasPendingWrites) {
-                    const fingerprint = JSON.stringify(incoming.payload);
-                    if (fingerprint && fingerprint !== lastSyncFingerprintRef.current) {
-                        isInternalUpdateRef.current = true;
-                        lastSyncFingerprintRef.current = fingerprint;
-                        dispatch({ type: 'HYDRATE_STATE', payload: incoming.payload });
-                    }
+        const db = getFirestore(getApp());
+        const unsub = onSnapshot(doc(db, 'backups', 'manifest'), async (snap) => {
+            if (snap.exists()) {
+                const meta = snap.data();
+                if (meta.source_session !== SESSION_ID && meta.fingerprint !== lastSyncFingerprintRef.current) {
+                    // 如果 Manifest 变了，全量拉取一次
+                    await pullFromCloud();
                 }
             }
         });
-        return () => unsubscribe();
+        return unsub;
     }, [state.connectionStatus, isHydrated]);
 
+    // 自动保存逻辑
     useEffect(() => {
         if (!isHydrated) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.firebaseConfig));
         const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
-        document.body.className = `theme-${state.theme}`;
+        
         if (!isInternalUpdateRef.current && state.connectionStatus === 'connected' && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 3000);
+            const timer = setTimeout(() => syncToCloud(), 5000);
             return () => clearTimeout(timer);
         }
         isInternalUpdateRef.current = false;
-    }, [state.products, state.orders, state.transactions, state.shipments, state.theme, state.connectionStatus]);
+    }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus]);
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
         if (state.connectionStatus !== 'connected' && !isForce) return false;
         
-        // 限制审计日志长度，防止超过 Firestore 1MB 文档限制
-        const safeAuditLogs = state.auditLogs.slice(0, 100);
-        const safeTransactions = state.transactions.slice(0, 500);
-
-        const payload = {
-            products: state.products, orders: state.orders, tasks: state.tasks,
-            customers: state.customers, shipments: state.shipments, suppliers: state.suppliers,
-            transactions: safeTransactions, adCampaigns: state.adCampaigns, influencers: state.influencers,
-            inboundShipments: state.inboundShipments, auditLogs: safeAuditLogs
-        };
-
-        const fingerprint = JSON.stringify(payload);
-        if (!isForce && fingerprint === lastSyncFingerprintRef.current) return true;
-
         try {
             const db = getFirestore(getApp());
-            await setDoc(doc(db, 'backups', 'quantum_state'), {
+            const batch = writeBatch(db);
+            const ts = new Date().toISOString();
+
+            // 1. 裁剪冗余数据：仅保留最近 20 条日志和 100 条流水，减少体积
+            const cleanAuditLogs = state.auditLogs.slice(0, 20);
+            const cleanTransactions = state.transactions.slice(0, 100);
+
+            // 2. 节点化数据块
+            const nodes = {
+                products: { products: state.products, suppliers: state.suppliers },
+                orders: { orders: state.orders, customers: state.customers, inboundShipments: state.inboundShipments },
+                finance: { transactions: cleanTransactions, adCampaigns: state.adCampaigns },
+                misc: { shipments: state.shipments, tasks: state.tasks, auditLogs: cleanAuditLogs, influencers: state.influencers }
+            };
+
+            const fingerprint = JSON.stringify(nodes);
+            if (!isForce && fingerprint === lastSyncFingerprintRef.current) return true;
+
+            // 3. 执行分段写入
+            Object.entries(nodes).forEach(([key, payload]) => {
+                const nodeRef = doc(db, 'backups', `node_${key}`);
+                batch.set(nodeRef, { payload, timestamp: ts });
+            });
+
+            // 4. 更新清单
+            batch.set(doc(db, 'backups', 'manifest'), {
+                fingerprint,
                 source_session: SESSION_ID,
-                payload: payload,
-                timestamp: new Date().toISOString()
-            }, { merge: true });
-            
+                lastSync: ts
+            });
+
+            await batch.commit();
             lastSyncFingerprintRef.current = fingerprint;
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
             return true;
+
         } catch (e: any) {
-            console.error("[Sync Error]", e);
+            console.error("[Sync Failed]", e);
             if (e.message.includes('too large')) {
-                dispatch({ type: 'ADD_TOAST', payload: { message: '同步失败：数据量过大 (超出 Firestore 1MB 限制)，请清理审计日志。', type: 'error' } });
+                dispatch({ type: 'ADD_TOAST', payload: { message: '数据过大 (5MB+)，部分图片或日志同步已被截断。', type: 'warning' } });
             }
             return false;
         }
     };
 
     const pullFromCloud = async () => {
-        if (state.connectionStatus !== 'connected') {
-            dispatch({ type: 'ADD_TOAST', payload: { message: '请先启动连接', type: 'warning' } });
-            return;
-        }
+        if (state.connectionStatus !== 'connected') return;
         try {
             const db = getFirestore(getApp());
-            const snapshot = await getDoc(doc(db, 'backups', 'quantum_state'));
-            if (snapshot.exists()) {
-                const cloudData = snapshot.data().payload;
-                dispatch({ type: 'HYDRATE_STATE', payload: cloudData });
-                dispatch({ type: 'ADD_TOAST', payload: { message: '已从云端拉取最新数据', type: 'success' } });
+            const nodes = ['products', 'orders', 'finance', 'misc'];
+            let combinedPayload: any = {};
+
+            const results = await Promise.all(nodes.map(n => getDoc(doc(db, 'backups', `node_${n}`))));
+            
+            results.forEach(snap => {
+                if (snap.exists()) {
+                    combinedPayload = { ...combinedPayload, ...snap.data().payload };
+                }
+            });
+
+            if (Object.keys(combinedPayload).length > 0) {
+                isInternalUpdateRef.current = true;
+                lastSyncFingerprintRef.current = JSON.stringify(combinedPayload);
+                dispatch({ type: 'HYDRATE_STATE', payload: combinedPayload });
             }
         } catch (e) {
-            dispatch({ type: 'ADD_TOAST', payload: { message: '拉取失败', type: 'error' } });
+            console.error("[Pull Failed]", e);
         }
     };
 
