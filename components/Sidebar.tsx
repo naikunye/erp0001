@@ -51,8 +51,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                         <Hexagon className="w-6 h-6 fill-current" />
                     </div>
                     <div>
-                        {/* 彻底修正字体为 font-sans */}
-                        <div className="font-sans font-black text-2xl text-white tracking-tight leading-none uppercase italic">TANXING</div>
+                        {/* 应用 brand-logo 专用类 */}
+                        <div className="brand-logo text-2xl tracking-tighter leading-none">TANXING</div>
                         <div className="text-[9px] text-indigo-400 font-mono tracking-[0.3em] mt-1.5 uppercase opacity-80">Quantum ERP</div>
                     </div>
                 </div>

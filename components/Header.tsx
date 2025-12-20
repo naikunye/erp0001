@@ -55,6 +55,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   };
 
   const getUSDate = () => {
+    // 强制使用洛杉矶时区计算当前日期
     return new Intl.DateTimeFormat('en-US', {
       timeZone: 'America/Los_Angeles',
       month: 'short',
@@ -147,14 +148,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">芝加哥 CT</span>
-                    <span className="text-xs font-mono text-indigo-100 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30">
-                        {formatTime('America/Chicago')}
-                    </span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">芝加哥 CT</span>
+                    <span className="text-xs font-mono text-white/70">{formatTime('America/Chicago')}</span>
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">洛杉矶 PT</span>
-                    <span className="text-xs font-mono text-white/70">{formatTime('America/Los_Angeles')}</span>
+                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">洛杉矶 PT</span>
+                    <span className="text-xs font-mono text-indigo-100 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
+                        {formatTime('America/Los_Angeles')}
+                    </span>
                 </div>
             </div>
         </div>
@@ -167,23 +168,13 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             <button 
                 onClick={handleCloudSync}
                 disabled={isSyncing || state.connectionStatus !== 'connected'}
-                className={`relative p-2 rounded-full transition-all hover:bg-white/5 ${isSyncing ? 'text-indigo-400' : statusUI.iconClass} disabled:opacity-20`}
-                title={state.connectionStatus === 'connected' ? `上次同步: ${state.leanConfig?.lastSync || '未知'}` : "云端未连接"}
+                className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-slate-400 hover:text-white disabled:opacity-20"
+                title="手动云端同步"
             >
                 {isSyncing ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
-            <button className={`relative p-2 rounded-full transition-all text-white/60 hover:text-white hover:bg-white/5`}>
-                <Bell className="w-5 h-5" />
-                <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-red-500 rounded-full ring-2 ring-[#121217]"></span>
-            </button>
-            <div className="relative">
-                <button className="flex items-center gap-3 pl-1 pr-3 py-1 rounded-full hover:bg-white/5 transition-all border border-transparent hover:border-white/10">
-                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 flex items-center justify-center text-[10px] font-black text-white shadow-inner border border-white/20">ROOT</div>
-                    <div className="text-left hidden md:block">
-                        <div className="text-[10px] font-black text-white leading-none mb-0.5 uppercase italic">Admin.Matrix</div>
-                        <div className="text-[8px] text-white/40 font-mono leading-none uppercase">ID: {SESSION_ID.toUpperCase()}</div>
-                    </div>
-                </button>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-white font-black text-xs cursor-pointer hover:border-indigo-500 transition-colors">
+                AD
             </div>
         </div>
       </div>

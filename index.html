@@ -19,6 +19,7 @@
             animation: {
               'blob': 'blob 15s infinite alternate',
               'spin-slow': 'spin 12s linear infinite',
+              'scan': 'scan 3s linear infinite',
             },
             keyframes: {
               blob: {
@@ -26,6 +27,10 @@
                 '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
                 '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
                 '100%': { transform: 'translate(0px, 0px) scale(1)' },
+              },
+              scan: {
+                '0%': { transform: 'translateY(-100%)' },
+                '100%': { transform: 'translateY(400%)' }
               }
             }
           }
@@ -35,9 +40,9 @@
     <style>
       :root {
         --theme-primary: #6366f1;
-        --glass-bg: rgba(15, 15, 20, 0.6);
+        --glass-bg: rgba(10, 10, 15, 0.7);
         --glass-border: rgba(255, 255, 255, 0.08);
-        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
       }
 
       body { 
@@ -53,66 +58,72 @@
       .ambient-bg {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
         z-index: -1; overflow: hidden; 
-        transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      /* 动态能量球基础样式 */
       .blob {
         position: absolute;
-        filter: blur(80px);
+        filter: blur(90px);
         border-radius: 50%;
-        opacity: 0.5;
+        opacity: 0.45;
         transition: all 1.2s ease;
       }
 
-      /* --- 主题 1: Obsidian Vision (深蓝/靛青) --- */
+      /* 主题色彩配置 */
       body.theme-ios-glass { --theme-primary: #6366f1; }
       body.theme-ios-glass .ambient-bg { background: #050814; }
-      body.theme-ios-glass .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #312e81; animation: blob 20s infinite; }
-      body.theme-ios-glass .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #1e1b4b; animation: blob 25s infinite reverse; }
-      body.theme-ios-glass .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: #4338ca; animation: blob 15s infinite alternate; }
+      body.theme-ios-glass .blob-1 { top: -10%; left: -10%; width: 55vw; height: 55vw; background: #312e81; animation: blob 20s infinite; }
+      body.theme-ios-glass .blob-2 { bottom: -10%; right: -10%; width: 65vw; height: 65vw; background: #1e1b4b; animation: blob 25s infinite reverse; }
+      body.theme-ios-glass .blob-3 { top: 40%; left: 30%; width: 35vw; height: 35vw; background: #4338ca; animation: blob 15s infinite alternate; }
 
-      /* --- 主题 2: Sunset Horizon (玫瑰/橙紫) --- */
       body.theme-midnight-dark { --theme-primary: #f43f5e; }
       body.theme-midnight-dark .ambient-bg { background: #0f0505; }
-      body.theme-midnight-dark .blob-1 { top: -10%; right: -10%; width: 55vw; height: 55vw; background: #881337; animation: blob 18s infinite; }
-      body.theme-midnight-dark .blob-2 { bottom: -5%; left: -5%; width: 45vw; height: 45vw; background: #4c0519; animation: blob 22s infinite reverse; }
-      body.theme-midnight-dark .blob-3 { top: 30%; left: 50%; width: 40vw; height: 40vw; background: #fb7185; opacity: 0.2; animation: blob 20s infinite alternate; }
+      body.theme-midnight-dark .blob-1 { top: -10%; right: -10%; width: 60vw; height: 60vw; background: #881337; animation: blob 18s infinite; }
+      body.theme-midnight-dark .blob-2 { bottom: -5%; left: -5%; width: 50vw; height: 50vw; background: #4c0519; animation: blob 22s infinite reverse; }
+      body.theme-midnight-dark .blob-3 { top: 30%; left: 50%; width: 45vw; height: 45vw; background: #fb7185; opacity: 0.25; animation: blob 20s infinite alternate; }
 
-      /* --- 主题 3: Emerald Nebula (极光/青绿) --- */
       body.theme-cyber-neon { --theme-primary: #10b981; }
       body.theme-cyber-neon .ambient-bg { background: #020606; }
-      body.theme-cyber-neon .blob-1 { top: -15%; left: 20%; width: 50vw; height: 50vw; background: #064e3b; animation: blob 25s infinite; }
-      body.theme-cyber-neon .blob-2 { bottom: -10%; right: 10%; width: 55vw; height: 55vw; background: #065f46; animation: blob 18s infinite reverse; }
-      body.theme-cyber-neon .blob-3 { top: 50%; left: -10%; width: 35vw; height: 35vw; background: #10b981; opacity: 0.15; animation: blob 20s infinite alternate; }
+      body.theme-cyber-neon .blob-1 { top: -15%; left: 20%; width: 55vw; height: 55vw; background: #064e3b; animation: blob 25s infinite; }
+      body.theme-cyber-neon .blob-2 { bottom: -10%; right: 10%; width: 60vw; height: 60vw; background: #065f46; animation: blob 18s infinite reverse; }
+      body.theme-cyber-neon .blob-3 { top: 50%; left: -10%; width: 40vw; height: 40vw; background: #10b981; opacity: 0.2; animation: blob 20s infinite alternate; }
 
-      /* 毛玻璃面板通用样式 */
+      /* 毛玻璃面板 2.0 */
       .ios-glass-panel {
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
-        backdrop-filter: blur(40px) saturate(200%) contrast(95%);
-        -webkit-backdrop-filter: blur(40px) saturate(200%) contrast(95%);
+        backdrop-filter: blur(45px) saturate(210%) contrast(98%);
+        -webkit-backdrop-filter: blur(45px) saturate(210%) contrast(98%);
         box-shadow: var(--glass-shadow);
       }
 
       .ios-glass-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.06);
-        backdrop-filter: blur(20px) saturate(160%);
-        -webkit-backdrop-filter: blur(20px) saturate(160%);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        backdrop-filter: blur(25px) saturate(180%);
+        -webkit-backdrop-filter: blur(25px) saturate(180%);
+      }
+
+      /* 品牌 Logo 专用字体样式 */
+      .brand-logo {
+        font-family: 'Inter', sans-serif;
+        font-weight: 900;
+        letter-spacing: -0.05em;
+        font-style: italic;
+        background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
       }
 
       .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
       
-      /* 网格扫描线覆盖 (仅在部分主题显示更明显) */
       .ambient-grid {
         position: fixed; inset: 0;
-        background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-        background-size: 50px 50px;
+        background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: 60px 60px;
         z-index: -1;
         pointer-events: none;
-        opacity: 0.5;
+        opacity: 0.3;
       }
     </style>
   <script type="importmap">
