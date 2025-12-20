@@ -105,37 +105,38 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
         if (!appId || !appKey || !serverURL) return;
-        const cleanUrl = serverURL.trim().replace(/\/$/, "");
-        AV.init({ appId, appKey, serverURL: cleanUrl });
-        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+        try {
+            const cleanUrl = serverURL.trim().replace(/\/$/, "");
+            AV.init({ appId, appKey, serverURL: cleanUrl });
+            
+            // 真实链路测试：尝试拉取一个不存在的ID，如果报 401/403 说明 Key 错，如果超时说明 URL 错
+            const query = new AV.Query('_User');
+            query.limit(1);
+            await query.find(); 
+            
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+        } catch (e: any) {
+            console.error("LeanCloud Auth Failed", e);
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+            throw e;
+        }
     };
 
-    // 核心修复：阻塞式加载流程
     useEffect(() => {
         const startup = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             const savedDb = localStorage.getItem(DB_KEY);
 
-            // 第一步：恢复本地 UI 配置
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
-                
                 try {
-                    // 第二步：尝试建立云端物理连接
                     await bootLean(config.appId, config.appKey, config.serverURL);
-                    
-                    // 第三步：强制拉取。成功拉取后，hasAttemptedPullRef 确保我们不再加载 Mock
                     const pullSuccess = await pullFromCloud(true);
-                    if (pullSuccess) {
-                        hasAttemptedPullRef.current = true;
-                    }
-                } catch (e) {
-                    console.error("Cloud boot error", e);
-                }
+                    if (pullSuccess) hasAttemptedPullRef.current = true;
+                } catch (e) {}
             }
 
-            // 第四步：如果云端没拉到数据，才降级加载本地缓存
             if (!hasAttemptedPullRef.current) {
                 if (savedDb) {
                     dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) });
@@ -143,14 +144,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     dispatch({ type: 'LOAD_MOCK_DATA' });
                 }
             }
-
-            // 第五步：释放 UI 锁定，进入系统
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
         startup();
     }, []);
 
-    // 后台自动同步逻辑：必须解锁后才运行
     useEffect(() => {
         if (!state.isInitialized) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
@@ -183,12 +181,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const Backup = AV.Object.extend('Backup');
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
-            let backupObj = null;
-            try {
-                backupObj = await query.first();
-            } catch (err: any) {
-                if (err.code !== 101 && !err.message?.includes("doesn't exist")) throw err;
-            }
+            let backupObj = await query.first();
 
             if (!backupObj) {
                 backupObj = new Backup();
@@ -204,7 +197,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             dispatch({ type: 'ALLOW_SYNC' });
             return true;
         } catch (e: any) {
-            console.error("[Tanxing Sync Error]", e);
+            console.error("[Sync Error]", e);
             showToast(`同步失败: ${e.message}`, 'error');
             return false;
         }
@@ -214,27 +207,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
-            let backupObj = null;
-            try {
-                backupObj = await query.first();
-            } catch (err: any) {
-                if (err.code !== 101 && !err.message?.includes("doesn't exist")) throw err;
-            }
+            let backupObj = await query.first();
 
             if (backupObj) {
-                const rawPayload = backupObj.get('payload');
-                if (!rawPayload) return false;
-                const data = JSON.parse(rawPayload);
+                const data = JSON.parse(backupObj.get('payload'));
                 setIsInternalUpdate(true);
                 dispatch({ type: 'HYDRATE_STATE', payload: { ...data, syncAllowed: true } });
-                if (!isSilent) showToast('已成功同步云端镜像', 'success');
+                if (!isSilent) showToast('已成功从云端镜像恢复数据', 'success');
                 return true;
-            } else {
-                if (!isSilent) showToast('云端尚无备份', 'info');
-                return false;
             }
+            if (!isSilent) showToast('云端尚无备份记录', 'info');
+            return false;
         } catch (e: any) {
-            if (!isSilent) showToast(`拉取异常: ${e.message}`, 'error');
+            if (!isSilent) showToast(`拉取失败: ${e.message}`, 'error');
             return false;
         }
     };
