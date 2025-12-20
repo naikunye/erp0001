@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { TanxingProvider, useTanxing } from './context/TanxingContext';
 import Sidebar from './components/Sidebar';
@@ -33,6 +32,15 @@ const MainLayout: React.FC = () => {
   const [loginForm, setLoginForm] = useState({ email: 'admin@tanxing.com', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
   
+  // --- 核心修复：同步主题到 body 标签 ---
+  useEffect(() => {
+      if (state.theme) {
+          // 清除所有旧主题类，添加新主题类
+          document.body.className = `theme-${state.theme}`;
+          Logger.info(`Theme applied: theme-${state.theme}`);
+      }
+  }, [state.theme]);
+
   useEffect(() => {
       setAuthChecking(false);
       Logger.info("Application mounted");
