@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark">
   <head>
@@ -7,7 +6,7 @@
     <title>Tanxing OS | LeanCloud Edition</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Zhi+Mang+Xing&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
@@ -16,69 +15,105 @@
             fontFamily: {
               sans: ['"Inter"', 'sans-serif'],
               mono: ['"JetBrains Mono"', 'monospace'],
-              display: ['"Zhi Mang Xing"', 'cursive'],
+            },
+            animation: {
+              'blob': 'blob 15s infinite alternate',
+              'spin-slow': 'spin 12s linear infinite',
+            },
+            keyframes: {
+              blob: {
+                '0%': { transform: 'translate(0px, 0px) scale(1)' },
+                '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+                '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+                '100%': { transform: 'translate(0px, 0px) scale(1)' },
+              }
             }
           }
         }
       }
     </script>
     <style>
-      body, .ambient-bg { transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1); }
-      .ios-glass-panel, .ios-glass-card { transition: background 0.3s ease, border 0.3s ease; }
-
       :root {
-        --glass-bg: rgba(255, 255, 255, 0.05);
-        --glass-border: rgba(255, 255, 255, 0.1);
-        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.2);
+        --theme-primary: #6366f1;
+        --glass-bg: rgba(15, 15, 20, 0.6);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
       }
 
+      body { 
+        height: 100%; 
+        overflow: hidden; 
+        -webkit-font-smoothing: antialiased; 
+        background-color: #02040a; 
+        color: #f8fafc; 
+        transition: background-color 0.8s ease;
+      }
+
+      /* 核心动态背景层 */
       .ambient-bg {
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: -1; overflow: hidden;
+        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
+        z-index: -1; overflow: hidden; 
+        transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      body.theme-ios-glass .ambient-bg {
-        background-color: #0f172a;
-        background-image: 
-          radial-gradient(at 0% 0%, #1e1b4b 0px, transparent 50%),
-          radial-gradient(at 100% 0%, #2e1065 0px, transparent 50%),
-          radial-gradient(at 100% 100%, #1e293b 0px, transparent 50%),
-          radial-gradient(at 0% 100%, #312e81 0px, transparent 50%),
-          radial-gradient(at 50% 50%, #020617 0px, transparent 80%);
+      /* 动态能量球基础样式 */
+      .blob {
+        position: absolute;
+        filter: blur(80px);
+        border-radius: 50%;
+        opacity: 0.5;
+        transition: all 1.2s ease;
       }
 
-      body.theme-midnight-dark .ambient-bg {
-        background-color: #020617;
-        background-image: 
-          radial-gradient(at 20% 30%, #1e1b4b 0px, transparent 30%),
-          radial-gradient(at 80% 70%, #4c0519 0px, transparent 30%),
-          radial-gradient(at 50% 50%, #000000 0px, transparent 70%);
-      }
+      /* --- 主题 1: Obsidian Vision (深蓝/靛青) --- */
+      body.theme-ios-glass { --theme-primary: #6366f1; }
+      body.theme-ios-glass .ambient-bg { background: #050814; }
+      body.theme-ios-glass .blob-1 { top: -10%; left: -10%; width: 50vw; height: 50vw; background: #312e81; animation: blob 20s infinite; }
+      body.theme-ios-glass .blob-2 { bottom: -10%; right: -10%; width: 60vw; height: 60vw; background: #1e1b4b; animation: blob 25s infinite reverse; }
+      body.theme-ios-glass .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: #4338ca; animation: blob 15s infinite alternate; }
 
-      body.theme-cyber-neon .ambient-bg {
-        background-color: #020617;
-        background-image: 
-          radial-gradient(at 0% 0%, #083344 0px, transparent 40%),
-          radial-gradient(at 100% 100%, #4c1d95 0px, transparent 40%),
-          radial-gradient(at 50% 10%, #164e63 0px, transparent 30%),
-          linear-gradient(rgba(6, 182, 212, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(6, 182, 212, 0.03) 1px, transparent 1px);
-        background-size: 100%, 100%, 100%, 40px 40px, 40px 40px;
-      }
+      /* --- 主题 2: Sunset Horizon (玫瑰/橙紫) --- */
+      body.theme-midnight-dark { --theme-primary: #f43f5e; }
+      body.theme-midnight-dark .ambient-bg { background: #0f0505; }
+      body.theme-midnight-dark .blob-1 { top: -10%; right: -10%; width: 55vw; height: 55vw; background: #881337; animation: blob 18s infinite; }
+      body.theme-midnight-dark .blob-2 { bottom: -5%; left: -5%; width: 45vw; height: 45vw; background: #4c0519; animation: blob 22s infinite reverse; }
+      body.theme-midnight-dark .blob-3 { top: 30%; left: 50%; width: 40vw; height: 40vw; background: #fb7185; opacity: 0.2; animation: blob 20s infinite alternate; }
 
+      /* --- 主题 3: Emerald Nebula (极光/青绿) --- */
+      body.theme-cyber-neon { --theme-primary: #10b981; }
+      body.theme-cyber-neon .ambient-bg { background: #020606; }
+      body.theme-cyber-neon .blob-1 { top: -15%; left: 20%; width: 50vw; height: 50vw; background: #064e3b; animation: blob 25s infinite; }
+      body.theme-cyber-neon .blob-2 { bottom: -10%; right: 10%; width: 55vw; height: 55vw; background: #065f46; animation: blob 18s infinite reverse; }
+      body.theme-cyber-neon .blob-3 { top: 50%; left: -10%; width: 35vw; height: 35vw; background: #10b981; opacity: 0.15; animation: blob 20s infinite alternate; }
+
+      /* 毛玻璃面板通用样式 */
       .ios-glass-panel {
-        background: var(--glass-bg); border: 1px solid var(--glass-border);
-        backdrop-filter: blur(40px) saturate(180%); -webkit-backdrop-filter: blur(40px) saturate(180%);
+        background: var(--glass-bg);
+        border: 1px solid var(--glass-border);
+        backdrop-filter: blur(40px) saturate(200%) contrast(95%);
+        -webkit-backdrop-filter: blur(40px) saturate(200%) contrast(95%);
         box-shadow: var(--glass-shadow);
       }
 
       .ios-glass-card {
-        background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(20px) saturate(140%); -webkit-backdrop-filter: blur(20px) saturate(140%);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        backdrop-filter: blur(20px) saturate(160%);
+        -webkit-backdrop-filter: blur(20px) saturate(160%);
       }
 
-      html, body { height: 100%; overflow: hidden; -webkit-font-smoothing: antialiased; background-color: #020617; color: #f8fafc; }
       .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 10px; }
+      
+      /* 网格扫描线覆盖 (仅在部分主题显示更明显) */
+      .ambient-grid {
+        position: fixed; inset: 0;
+        background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+        background-size: 50px 50px;
+        z-index: -1;
+        pointer-events: none;
+        opacity: 0.5;
+      }
     </style>
   <script type="importmap">
 {
@@ -96,7 +131,12 @@
 </script>
 </head>
   <body class="theme-ios-glass"> 
-    <div class="ambient-bg"></div>
+    <div class="ambient-bg">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <div class="ambient-grid"></div>
+    </div>
     <div id="root" class="h-full w-full relative z-10 antialiased selection:bg-indigo-500/30"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
