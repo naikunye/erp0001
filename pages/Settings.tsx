@@ -4,7 +4,7 @@ import {
     RefreshCw, Eye, EyeOff, Trash2, Wifi, 
     ArrowUpCircle, ArrowDownCircle, Download, Upload,
     Palette, Monitor, Sparkles, Check, Moon, MonitorDot, AlertCircle,
-    ExternalLink, FileJson, ArrowRight, Eraser, LogOut, Zap
+    ExternalLink, FileJson, ArrowRight, Eraser, LogOut, Zap, Loader2
 } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 
@@ -13,6 +13,7 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [isSyncingNow, setIsSyncingNow] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -47,11 +48,31 @@ const Settings: React.FC = () => {
       try {
           dispatch({ type: 'SET_FIREBASE_CONFIG', payload: fbForm });
           await bootFirebase(fbForm as any);
-          showToast('量子分片链路已接通', 'success');
+          showToast('量子链路初始化完成', 'success');
       } catch (e: any) {
           showToast(`配置激活失败: ${e.message}`, 'error');
       } finally {
           setIsSaving(false);
+      }
+  };
+
+  const handleManualSync = async () => {
+      if (!fbForm.apiKey) {
+          showToast('请先配置并保存 Firebase 参数', 'warning');
+          return;
+      }
+      setIsSyncingNow(true);
+      try {
+          const success = await syncToCloud(true);
+          if (success) {
+              showToast('云端 5.4MB+ 大文件分片同步成功', 'success');
+          } else {
+              showToast('同步失败：可能是 Firestore Rules 权限未开启', 'error');
+          }
+      } catch (e: any) {
+          showToast(`传输异常: ${e.message}`, 'error');
+      } finally {
+          setIsSyncingNow(false);
       }
   };
 
@@ -96,21 +117,8 @@ const Settings: React.FC = () => {
               }
 
               dispatch({ type: 'HYDRATE_STATE', payload: importedData });
-              showToast('本地重构成功，正在执行量子分片上传...', 'info');
-
-              if (state.connectionStatus === 'connected') {
-                  setTimeout(async () => {
-                      const success = await syncToCloud(true);
-                      if (success) {
-                          showToast('云端分片同步完成', 'success');
-                      } else {
-                          showToast('分片同步失败', 'error');
-                      }
-                      setIsImporting(false);
-                  }, 1000);
-              } else {
-                  setIsImporting(false);
-              }
+              showToast('本地重构成功', 'info');
+              setIsImporting(false);
           } catch (err) {
               showToast('解析 JSON 失败', 'error');
               setIsImporting(false);
@@ -128,7 +136,7 @@ const Settings: React.FC = () => {
           <h2 className="text-2xl font-bold text-white flex items-center gap-3 italic">
               <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与量子同步协议
           </h2>
-          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Sharding Matrix Interface v9.6</p>
+          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Sharding Matrix Interface v9.7</p>
         </div>
         <button onClick={() => confirm('确定重置全系统数据？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
       </div>
@@ -161,13 +169,24 @@ const Settings: React.FC = () => {
                               量子分片同步 (Quantum Sharding)
                               <span className="bg-emerald-500 text-[8px] text-black px-1.5 py-0.5 rounded font-black">FREE FOREVER</span>
                           </h4>
-                          <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">当前链路: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span></p>
-                          <p className="text-[10px] text-indigo-400/60 font-mono mt-1">方案原理: 自动将大体积 JSON 切碎存入多个 Firestore 文档，支持 5.4MB+ 大镜像同步。</p>
+                          <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">
+                              当前状态: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span>
+                              {state.firebaseConfig.lastSync && <span className="ml-3 text-slate-600">上次同步: {state.firebaseConfig.lastSync}</span>}
+                          </p>
+                          <p className="text-[10px] text-indigo-400/60 font-mono mt-1">
+                              方案原理: 已自动适配 500KB 安全分片，绕过 Firestore 1MB 限制，支持 5.4MB+ 大文件。
+                          </p>
                       </div>
                   </div>
                   <div className="flex gap-3">
-                      <button onClick={pullFromCloud} disabled={state.connectionStatus !== 'connected'} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-white/10 transition-all">拉取重构</button>
-                      <button onClick={() => syncToCloud(true)} disabled={state.connectionStatus !== 'connected'} className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/40">分片上传</button>
+                      <button onClick={pullFromCloud} className="px-5 py-2.5 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-bold flex items-center gap-2 hover:bg-white/10 transition-all">拉取重构</button>
+                      <button 
+                        onClick={handleManualSync} 
+                        disabled={isSyncingNow}
+                        className="px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-bold flex items-center gap-2 transition-all shadow-lg shadow-indigo-900/40 disabled:opacity-50"
+                      >
+                          {isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <Upload className="w-4 h-4" />} 分片上传
+                      </button>
                   </div>
               </div>
 
@@ -189,7 +208,7 @@ const Settings: React.FC = () => {
                       
                       <div className="flex gap-4 pt-4">
                         <button onClick={handleSaveConfig} disabled={isSaving} className="flex-1 py-5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
-                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />} 启动同步协议
+                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />} 初始化链路
                         </button>
                         <button onClick={handleClearConfig} className="p-5 bg-white/5 border border-white/10 text-slate-500 hover:text-red-400 rounded-2xl transition-all" title="断开连接">
                             <LogOut className="w-6 h-6" />
@@ -200,20 +219,17 @@ const Settings: React.FC = () => {
                   <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
                       <div className="flex items-center gap-3">
                           <Zap className="w-5 h-5 text-indigo-400" />
-                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">Firestore 安全规则建议</h5>
+                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">同步排障指南</h5>
                       </div>
                       <div className="space-y-4">
-                          <div className="text-[11px] text-slate-500 leading-relaxed font-mono">
-                              <p className="text-indigo-400 font-bold mb-2">为了确保同步正常，请在 Firestore 控制台设置：</p>
-                              <code className="text-indigo-300 block py-2 whitespace-pre-wrap">
-{`service cloud.firestore {
-  match /databases/{database}/documents {
-    match /{allPaths=**} {
-      allow read, write: if true;
-    }
-  }
-}`}
+                          <div className="text-[11px] text-slate-400 leading-relaxed font-mono">
+                              <p className="text-indigo-400 font-bold mb-2">如果点击分片上传无反应，请确认：</p>
+                              1. 您的 <b>Firestore</b> 数据库是否已启用？<br/>
+                              2. <b>Cloud Firestore Rules</b> 是否允许写入？<br/>
+                              <code className="text-indigo-300 block py-2 whitespace-pre-wrap mt-2 bg-black/40 p-2 rounded">
+{`allow read, write: if true;`}
                               </code>
+                              3. 您的 Project ID 是否填写的纯文本（无空格/网址）？
                           </div>
                       </div>
                   </div>
@@ -281,7 +297,7 @@ const Settings: React.FC = () => {
                       <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500"><Eraser className="w-6 h-6" /></div>
                       <div>
                           <h4 className="text-sm font-bold text-white uppercase italic">清理本地缓存</h4>
-                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">重置本地浏览器存储空间。完成后刷新页面可从云端拉取最新分片镜像。</p>
+                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">仅清除本地暂存，用于解决浏览器卡顿或 5MB+ 数据溢出报错。刷新后可从云端拉取。</p>
                       </div>
                   </div>
                   <button onClick={handleClearLocalOnly} className="px-8 py-3 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">释放本地空间</button>

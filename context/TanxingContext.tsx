@@ -1,12 +1,12 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch, query, orderBy } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch, query, orderBy, deleteDoc } from 'firebase/firestore';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
 const DB_KEY = 'TANXING_DB_V9_FIREBASE'; 
 const CONFIG_KEY = 'TANXING_FIREBASE_CONFIG'; 
-const CHUNK_SIZE = 800000; // 每个分片 800KB，安全避开 1MB 限制
+const CHUNK_SIZE = 500000; // 降低至 500KB，确保含中文字符的大文件也不会突破 Firestore 限制
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'midnight-dark';
@@ -55,6 +55,9 @@ type Action =
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'UPDATE_PRODUCT'; payload: Product }
     | { type: 'ADD_PRODUCT'; payload: Product }
+    | { type: 'DELETE_PRODUCT'; payload: string }
+    | { type: 'ADD_TASK'; payload: Task }
+    | { type: 'ADD_ORDER'; payload: Order }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
     | { type: 'SET_FIREBASE_CONFIG'; payload: Partial<FirebaseConfig> }
@@ -116,13 +119,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
 
             const app = initializeApp({ ...config, projectId: cleanId });
-            const db = getFirestore(app);
+            getFirestore(app); // 仅初始化
             
-            // 握手测试
-            await setDoc(doc(db, 'system', 'status'), { last_active: new Date().toISOString(), session: SESSION_ID }, { merge: true });
-
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-            dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { projectId: cleanId } });
+            // 延迟 1 秒确认连接（Firestore 初始化是同步的，但我们需要给用户一点反馈感）
+            setTimeout(() => {
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
+                dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { projectId: cleanId } });
+            }, 500);
         } catch (e: any) {
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             throw e;
@@ -157,18 +160,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
         
         if (!isInternalUpdateRef.current && state.connectionStatus === 'connected' && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 5000);
+            const timer = setTimeout(() => syncToCloud(), 10000); // 延长自动同步周期至 10秒
             return () => clearTimeout(timer);
         }
         isInternalUpdateRef.current = false;
     }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus]);
 
-    /**
-     * 量子分片同步引擎 (Sharding Engine)
-     * 将 5.4MB 数据切碎存入 Firestore，免费方案支持无限大小。
-     */
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
-        if (state.connectionStatus !== 'connected' && !isForce) return false;
+        if (state.connectionStatus === 'disconnected' && !isForce) return false;
         
         try {
             const db = getFirestore(getApp());
@@ -182,7 +181,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 suppliers: state.suppliers,
                 influencers: state.influencers,
                 inboundShipments: state.inboundShipments,
-                auditLogs: state.auditLogs.slice(0, 100),
+                auditLogs: state.auditLogs.slice(0, 50),
                 session: SESSION_ID,
                 timestamp: new Date().toISOString()
             };
@@ -190,15 +189,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const dataStr = JSON.stringify(fullPayload);
             const chunks: string[] = [];
             
-            // 1. 切片处理
             for (let i = 0; i < dataStr.length; i += CHUNK_SIZE) {
                 chunks.push(dataStr.substring(i, i + CHUNK_SIZE));
             }
 
-            // 2. 批量写入
             const batch = writeBatch(db);
             
-            // 写入清单 (Manifest)
+            // 写入清单
             batch.set(doc(db, 'quantum_backup', 'manifest'), {
                 chunkCount: chunks.length,
                 totalSize: dataStr.length,
@@ -213,29 +210,27 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             });
 
             await batch.commit();
-            
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
             return true;
 
         } catch (e: any) {
             console.error("[Quantum Sync Failed]", e);
+            // 如果是因为权限问题，抛出具体错误供 UI 捕获
+            if (e.code === 'permission-denied') {
+                showToast('Firestore 权限拒绝：请在控制台开启 Rules', 'error');
+            }
             return false;
         }
     };
 
-    /**
-     * 碎片重构加载引擎 (Merging Engine)
-     */
     const pullFromCloud = async () => {
-        if (state.connectionStatus !== 'connected') return;
         try {
             const db = getFirestore(getApp());
             const manifestSnap = await getDoc(doc(db, 'quantum_backup', 'manifest'));
             
             if (manifestSnap.exists()) {
                 const { chunkCount, session } = manifestSnap.data();
-                
-                if (session === SESSION_ID) return; // 避免自循环
+                if (session === SESSION_ID) return;
 
                 const chunkPromises = [];
                 for (let i = 0; i < chunkCount; i++) {
@@ -243,15 +238,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
 
                 const results = await Promise.all(chunkPromises);
-                const fullStr = results
-                    .map(snap => snap.data()?.content || '')
-                    .join('');
+                const fullStr = results.map(snap => snap.data()?.content || '').join('');
 
                 const data = JSON.parse(fullStr);
                 if (data) {
                     isInternalUpdateRef.current = true;
                     dispatch({ type: 'HYDRATE_STATE', payload: data });
-                    showToast('量子分片重构成功，数据已对齐', 'success');
+                    showToast('量子镜像同步完成', 'success');
                 }
             }
         } catch (e) {
