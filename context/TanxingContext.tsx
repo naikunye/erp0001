@@ -15,6 +15,7 @@ interface LeanConfig {
     appKey: string;
     serverURL: string;
     lastSync: string | null;
+    payloadSize?: number; // 记录上一次同步的大小（字节）
 }
 
 interface AppState {
@@ -108,21 +109,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const cleanUrl = serverURL.trim().replace(/\/$/, "");
             AV.init({ appId, appKey, serverURL: cleanUrl });
-            
-            // 改进验证逻辑：
-            // 不再查询受保护的系统表 _User，改查 Backup 表。
-            // 即使表不存在，只要不是 401 (Key错) 就算物理链路通了。
             const query = new AV.Query('Backup');
             query.limit(1);
             try {
                 await query.find();
             } catch (e: any) {
-                // 101 是 Class 不存在的错误代码，属于正常现象（还没推送过）
-                // 401 是 App ID 或 Key 错误
                 if (e.code === 401) throw e;
-                // 其他错误（如 403 权限不足）在验证阶段可以忽略，因为我们只需要确认能连上
             }
-            
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
         } catch (e: any) {
             console.error("LeanCloud Auth Failed", e);
@@ -179,13 +172,17 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (state.connectionStatus !== 'connected') return false;
 
         try {
-            const payload = {
+            const payloadData = {
                 products: state.products, orders: state.orders, transactions: state.transactions,
                 customers: state.customers, shipments: state.shipments, tasks: state.tasks,
                 suppliers: state.suppliers, influencers: state.influencers,
                 inboundShipments: state.inboundShipments,
                 timestamp: new Date().toISOString(), session: SESSION_ID
             };
+
+            const jsonPayload = JSON.stringify(payloadData);
+            // 计算字节大小
+            const payloadBytes = new Blob([jsonPayload]).size;
 
             const Backup = AV.Object.extend('Backup');
             const query = new AV.Query('Backup');
@@ -197,12 +194,15 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 backupObj.set('uniqueId', 'GLOBAL_BACKUP_NODE');
             }
 
-            backupObj.set('payload', JSON.stringify(payload));
+            backupObj.set('payload', jsonPayload);
             backupObj.set('lastSyncTime', new Date().toISOString());
             backupObj.set('session', SESSION_ID);
 
             await backupObj.save();
-            dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
+            dispatch({ type: 'SET_LEAN_CONFIG', payload: { 
+                lastSync: new Date().toLocaleTimeString(),
+                payloadSize: payloadBytes 
+            } });
             dispatch({ type: 'ALLOW_SYNC' });
             return true;
         } catch (e: any) {
@@ -219,9 +219,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             let backupObj = await query.first();
 
             if (backupObj) {
-                const data = JSON.parse(backupObj.get('payload'));
+                const rawPayload = backupObj.get('payload');
+                const data = JSON.parse(rawPayload);
+                const payloadBytes = new Blob([rawPayload]).size;
+                
                 setIsInternalUpdate(true);
                 dispatch({ type: 'HYDRATE_STATE', payload: { ...data, syncAllowed: true } });
+                dispatch({ type: 'SET_LEAN_CONFIG', payload: { payloadSize: payloadBytes } });
+                
                 if (!isSilent) showToast('已成功从云端镜像恢复数据', 'success');
                 return true;
             }

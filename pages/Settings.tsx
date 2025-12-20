@@ -3,7 +3,7 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
-    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History
+    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
@@ -18,6 +18,10 @@ const Settings: React.FC = () => {
 
   const [leanForm, setLeanForm] = useState({ appId: '', appKey: '', serverURL: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const LEANCLOUD_LIMIT = 16 * 1024 * 1024; // 16MB in bytes
+  const currentSize = state.leanConfig?.payloadSize || 0;
+  const sizePercentage = Math.min(100, (currentSize / LEANCLOUD_LIMIT) * 100);
 
   useEffect(() => {
     if (state.leanConfig) {
@@ -76,10 +80,8 @@ const Settings: React.FC = () => {
       }
   };
 
-  // --- JSON 数据管理核心逻辑 ---
   const handleExportJSON = () => {
       try {
-          // 剔除临时状态，仅保留业务数据
           const { toasts, exportTasks, connectionStatus, isInitialized, isMobileMenuOpen, ...persistentData } = state;
           const dataStr = JSON.stringify(persistentData, null, 2);
           const blob = new Blob([dataStr], { type: 'application/json' });
@@ -105,16 +107,12 @@ const Settings: React.FC = () => {
           try {
               const content = event.target?.result as string;
               const importedData = JSON.parse(content);
-              
-              // 简单验证数据合法性
               if (!importedData.products || !Array.isArray(importedData.products)) {
                   throw new Error("无效的备份文件格式");
               }
-
               if (confirm('警告：导入将覆盖当前系统内所有数据！是否继续还原？')) {
                   dispatch({ type: 'HYDRATE_STATE', payload: importedData });
                   showToast('数据还原成功，正在重构视图...', 'success');
-                  // 强制刷新一下导航，确保状态同步
                   setTimeout(() => dispatch({ type: 'NAVIGATE', payload: { page: 'dashboard' } }), 1000);
               }
           } catch (err: any) {
@@ -122,8 +120,15 @@ const Settings: React.FC = () => {
           }
       };
       reader.readAsText(file);
-      // 清空 input 方便下次选择同名文件
       e.target.value = '';
+  };
+
+  const formatSize = (bytes: number) => {
+      if (bytes === 0) return '0 KB';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
@@ -133,7 +138,7 @@ const Settings: React.FC = () => {
           <h2 className="text-2xl font-bold text-white flex items-center gap-3 italic">
               <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与同步协议
           </h2>
-          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Enterprise Data Control v11.8</p>
+          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">Enterprise Data Control v11.9</p>
         </div>
         <button onClick={() => confirm('确定重置所有本地缓存数据？这将清除未同步的修改。') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">初始化离线环境</button>
       </div>
@@ -156,14 +161,38 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-              <div className="bg-indigo-500/10 border border-indigo-500/30 rounded-3xl p-6 flex items-start gap-5">
-                  <div className="p-3 bg-indigo-500/20 rounded-2xl shrink-0"><DatabaseZap className="w-6 h-6 text-indigo-400" /></div>
-                  <div>
-                      <h4 className="text-indigo-300 font-black text-sm uppercase tracking-wider">LeanCloud 后台核对指南</h4>
-                      <div className="text-xs text-indigo-100/60 mt-2 leading-relaxed space-y-2">
-                        <p>1. 您目前已经在正确页面：<span className="text-white font-bold underline">“结构化数据”</span>。</p>
-                        <p>2. 如果左侧列表没有 <code className="bg-white/10 px-1.5 py-0.5 rounded text-white">Backup</code> 表，说明您还没有点下方的 <span className="text-white font-bold">“立即同步到云端”</span>。</p>
-                        <p>3. 只要推送一次，云端就会生成表格，从此数据永不丢失。</p>
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  <div className="lg:col-span-2 bg-indigo-500/10 border border-indigo-500/30 rounded-3xl p-6 flex items-start gap-5">
+                      <div className="p-3 bg-indigo-500/20 rounded-2xl shrink-0"><DatabaseZap className="w-6 h-6 text-indigo-400" /></div>
+                      <div>
+                          <h4 className="text-indigo-300 font-black text-sm uppercase tracking-wider">LeanCloud 存储限额说明</h4>
+                          <div className="text-xs text-indigo-100/60 mt-2 leading-relaxed space-y-2">
+                            <p>1. 免费/基础版单条记录上限为 <span className="text-white font-bold">16 MB</span>。</p>
+                            <p>2. 当前 ERP 采用单表镜像模式，所有业务数据打包为一条记录。</p>
+                            <p>3. 只要总容量在绿色区间内，您可以放心同步无限次。</p>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* 容量仪表盘 */}
+                  <div className="bg-black/40 border border-white/10 rounded-3xl p-6 flex flex-col justify-center">
+                      <div className="flex justify-between items-center mb-3">
+                          <span className="text-[10px] font-bold text-slate-500 uppercase flex items-center gap-2">
+                              <HardDrive className="w-3.5 h-3.5 text-indigo-400" /> 镜像包大小
+                          </span>
+                          <span className={`text-[10px] font-mono font-bold ${sizePercentage > 80 ? 'text-rose-400' : 'text-emerald-400'}`}>
+                              {sizePercentage.toFixed(1)}%
+                          </span>
+                      </div>
+                      <div className="h-2 w-full bg-white/5 rounded-full overflow-hidden mb-3 border border-white/5 shadow-inner">
+                          <div 
+                            className={`h-full transition-all duration-1000 ${sizePercentage > 80 ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : sizePercentage > 50 ? 'bg-amber-500' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]'}`}
+                            style={{ width: `${sizePercentage}%` }}
+                          ></div>
+                      </div>
+                      <div className="flex justify-between items-baseline">
+                          <span className="text-xl font-black text-white font-mono">{formatSize(currentSize)}</span>
+                          <span className="text-[9px] text-slate-600 font-bold">LIMIT: 16 MB</span>
                       </div>
                   </div>
               </div>
@@ -231,7 +260,7 @@ const Settings: React.FC = () => {
                               <p className="flex items-center gap-3"><div className={`w-1.5 h-1.5 rounded-full ${leanForm.appKey ? 'bg-emerald-500' : 'bg-slate-700'}`}></div> App Key 已注入</p>
                               <p className="flex items-center gap-3"><div className={`w-1.5 h-1.5 rounded-full ${leanForm.serverURL.includes('https://') ? 'bg-emerald-500' : 'bg-rose-500'}`}></div> API 地址格式校验</p>
                               <div className="h-px bg-white/5 my-2"></div>
-                              <p className="text-[10px] text-slate-500 italic">提示：点完“立即同步”后，LeanCloud 网页刷新就能看到数据。建议在不同浏览器尝试，确保同步成功。</p>
+                              <p className="text-[10px] text-slate-500 italic">提示：点完“立即同步”后，LeanCloud 网页刷新就能看到数据。当前镜像大小为 <span className="text-white font-bold">{formatSize(currentSize)}</span>。</p>
                           </div>
                       </div>
                   </div>
@@ -304,7 +333,7 @@ const Settings: React.FC = () => {
                       
                       <div className="flex-1 bg-black/40 border border-white/5 rounded-3xl p-8 flex flex-col justify-center items-center text-center">
                           <AlertCircle className="w-12 h-12 text-slate-700 mb-4" />
-                          <p className="text-xs text-slate-500 font-mono">上次离线导出: <span className="text-white">{state.leanConfig?.lastSync || '从未导出'}</span></p>
+                          <p className="text-xs text-slate-500 font-mono">上次同步镜像大小: <span className="text-white">{formatSize(currentSize)}</span></p>
                           <div className="mt-8 p-4 bg-red-500/5 border border-red-500/20 rounded-2xl">
                              <div className="flex items-center gap-2 text-red-500 text-[10px] font-bold uppercase mb-2">
                                 <Zap className="w-3 h-3" /> Danger Zone
