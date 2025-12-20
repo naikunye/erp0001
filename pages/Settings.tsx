@@ -3,12 +3,12 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
-    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, ExternalLink
+    FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2
 } from 'lucide-react';
 import { useTanxing, Theme, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean } = useTanxing();
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud');
   const [showKey, setShowKey] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -16,32 +16,34 @@ const Settings: React.FC = () => {
   const [isImporting, setIsImporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const [supaForm, setSupaForm] = useState({
-      url: '',
-      anonKey: ''
+  const [leanForm, setLeanForm] = useState({
+      appId: '',
+      appKey: '',
+      serverURL: ''
   });
 
   useEffect(() => {
-    if (state.supaConfig) {
-        setSupaForm({
-            url: state.supaConfig.url || '',
-            anonKey: state.supaConfig.anonKey || ''
+    if (state.leanConfig) {
+        setLeanForm({
+            appId: state.leanConfig.appId || '',
+            appKey: state.leanConfig.appKey || '',
+            serverURL: state.leanConfig.serverURL || ''
         });
     }
-  }, [state.supaConfig]);
+  }, [state.leanConfig]);
 
   const handleSaveConfig = async () => {
-      if (!supaForm.url || !supaForm.anonKey) {
-          showToast('请提供 Supabase URL 和 Anon Key', 'warning');
+      if (!leanForm.appId || !leanForm.appKey) {
+          showToast('请提供 LeanCloud App ID 和 Key', 'warning');
           return;
       }
       setIsSaving(true);
       try {
-          dispatch({ type: 'SET_SUPA_CONFIG', payload: supaForm });
-          await bootSupa(supaForm.url, supaForm.anonKey);
-          showToast('Supabase 量子链路已就绪', 'success');
+          dispatch({ type: 'SET_LEAN_CONFIG', payload: leanForm });
+          await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
+          showToast('LeanCloud 镜像链路已就绪', 'success');
       } catch (e: any) {
-          showToast(`激活失败: 请确认 Table 是否已创建并关闭 RLS`, 'error');
+          showToast(`激活失败: 请确认 App ID 是否正确`, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -49,17 +51,20 @@ const Settings: React.FC = () => {
 
   const handleManualSync = async () => {
       setIsSyncingNow(true);
-      const success = await syncToCloud(true);
-      if (success) showToast('5.4MB+ 全量镜像已推送到 Supabase', 'success');
-      setIsSyncingNow(false);
+      try {
+          const success = await syncToCloud(true);
+          if (success) showToast('5.4MB+ 数据已成功压缩并同步至云端', 'success');
+      } finally {
+          setIsSyncingNow(false);
+      }
   };
 
   const handleClearConfig = () => {
       if (confirm('确定要清除云端连接吗？')) {
-          localStorage.removeItem('TANXING_SUPA_CONFIG');
-          dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } });
+          localStorage.removeItem('TANXING_LEAN_CONFIG');
+          dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null } });
           dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
-          showToast('连接已断开', 'info');
+          showToast('同步协议已注销', 'info');
       }
   };
 
@@ -69,8 +74,8 @@ const Settings: React.FC = () => {
   };
 
   const handleClearLocalOnly = () => {
-      if (confirm('⚠️ 该操作仅清除浏览器本地缓存以释放空间，不影响云端数据。确定继续？')) {
-          localStorage.removeItem('TANXING_DB_V10_SUPA');
+      if (confirm('⚠️ 该操作仅清除浏览器本地缓存以释放空间。确定继续？')) {
+          localStorage.removeItem('TANXING_DB_V11_LEAN');
           showToast('本地缓存已清理', 'success');
           setTimeout(() => window.location.reload(), 800);
       }
@@ -81,9 +86,9 @@ const Settings: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-3 italic">
-              <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与 Supabase 云协议
+              <SettingsIcon className="w-7 h-7 text-indigo-500" /> 系统偏好与 LeanCloud 协议
           </h2>
-          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">PostgreSQL Cloud Interface v10.1</p>
+          <p className="text-xs text-slate-500 mt-2 font-mono tracking-[0.2em] uppercase">No-SQL Quantum Interface v11.0</p>
         </div>
         <button onClick={() => confirm('重置全部？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all">全系统重置</button>
       </div>
@@ -91,7 +96,7 @@ const Settings: React.FC = () => {
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
           {[
             { id: 'theme', label: '外观主题', icon: Palette },
-            { id: 'cloud', label: '云端同步 (Supabase)', icon: Cloud },
+            { id: 'cloud', label: '云端同步 (LeanCloud)', icon: Cloud },
             { id: 'data', label: '本地数据', icon: Database }
           ].map(tab => (
               <button 
@@ -113,15 +118,15 @@ const Settings: React.FC = () => {
                       </div>
                       <div>
                           <h4 className="text-white font-bold uppercase tracking-tighter flex items-center gap-2">
-                              Supabase 无限制同步 (Large Field Support)
-                              <span className="bg-emerald-500 text-[8px] text-black px-1.5 py-0.5 rounded font-black">UNLIMITED SIZE</span>
+                              LeanCloud 自动建表同步 (Auto-Schema)
+                              <span className="bg-emerald-500 text-[8px] text-black px-1.5 py-0.5 rounded font-black">AUTO SETUP</span>
                           </h4>
                           <p className="text-[10px] text-slate-500 mt-1 uppercase font-mono">
                               状态: <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-amber-500'}`}>{state.connectionStatus.toUpperCase()}</span>
-                              {state.supaConfig.lastSync && <span className="ml-3 text-slate-600">Sync: {state.supaConfig.lastSync}</span>}
+                              {state.leanConfig.lastSync && <span className="ml-3 text-slate-600 font-bold tracking-tighter">LAST: {state.leanConfig.lastSync}</span>}
                           </p>
                           <p className="text-[10px] text-indigo-400/60 font-mono mt-1">
-                              优势: 完美支持 5.4MB+ 单次同步，基于 PostgreSQL 强一致性，无需分片，免费且更稳健。
+                              特点: 无需手动 SQL。填入 Key 后点击同步，系统将自动在云端创建名为 "Backup" 的数据类并保存。
                           </p>
                       </div>
                   </div>
@@ -140,20 +145,24 @@ const Settings: React.FC = () => {
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                   <div className="space-y-4">
                       <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase">Supabase URL</label>
-                          <input type="text" value={supaForm.url} onChange={e=>setSupaForm({...supaForm, url: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="https://xxx.supabase.co" />
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">App ID</label>
+                          <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="从 LeanCloud 控制台复制..." />
                       </div>
                       <div className="space-y-2">
-                          <label className="text-[10px] text-slate-500 font-bold uppercase">Anon Key</label>
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">App Key</label>
                           <div className="relative">
-                              <input type={showKey ? "text" : "password"} value={supaForm.anonKey} onChange={e=>setSupaForm({...supaForm, anonKey: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
+                              <input type={showKey ? "text" : "password"} value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" />
                               <button onClick={()=>setShowKey(!showKey)} className="absolute right-3 top-3 text-slate-600">{showKey ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}</button>
                           </div>
+                      </div>
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-bold uppercase">REST API 服务器地址 (可选)</label>
+                          <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono" placeholder="https://your-api-url.com (国际版可不填)" />
                       </div>
                       
                       <div className="flex gap-4 pt-4">
                         <button onClick={handleSaveConfig} disabled={isSaving} className="flex-1 py-5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-[0.98] transition-all">
-                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />} 启动 Supabase 协议
+                            {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />} 启动同步协议
                         </button>
                         <button onClick={handleClearConfig} className="p-5 bg-white/5 border border-white/10 text-slate-500 hover:text-red-400 rounded-2xl transition-all" title="断开连接">
                             <LogOut className="w-6 h-6" />
@@ -162,22 +171,16 @@ const Settings: React.FC = () => {
                   </div>
 
                   <div className="p-8 bg-black/40 border border-white/10 rounded-3xl space-y-6">
-                      <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-3">
-                              <Zap className="w-5 h-5 text-indigo-400" />
-                              <h5 className="text-xs font-bold text-white uppercase tracking-widest">初始化脚本 (SQL Editor)</h5>
-                          </div>
-                          <a href="https://supabase.com/dashboard" target="_blank" className="text-[10px] text-indigo-400 flex items-center gap-1 hover:underline">去控制台 <ExternalLink className="w-3 h-3"/></a>
+                      <div className="flex items-center gap-3">
+                          <Zap className="w-5 h-5 text-indigo-400" />
+                          <h5 className="text-xs font-bold text-white uppercase tracking-widest">为什么这次能点动？</h5>
                       </div>
                       <div className="space-y-4">
-                          <div className="text-[10px] text-slate-400 leading-relaxed font-mono">
-                              <p className="text-indigo-400 font-bold mb-2">请在 SQL Editor 执行以下代码以开启大文件同步支持：</p>
-                              <code className="text-indigo-300 block py-2 whitespace-pre-wrap mt-2 bg-black/40 p-3 rounded border border-white/5 select-all">
-{`CREATE TABLE backups (id int8 PRIMARY KEY DEFAULT 1, data text, updated_at timestamptz DEFAULT now());
-INSERT INTO backups (id, data) VALUES (1, '{}');
-ALTER TABLE backups ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Allow All" ON backups FOR ALL USING (true);`}
-                              </code>
+                          <div className="text-[11px] text-slate-400 leading-relaxed font-mono">
+                              <p className="text-indigo-400 font-bold mb-2">架构优化点：</p>
+                              1. <b>零检测初始化</b>：只要填了 Key，系统就认为已连接。只有在点击“同步”的那一刻，才会尝试与云端通信。<br/><br/>
+                              2. <b>自动扩容字段</b>：LeanCloud 默认支持大文本字段，无需担心 5.4MB 数据溢出。<br/><br/>
+                              3. <b>无表运行</b>：即便你没在 LeanCloud 手动建表，系统第一次同步时会自动为你创建名为 <span className="text-white">Backup</span> 的表。
                           </div>
                       </div>
                   </div>
@@ -254,7 +257,7 @@ CREATE POLICY "Allow All" ON backups FOR ALL USING (true);`}
                       <div className="p-3 bg-rose-500/10 rounded-xl text-rose-500"><Eraser className="w-6 h-6" /></div>
                       <div>
                           <h4 className="text-sm font-bold text-white uppercase italic">清理本地缓存</h4>
-                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">仅清除本地暂存。完成后刷新页面可从 Supabase 全量拉取最新镜像。</p>
+                          <p className="text-xs text-slate-500 mt-1 max-w-lg leading-relaxed">仅清除本地暂存。完成后刷新页面可从 LeanCloud 镜像同步回最新数据。</p>
                       </div>
                   </div>
                   <button onClick={handleClearLocalOnly} className="px-8 py-3 bg-rose-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">释放本地空间</button>

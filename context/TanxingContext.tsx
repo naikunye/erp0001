@@ -1,18 +1,19 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import AV from 'leancloud-storage';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
-const DB_KEY = 'TANXING_DB_V10_SUPA'; 
-const CONFIG_KEY = 'TANXING_SUPA_CONFIG'; 
+const DB_KEY = 'TANXING_DB_V11_LEAN'; 
+const CONFIG_KEY = 'TANXING_LEAN_CONFIG'; 
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'midnight-dark';
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'syncing';
 
-interface SupaConfig {
-    url: string;
-    anonKey: string;
+interface LeanConfig {
+    appId: string;
+    appKey: string;
+    serverURL: string;
     lastSync: string | null;
 }
 
@@ -20,7 +21,7 @@ interface AppState {
     theme: Theme;
     activePage: Page;
     navParams: { searchQuery?: string };
-    supaConfig: SupaConfig;
+    leanConfig: LeanConfig;
     connectionStatus: ConnectionStatus;
     products: Product[];
     transactions: Transaction[];
@@ -52,13 +53,14 @@ type Action =
     | { type: 'DELETE_PRODUCT'; payload: string }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
-    | { type: 'SET_SUPA_CONFIG'; payload: Partial<SupaConfig> }
+    | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
+    | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' };
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
-    supaConfig: { url: '', anonKey: '', lastSync: null },
+    leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null },
     connectionStatus: 'disconnected', products: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], calendarEvents: [], suppliers: [], adCampaigns: [], influencers: [], inboundShipments: [], toasts: [], auditLogs: [], exportTasks: [], isMobileMenuOpen: false, isInitialized: false, isDemoMode: false
 };
 
@@ -71,13 +73,13 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
         case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
         case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
-        case 'DELETE_PRODUCT': return { ...state, products: state.products.filter(p => p.id !== action.payload), isDemoMode: false };
         case 'HYDRATE_STATE': 
             const { connectionStatus, ...rest } = action.payload;
             return { ...state, ...rest, isInitialized: true, isDemoMode: false };
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true };
-        case 'SET_SUPA_CONFIG': return { ...state, supaConfig: { ...state.supaConfig, ...action.payload } };
+        case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
+        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
         case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true };
         default: return state;
     }
@@ -89,26 +91,23 @@ const TanxingContext = createContext<{
     showToast: (message: string, type: Toast['type']) => void;
     syncToCloud: (isForce?: boolean) => Promise<boolean>;
     pullFromCloud: () => Promise<void>;
-    bootSupa: (url: string, key: string) => Promise<void>;
-}>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => false, pullFromCloud: async () => {}, bootSupa: async () => {} });
+    bootLean: (appId: string, appKey: string, serverURL: string) => Promise<void>;
+}>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => false, pullFromCloud: async () => {}, bootLean: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const [isHydrated, setIsHydrated] = useState(false);
-    const supaRef = useRef<SupabaseClient | null>(null);
     const isInternalUpdateRef = useRef(false);
 
-    const bootSupa = async (url: string, key: string) => {
-        if (!url || !key) return;
+    const bootLean = async (appId: string, appKey: string, serverURL: string) => {
+        if (!appId || !appKey) return;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
         try {
-            supaRef.current = createClient(url, key);
-            // 连通性测试
-            const { error } = await supaRef.current.from('backups').select('id').limit(1);
-            if (error) throw error;
+            AV.init({ appId, appKey, serverURL });
+            // 不进行强制读取测试，防止因为云端为空而报错阻断
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
         } catch (e: any) {
-            console.error("Supabase Connection Failed", e);
+            console.error("LeanCloud Init Failed", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
             throw e;
         }
@@ -124,8 +123,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
-                dispatch({ type: 'SET_SUPA_CONFIG', payload: config });
-                await bootSupa(config.url, config.anonKey).catch(() => {});
+                dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
+                await bootLean(config.appId, config.appKey, config.serverURL).catch(() => {});
             } else if (!savedDb) {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
@@ -134,22 +133,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         init();
     }, []);
 
-    // 自动保存与云同步触发
     useEffect(() => {
         if (!isHydrated) return;
-        localStorage.setItem(CONFIG_KEY, JSON.stringify(state.supaConfig));
+        localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
         const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
         
         if (!isInternalUpdateRef.current && state.connectionStatus === 'connected' && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 15000);
+            const timer = setTimeout(() => syncToCloud(), 20000);
             return () => clearTimeout(timer);
         }
         isInternalUpdateRef.current = false;
     }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus]);
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
-        if (!supaRef.current || (state.connectionStatus !== 'connected' && !isForce)) return false;
+        if (state.connectionStatus !== 'connected' && !isForce) return false;
         
         try {
             const fullPayload = {
@@ -160,36 +158,50 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 session: SESSION_ID, timestamp: new Date().toISOString()
             };
 
-            const { error } = await supaRef.current
-                .from('backups')
-                .upsert({ id: 1, data: JSON.stringify(fullPayload), updated_at: new Date().toISOString() });
-
-            if (error) throw error;
+            const Backup = AV.Object.extend('Backup');
+            const query = new AV.Query('Backup');
+            query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
+            let backupObj = await query.first();
             
-            dispatch({ type: 'SET_SUPA_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
+            if (!backupObj) {
+                backupObj = new Backup();
+                backupObj.set('uniqueId', 'GLOBAL_BACKUP_NODE');
+            }
+
+            backupObj.set('payload', JSON.stringify(fullPayload));
+            backupObj.set('lastSyncTime', new Date().toISOString());
+            backupObj.set('session', SESSION_ID);
+
+            await backupObj.save();
+            dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
             return true;
         } catch (e: any) {
-            console.error("[Supabase Sync Failed]", e);
+            console.error("[LeanCloud Sync Failed]", e);
             showToast(`同步异常: ${e.message}`, 'error');
             return false;
         }
     };
 
     const pullFromCloud = async () => {
-        if (!supaRef.current) return;
         try {
-            const { data, error } = await supaRef.current.from('backups').select('data, session').eq('id', 1).single();
-            if (error) throw error;
+            const query = new AV.Query('Backup');
+            query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
+            const backupObj = await query.first();
             
-            if (data && data.data) {
-                const parsed = JSON.parse(data.data);
-                if (parsed.session === SESSION_ID) return; // 避免自覆盖
+            if (backupObj) {
+                const payloadStr = backupObj.get('payload');
+                const session = backupObj.get('session');
+                if (session === SESSION_ID) return;
+
+                const parsed = JSON.parse(payloadStr);
                 isInternalUpdateRef.current = true;
                 dispatch({ type: 'HYDRATE_STATE', payload: parsed });
                 showToast('全量云端镜像同步完成', 'success');
+            } else {
+                showToast('云端尚无备份记录', 'info');
             }
         } catch (e) {
-            console.error("[Supabase Pull Failed]", e);
+            console.error("[LeanCloud Pull Failed]", e);
             showToast('拉取镜像失败', 'error');
         }
     };
@@ -197,7 +209,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
 
     return (
-        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa }}>
+        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean }}>
             {children}
         </TanxingContext.Provider>
     );
