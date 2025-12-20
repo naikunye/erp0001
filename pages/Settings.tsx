@@ -157,7 +157,7 @@ const Settings: React.FC = () => {
                               <a href="https://leancloud.app/dashboard/applist.html#/apps" target="_blank" className="text-[9px] text-slate-500 flex items-center gap-1 hover:text-white transition-colors">去控制台获取 <ExternalLink className="w-2.5 h-2.5"/></a>
                           </div>
                           <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value})} className="w-full bg-black/40 border border-indigo-500/30 rounded-xl p-3 text-sm text-indigo-100 font-mono focus:border-indigo-500 outline-none" placeholder="https://your-app-prefix.example.com" />
-                          <p className="text-[9px] text-slate-600 italic mt-1">注：设置 &rarr; 应用凭证 &rarr; 服务器地址 (API 地址)</p>
+                          <p className="text-[9px] text-slate-600 italic mt-1">{"注：设置 -> 应用凭证 -> 服务器地址 (API 地址)"}</p>
                       </div>
                       
                       <div className="flex gap-4 pt-4">
@@ -181,10 +181,10 @@ const Settings: React.FC = () => {
                               LeanCloud 自 2020 年起强制要求开发者通过绑定域名或官方分配的 API 域名进行访问。请务必在左侧填入 <span className="text-white">API 服务器地址</span>。
                               <br/><br/>
                               <p className="text-indigo-400 font-bold mb-2">如何查找：</p>
-                              1. 登录 LeanCloud 控制台。<br/>
-                              2. 进入您的应用。<br/>
-                              3. 设置 &rarr; 应用凭证 &rarr; 服务器地址。<br/>
-                              4. 复制 <span className="text-white">API</span> 栏位对应的 HTTPS 链接。
+                              {"1. 登录 LeanCloud 控制台。"}<br/>
+                              {"2. 进入您的应用。"}<br/>
+                              {"3. 设置 -> 应用凭证 -> 服务器地址。"}<br/>
+                              {"4. 复制"} <span className="text-white">API</span> {"栏位对应的 HTTPS 链接。"}
                           </div>
                       </div>
                   </div>
