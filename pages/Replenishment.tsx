@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { ReplenishmentItem, Product } from '../types';
@@ -561,7 +560,8 @@ const Replenishment: React.FC = () => {
                                 <td className="px-4 py-4 align-top">
                                     <div className="space-y-1.5">
                                         <div className="flex items-center gap-2 text-xs text-blue-400 font-bold">
-                                            <Plane className="w-3.5 h-3.5" />
+                                            {/* 核心修复：根据物流方式显示动态图标 */}
+                                            {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5" /> : <Plane className="w-3.5 h-3.5" />}
                                             <span>{item.logistics?.method || 'Air'}</span>
                                         </div>
                                         <a href="#" className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono">
