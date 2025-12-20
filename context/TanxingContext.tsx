@@ -40,7 +40,7 @@ interface AppState {
     isMobileMenuOpen: boolean;
     isInitialized: boolean; 
     isDemoMode: boolean;
-    hasSyncedOnce: boolean; // 新增：标记是否至少与云端进行过一次有效交互
+    syncAllowed: boolean; // 关键：只有拉取过数据或手动保存过，才允许自动同步
 }
 
 type Action =
@@ -58,12 +58,12 @@ type Action =
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' }
-    | { type: 'MARK_SYNCED' };
+    | { type: 'ALLOW_SYNC' };
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
     leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null },
-    connectionStatus: 'disconnected', products: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], calendarEvents: [], suppliers: [], adCampaigns: [], influencers: [], inboundShipments: [], toasts: [], auditLogs: [], exportTasks: [], isMobileMenuOpen: false, isInitialized: false, isDemoMode: false, hasSyncedOnce: false
+    connectionStatus: 'disconnected', products: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], calendarEvents: [], suppliers: [], adCampaigns: [], influencers: [], inboundShipments: [], toasts: [], auditLogs: [], exportTasks: [], isMobileMenuOpen: false, isInitialized: false, isDemoMode: false, syncAllowed: false
 };
 
 const appReducer = (state: AppState, action: Action): AppState => {
@@ -73,17 +73,16 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_CONNECTION_STATUS': return { ...state, connectionStatus: action.payload };
         case 'ADD_TOAST': return { ...state, toasts: [...state.toasts, { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: state.toasts.filter(t => t.id !== action.payload) };
-        case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false };
-        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false };
+        case 'UPDATE_PRODUCT': return { ...state, products: state.products.map(p => p.id === action.payload.id ? action.payload : p), isDemoMode: false, syncAllowed: true };
+        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...state.products], isDemoMode: false, syncAllowed: true };
         case 'HYDRATE_STATE': 
-            const { connectionStatus, ...rest } = action.payload;
-            return { ...state, ...rest, isInitialized: true, isDemoMode: false };
+            return { ...state, ...action.payload, isInitialized: true, isDemoMode: false };
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, suppliers: MOCK_SUPPLIERS, adCampaigns: MOCK_AD_CAMPAIGNS, influencers: MOCK_INFLUENCERS, inboundShipments: MOCK_INBOUND_SHIPMENTS, isDemoMode: true, isInitialized: true };
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
+        case 'ALLOW_SYNC': return { ...state, syncAllowed: true };
         case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true };
-        case 'MARK_SYNCED': return { ...state, hasSyncedOnce: true, isDemoMode: false };
         default: return state;
     }
 };
@@ -93,167 +92,144 @@ const TanxingContext = createContext<{
     dispatch: React.Dispatch<Action>;
     showToast: (message: string, type: Toast['type']) => void;
     syncToCloud: (isForce?: boolean) => Promise<boolean>;
-    pullFromCloud: (silent?: boolean) => Promise<void>;
+    pullFromCloud: (isSilent?: boolean) => Promise<void>;
     bootLean: (appId: string, appKey: string, serverURL: string) => Promise<void>;
 }>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => false, pullFromCloud: async () => {}, bootLean: async () => {} });
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
-    const [isHydrated, setIsHydrated] = useState(false);
-    const isInternalUpdateRef = useRef(false);
+    const [isInternalUpdate, setIsInternalUpdate] = useState(false);
+    const stateRef = useRef(state);
+
+    useEffect(() => {
+        stateRef.current = state;
+    }, [state]);
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
-        if (!appId || !appKey) return;
-        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
-        try {
-            const cleanUrl = serverURL?.trim().replace(/\/$/, "");
-            AV.init({ appId, appKey, serverURL: cleanUrl });
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
-        } catch (e: any) {
-            console.error("LeanCloud Init Failed", e);
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-            throw e;
-        }
+        if (!appId || !appKey || !serverURL) return;
+        const cleanUrl = serverURL?.trim().replace(/\/$/, "");
+        AV.init({ appId, appKey, serverURL: cleanUrl });
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
     };
 
-    // 核心修复：更严格的初始化流程
+    // 核心修复：更严格的初始化顺序
     useEffect(() => {
         const init = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             const savedDb = localStorage.getItem(DB_KEY);
-            
-            // 1. 先加载本地缓存
-            if (savedDb) {
-                const localData = JSON.parse(savedDb);
-                dispatch({ type: 'HYDRATE_STATE', payload: { ...localData, connectionStatus: 'disconnected' } });
-            } else {
-                dispatch({ type: 'LOAD_MOCK_DATA' });
-            }
 
-            // 2. 如果有云端配置，执行连接并【强制拉取一次】
+            // 1. 如果有配置，先连接并拉取云端（优先级最高）
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                 try {
                     await bootLean(config.appId, config.appKey, config.serverURL);
-                    // 关键：连接成功后立刻尝试拉取云端数据，覆盖本地可能的旧缓存或Mock
+                    // 刷新时自动执行静默拉取
                     await pullFromCloud(true);
                 } catch (e) {
-                    console.warn("Auto-pull failed during init", e);
+                    console.error("Auto pull failed, fallback to local", e);
                 }
             }
-            
-            setIsHydrated(true);
+
+            // 2. 如果云端拉取没起作用（或没配置），尝试加载本地
+            if (!stateRef.current.isInitialized) {
+                if (savedDb) {
+                    dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) });
+                } else {
+                    dispatch({ type: 'LOAD_MOCK_DATA' });
+                }
+            }
+
+            dispatch({ type: 'HYDRATE_STATE', payload: { isInitialized: true } });
         };
         init();
     }, []);
 
+    // 自动保存和同步逻辑
     useEffect(() => {
-        if (!isHydrated) return;
-        
-        // 保存配置到本地
+        if (!state.isInitialized) return;
+
+        // 保存到本地缓存
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
-        
-        // 保存数据到本地缓存
-        const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
-        try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
-        
-        // 自动同步逻辑：增加 hasSyncedOnce 校验，防止 Mock 数据意外上传
-        if (!isInternalUpdateRef.current && 
-            state.connectionStatus === 'connected' && 
-            !state.isDemoMode && 
-            state.hasSyncedOnce) {
+        if (!isInternalUpdate) {
+            const slim = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
+            try { localStorage.setItem(DB_KEY, JSON.stringify(slim)); } catch(e) {}
+        }
+
+        // 自动同步逻辑：必须满足 connected 且 syncAllowed
+        if (state.connectionStatus === 'connected' && state.syncAllowed && !isInternalUpdate) {
             const timer = setTimeout(() => syncToCloud(), 15000);
             return () => clearTimeout(timer);
         }
-        isInternalUpdateRef.current = false;
-    }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus, state.hasSyncedOnce]);
+        setIsInternalUpdate(false);
+    }, [state.products, state.orders, state.transactions, state.syncAllowed]);
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
+        // 如果没有被允许同步且不是强制执行，则拦截
+        if (!state.syncAllowed && !isForce) return false;
         if (state.connectionStatus !== 'connected' && !isForce) return false;
-        if (!state.leanConfig.serverURL) {
-            showToast('同步被拦截: 未配置服务器地址 URL', 'error');
-            return false;
-        }
-        
+
         try {
-            const fullPayload = {
+            const payload = {
                 products: state.products, orders: state.orders, transactions: state.transactions,
                 customers: state.customers, shipments: state.shipments, tasks: state.tasks,
                 suppliers: state.suppliers, influencers: state.influencers,
                 inboundShipments: state.inboundShipments,
-                session: SESSION_ID, timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(), session: SESSION_ID
             };
 
-            const Backup = AV.Object.extend('Backup');
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
-            
             let backupObj = null;
             try {
                 backupObj = await query.first();
-            } catch (queryErr: any) {
-                const isNotFound = queryErr.code === 101 || queryErr.message?.includes("doesn't exist");
-                if (!isNotFound) throw queryErr;
+            } catch (err: any) {
+                if (err.code !== 101 && !err.message?.includes("doesn't exist")) throw err;
             }
-            
+
             if (!backupObj) {
+                const Backup = AV.Object.extend('Backup');
                 backupObj = new Backup();
                 backupObj.set('uniqueId', 'GLOBAL_BACKUP_NODE');
             }
 
-            backupObj.set('payload', JSON.stringify(fullPayload));
+            backupObj.set('payload', JSON.stringify(payload));
             backupObj.set('lastSyncTime', new Date().toISOString());
             backupObj.set('session', SESSION_ID);
 
             await backupObj.save();
             dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
-            dispatch({ type: 'MARK_SYNCED' }); // 标记同步成功，开启后续自动同步
+            dispatch({ type: 'ALLOW_SYNC' }); // 成功同步一次后，允许后续自动同步
             return true;
         } catch (e: any) {
-            console.error("[LeanCloud Sync Failed]", e);
-            showToast(`同步异常: ${e.message}`, 'error');
+            console.error("Sync Failed", e);
+            showToast(`同步失败: ${e.message}`, 'error');
             return false;
         }
     };
 
-    const pullFromCloud = async (silent: boolean = false) => {
-        if (!state.leanConfig.serverURL) {
-            if (!silent) showToast('请先配置服务器地址', 'warning');
-            return;
-        }
+    const pullFromCloud = async (isSilent: boolean = false) => {
         try {
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
-            
             let backupObj = null;
             try {
                 backupObj = await query.first();
-            } catch (queryErr: any) {
-                const isNotFound = queryErr.code === 101 || queryErr.message?.includes("doesn't exist");
-                if (!isNotFound) throw queryErr;
+            } catch (err: any) {
+                if (err.code !== 101 && !err.message?.includes("doesn't exist")) throw err;
             }
-            
-            if (backupObj) {
-                const payloadStr = backupObj.get('payload');
-                const session = backupObj.get('session');
-                
-                // 如果不是静默拉取（即用户手动拉取），且 session 一致，询问
-                if (!silent && session === SESSION_ID) {
-                    if (!confirm('检测到云端数据由当前会话产生，确定要重新覆盖本地吗？')) return;
-                }
 
-                const parsed = JSON.parse(payloadStr);
-                isInternalUpdateRef.current = true;
-                dispatch({ type: 'HYDRATE_STATE', payload: parsed });
-                dispatch({ type: 'MARK_SYNCED' }); // 关键：拉取成功也视为激活同步链路
-                if (!silent) showToast('全量云端镜像同步完成', 'success');
-            } else {
-                if (!silent) showToast('云端尚无备份记录', 'info');
+            if (backupObj) {
+                const data = JSON.parse(backupObj.get('payload'));
+                setIsInternalUpdate(true);
+                dispatch({ type: 'HYDRATE_STATE', payload: { ...data, syncAllowed: true } });
+                if (!isSilent) showToast('已成功从云端镜像恢复数据', 'success');
+            } else if (!isSilent) {
+                showToast('云端尚无备份记录', 'info');
             }
         } catch (e: any) {
-            console.error("[LeanCloud Pull Failed]", e);
-            if (!silent) showToast(`拉取失败: ${e.message}`, 'error');
+            if (!isSilent) showToast(`拉取失败: ${e.message}`, 'error');
+            throw e;
         }
     };
 
