@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { Shipment } from '../types';
@@ -70,7 +69,7 @@ const Tracking: React.FC = () => {
     setAiAnalysis(null);
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-        const prompt = `分析这份 ${selectedShipment.carrier} 运单号 ${selectedShipment.trackingNo} 的物流轨迹。内容包含中药材名称：${selectedShipment.productName}。请评估其温湿度风险并预测送达日期。使用HTML加粗。`;
+        const prompt = `分析这份 ${selectedShipment.carrier} 运单号 ${selectedShipment.trackingNo} 的物流轨迹。货品名称：${selectedShipment.productName}。请评估其温湿度风险并预测送达日期。使用HTML加粗。`;
         const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
         setAiAnalysis(response.text);
     } catch (e: any) {
@@ -153,7 +152,7 @@ const Tracking: React.FC = () => {
             </div>
             <div>
                 <h2 className="text-white font-black text-xl tracking-tight uppercase italic flex items-center gap-2">
-                    全球中药物流情报 (Logistics Matrix)
+                    全球重要物流情报 (Logistics Matrix)
                 </h2>
                 <div className="flex gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
                     <span className="flex items-center gap-1"><Layers className="w-3 h-3 text-indigo-400"/> 运行中: {state.shipments.filter(s=>s.status!=='已送达').length}</span>
@@ -168,7 +167,7 @@ const Tracking: React.FC = () => {
                     type="text" 
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="单号 / 品名 / 药材..."
+                    placeholder="单号 / 品名 / 货件..."
                     className="w-full sm:w-72 pl-10 pr-4 py-2.5 bg-black/40 border border-white/10 rounded-xl text-sm text-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 transition-all placeholder:text-slate-700"
                 />
                 <Search className="w-4 h-4 text-slate-500 absolute left-3.5 top-3.5 group-focus-within:text-indigo-400 transition-colors" />
@@ -210,7 +209,7 @@ const Tracking: React.FC = () => {
                                    <Box className="w-4 h-4 text-indigo-400" />
                                </div>
                                <div className="truncate">
-                                   <div className="text-sm font-bold text-white leading-tight truncate">{shipment.productName || '未命名药材'}</div>
+                                   <div className="text-sm font-bold text-white leading-tight truncate">{shipment.productName || '未命名货品'}</div>
                                    <div className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
                                        <Scale className="w-2.5 h-2.5" /> 净重: 12.5kg | 5包
                                    </div>
@@ -255,7 +254,6 @@ const Tracking: React.FC = () => {
                           </div>
                       </div>
 
-                      {/* 缩略栏备注预览 (Highlighted Note Preview) */}
                       {shipment.notes && (
                           <div className="mt-1 px-3 py-1.5 bg-amber-500/10 border border-dashed border-amber-500/30 rounded-lg flex items-center gap-2">
                               <StickyNote className="w-3 h-3 text-amber-500 shrink-0" />
@@ -335,7 +333,6 @@ const Tracking: React.FC = () => {
                   </div>
 
                   <div className="p-8 space-y-8">
-                      {/* Highlighted Notes Block (Main Panel) */}
                       {selectedShipment.notes && (
                           <div className="bg-amber-500/10 border-2 border-dashed border-amber-500/40 rounded-3xl p-6 relative overflow-hidden group animate-in slide-in-from-top-4">
                               <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform">
@@ -436,7 +433,7 @@ const Tracking: React.FC = () => {
                       </div>
                       <div>
                           <label className="text-[10px] text-slate-500 font-black uppercase block mb-2">装载品名 (Payload)</label>
-                          <input type="text" value={editForm.productName || ''} onChange={e => setEditForm({...editForm, productName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm text-white" placeholder="药材品名或 SKU..." />
+                          <input type="text" value={editForm.productName || ''} onChange={e => setEditForm({...editForm, productName: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl px-5 py-4 text-sm text-white" placeholder="货品名或 SKU..." />
                       </div>
                       <div>
                           <label className="text-[10px] text-amber-500 font-black uppercase block mb-2">信息备注 (Internal Memo)</label>
@@ -463,7 +460,7 @@ const Tracking: React.FC = () => {
                                 type="date" 
                                 value={editForm.estimatedDelivery || ''} 
                                 onChange={e => setEditForm({...editForm, estimatedDelivery: e.target.value})} 
-                                className={`w-full border rounded-xl px-4 py-3 text-sm font-mono font-black transition-all outline-none ${editForm.estimatedDelivery ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400' : 'bg-black/40 border-white/10 text-slate-600'}`} 
+                                className={`w-full border rounded-xl px-4 py-3 text-sm font-mono font-black transition-all outline-none ${editForm.estimatedDelivery ? 'bg-indigo-600/10 border-indigo-500/30 text-indigo-400' : 'bg-black/40 border border-white/10 text-slate-600'}`} 
                               />
                           </div>
                       </div>
@@ -471,7 +468,7 @@ const Tracking: React.FC = () => {
 
                   <div className="flex justify-end gap-4 mt-10 pt-6 border-t border-white/10">
                       <button onClick={() => setShowEditModal(false)} className="px-6 py-3 text-slate-500 hover:text-white text-xs font-black uppercase">取消</button>
-                      <button onClick={handleSaveEdit} className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase shadow-2xl shadow-indigo-900/50 flex items-center gap-3 active:scale-95 transition-all"><Save className="w-4 h-4" /> 部署全球节点</button>
+                      <button onClick={handleSaveEdit} className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase shadow-2xl shadow-indigo-900/40 flex items-center gap-3 active:scale-95 transition-all"><Save className="w-4 h-4" /> 部署全球节点</button>
                   </div>
               </div>
           </div>

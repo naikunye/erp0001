@@ -36,7 +36,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           if (success) {
               showToast('云端镜像同步成功', 'success');
           }
-          // 如果失败，已经在 TanxingContext 里的 try-catch 弹窗提示具体原因了
       } catch (e) {
           showToast('核心链路发生异常', 'error');
       } finally {
@@ -141,15 +140,22 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     <span className="text-xs font-mono font-bold text-white">{getUSDate()}</span>
                 </div>
             </div>
-            <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">纽约 ET</span>
-                <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
-            </div>
-            <div className="flex flex-col items-center">
-                <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">洛杉矶 PT</span>
-                <span className="text-xs font-mono text-indigo-300 bg-indigo-500/10 px-2 py-0.5 rounded border border-indigo-500/20 shadow-[0_0_10px_rgba(99,102,241,0.1)]">
-                    {formatTime('America/Los_Angeles')}
-                </span>
+            
+            <div className="flex items-center gap-4">
+                <div className="flex flex-col items-center">
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">纽约 ET</span>
+                    <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">芝加哥 CT</span>
+                    <span className="text-xs font-mono text-indigo-100 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30">
+                        {formatTime('America/Chicago')}
+                    </span>
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">洛杉矶 PT</span>
+                    <span className="text-xs font-mono text-white/70">{formatTime('America/Los_Angeles')}</span>
+                </div>
             </div>
         </div>
 
