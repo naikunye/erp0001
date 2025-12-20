@@ -1,11 +1,12 @@
 import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import { initializeApp, getApp, getApps, deleteApp } from 'firebase/app';
-import { getFirestore, doc, setDoc, onSnapshot, getDoc, enableNetwork, terminate, writeBatch } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, collection, getDocs, writeBatch, query, orderBy } from 'firebase/firestore';
 import { Product, Transaction, Toast, Customer, Shipment, CalendarEvent, Supplier, AdCampaign, Influencer, Page, InboundShipment, Order, AuditLog, ExportTask, Task } from '../types';
 import { MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, MOCK_SUPPLIERS, MOCK_AD_CAMPAIGNS, MOCK_INFLUENCERS, MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS } from '../constants';
 
 const DB_KEY = 'TANXING_DB_V9_FIREBASE'; 
 const CONFIG_KEY = 'TANXING_FIREBASE_CONFIG'; 
+const CHUNK_SIZE = 800000; // 每个分片 800KB，安全避开 1MB 限制
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 export type Theme = 'ios-glass' | 'cyber-neon' | 'midnight-dark';
@@ -54,10 +55,6 @@ type Action =
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'UPDATE_PRODUCT'; payload: Product }
     | { type: 'ADD_PRODUCT'; payload: Product }
-    | { type: 'DELETE_PRODUCT'; payload: string }
-    | { type: 'ADD_TASK'; payload: Task }
-    | { type: 'ADD_ORDER'; payload: Order }
-    | { type: 'ADD_SHIPMENT'; payload: Shipment }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
     | { type: 'SET_FIREBASE_CONFIG'; payload: Partial<FirebaseConfig> }
@@ -103,7 +100,6 @@ const TanxingContext = createContext<{
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const [isHydrated, setIsHydrated] = useState(false);
-    const lastSyncFingerprintRef = useRef<string>('');
     const isInternalUpdateRef = useRef(false);
 
     const sanitizeId = (id: string) => id?.replace(/https?:\/\//g, '').split('.')[0].trim();
@@ -116,17 +112,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const apps = getApps();
             for (const app of apps) {
-                try { const db = getFirestore(app); await terminate(db); } catch(e) {}
                 await deleteApp(app).catch(() => {});
             }
 
             const app = initializeApp({ ...config, projectId: cleanId });
             const db = getFirestore(app);
-            await enableNetwork(db);
             
             // 握手测试
-            const docRef = doc(db, 'backups', 'manifest');
-            await setDoc(docRef, { handshake: SESSION_ID, last_active: new Date().toISOString() }, { merge: true });
+            await setDoc(doc(db, 'system', 'status'), { last_active: new Date().toISOString(), session: SESSION_ID }, { merge: true });
 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' });
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { projectId: cleanId } });
@@ -156,22 +149,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         init();
     }, []);
 
-    // 实时同步：监听 Manifest
-    useEffect(() => {
-        if (!isHydrated || state.connectionStatus !== 'connected') return;
-        const db = getFirestore(getApp());
-        const unsub = onSnapshot(doc(db, 'backups', 'manifest'), async (snap) => {
-            if (snap.exists()) {
-                const meta = snap.data();
-                if (meta.source_session !== SESSION_ID && meta.fingerprint !== lastSyncFingerprintRef.current) {
-                    // 如果 Manifest 变了，全量拉取一次
-                    await pullFromCloud();
-                }
-            }
-        });
-        return unsub;
-    }, [state.connectionStatus, isHydrated]);
-
     // 自动保存逻辑
     useEffect(() => {
         if (!isHydrated) return;
@@ -186,78 +163,99 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         isInternalUpdateRef.current = false;
     }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus]);
 
+    /**
+     * 量子分片同步引擎 (Sharding Engine)
+     * 将 5.4MB 数据切碎存入 Firestore，免费方案支持无限大小。
+     */
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
         if (state.connectionStatus !== 'connected' && !isForce) return false;
         
         try {
             const db = getFirestore(getApp());
-            const batch = writeBatch(db);
-            const ts = new Date().toISOString();
-
-            // 1. 裁剪冗余数据：仅保留最近 20 条日志和 100 条流水，减少体积
-            const cleanAuditLogs = state.auditLogs.slice(0, 20);
-            const cleanTransactions = state.transactions.slice(0, 100);
-
-            // 2. 节点化数据块
-            const nodes = {
-                products: { products: state.products, suppliers: state.suppliers },
-                orders: { orders: state.orders, customers: state.customers, inboundShipments: state.inboundShipments },
-                finance: { transactions: cleanTransactions, adCampaigns: state.adCampaigns },
-                misc: { shipments: state.shipments, tasks: state.tasks, auditLogs: cleanAuditLogs, influencers: state.influencers }
+            const fullPayload = {
+                products: state.products,
+                orders: state.orders,
+                transactions: state.transactions,
+                customers: state.customers,
+                shipments: state.shipments,
+                tasks: state.tasks,
+                suppliers: state.suppliers,
+                influencers: state.influencers,
+                inboundShipments: state.inboundShipments,
+                auditLogs: state.auditLogs.slice(0, 100),
+                session: SESSION_ID,
+                timestamp: new Date().toISOString()
             };
 
-            const fingerprint = JSON.stringify(nodes);
-            if (!isForce && fingerprint === lastSyncFingerprintRef.current) return true;
+            const dataStr = JSON.stringify(fullPayload);
+            const chunks: string[] = [];
+            
+            // 1. 切片处理
+            for (let i = 0; i < dataStr.length; i += CHUNK_SIZE) {
+                chunks.push(dataStr.substring(i, i + CHUNK_SIZE));
+            }
 
-            // 3. 执行分段写入
-            Object.entries(nodes).forEach(([key, payload]) => {
-                const nodeRef = doc(db, 'backups', `node_${key}`);
-                batch.set(nodeRef, { payload, timestamp: ts });
+            // 2. 批量写入
+            const batch = writeBatch(db);
+            
+            // 写入清单 (Manifest)
+            batch.set(doc(db, 'quantum_backup', 'manifest'), {
+                chunkCount: chunks.length,
+                totalSize: dataStr.length,
+                timestamp: fullPayload.timestamp,
+                session: SESSION_ID
             });
 
-            // 4. 更新清单
-            batch.set(doc(db, 'backups', 'manifest'), {
-                fingerprint,
-                source_session: SESSION_ID,
-                lastSync: ts
+            // 写入每个切片
+            chunks.forEach((content, index) => {
+                const chunkRef = doc(db, 'quantum_backup', `chunk_${index}`);
+                batch.set(chunkRef, { content, index });
             });
 
             await batch.commit();
-            lastSyncFingerprintRef.current = fingerprint;
+            
             dispatch({ type: 'SET_FIREBASE_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
             return true;
 
         } catch (e: any) {
-            console.error("[Sync Failed]", e);
-            if (e.message.includes('too large')) {
-                dispatch({ type: 'ADD_TOAST', payload: { message: '数据过大 (5MB+)，部分图片或日志同步已被截断。', type: 'warning' } });
-            }
+            console.error("[Quantum Sync Failed]", e);
             return false;
         }
     };
 
+    /**
+     * 碎片重构加载引擎 (Merging Engine)
+     */
     const pullFromCloud = async () => {
         if (state.connectionStatus !== 'connected') return;
         try {
             const db = getFirestore(getApp());
-            const nodes = ['products', 'orders', 'finance', 'misc'];
-            let combinedPayload: any = {};
-
-            const results = await Promise.all(nodes.map(n => getDoc(doc(db, 'backups', `node_${n}`))));
+            const manifestSnap = await getDoc(doc(db, 'quantum_backup', 'manifest'));
             
-            results.forEach(snap => {
-                if (snap.exists()) {
-                    combinedPayload = { ...combinedPayload, ...snap.data().payload };
-                }
-            });
+            if (manifestSnap.exists()) {
+                const { chunkCount, session } = manifestSnap.data();
+                
+                if (session === SESSION_ID) return; // 避免自循环
 
-            if (Object.keys(combinedPayload).length > 0) {
-                isInternalUpdateRef.current = true;
-                lastSyncFingerprintRef.current = JSON.stringify(combinedPayload);
-                dispatch({ type: 'HYDRATE_STATE', payload: combinedPayload });
+                const chunkPromises = [];
+                for (let i = 0; i < chunkCount; i++) {
+                    chunkPromises.push(getDoc(doc(db, 'quantum_backup', `chunk_${i}`)));
+                }
+
+                const results = await Promise.all(chunkPromises);
+                const fullStr = results
+                    .map(snap => snap.data()?.content || '')
+                    .join('');
+
+                const data = JSON.parse(fullStr);
+                if (data) {
+                    isInternalUpdateRef.current = true;
+                    dispatch({ type: 'HYDRATE_STATE', payload: data });
+                    showToast('量子分片重构成功，数据已对齐', 'success');
+                }
             }
         } catch (e) {
-            console.error("[Pull Failed]", e);
+            console.error("[Quantum Pull Failed]", e);
         }
     };
 

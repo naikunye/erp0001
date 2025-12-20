@@ -26,7 +26,6 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subValue, trend, tren
   const trendColor = trendUp ? 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20' : 'text-rose-400 bg-rose-500/10 border-rose-500/20';
   const TrendIcon = trendUp ? ArrowUpRight : ArrowDownRight;
   
-  // Extract base color class for icon bg
   const iconBaseColor = colors[accentColor].split(' ')[0];
 
   return (
@@ -52,7 +51,6 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subValue, trend, tren
         </div>
       ) : (
         <div className="flex flex-col h-full justify-between animate-in fade-in duration-700 slide-in-from-bottom-2">
-            {/* Background Gradient Blob on Hover */}
             <div className={`absolute -right-10 -top-10 w-32 h-32 bg-gradient-to-br ${colors[accentColor].split(' ')[1]} rounded-full blur-3xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`}></div>
 
             <div className="flex justify-between items-start mb-4 relative z-10">
@@ -83,7 +81,6 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, subValue, trend, tren
                         {trend}
                     </div>
                 )}
-                {/* Mini Sparkline Visualization */}
                 <div className="flex gap-0.5 items-end h-4 opacity-50">
                     {[30, 50, 40, 70, 50, 80].map((h, i) => (
                         <div key={i} className={`w-1 rounded-t-sm ${iconBaseColor.replace('text-', 'bg-')}`} style={{ height: `${h}%` }}></div>
