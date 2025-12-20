@@ -40,6 +40,7 @@ interface AppState {
     isMobileMenuOpen: boolean;
     isInitialized: boolean; 
     isDemoMode: boolean;
+    hasSyncedOnce: boolean; // 新增：标记是否至少与云端进行过一次有效交互
 }
 
 type Action =
@@ -56,12 +57,13 @@ type Action =
     | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'CLEAR_NAV_PARAMS' }
-    | { type: 'RESET_DATA' };
+    | { type: 'RESET_DATA' }
+    | { type: 'MARK_SYNCED' };
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
     leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null },
-    connectionStatus: 'disconnected', products: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], calendarEvents: [], suppliers: [], adCampaigns: [], influencers: [], inboundShipments: [], toasts: [], auditLogs: [], exportTasks: [], isMobileMenuOpen: false, isInitialized: false, isDemoMode: false
+    connectionStatus: 'disconnected', products: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], calendarEvents: [], suppliers: [], adCampaigns: [], influencers: [], inboundShipments: [], toasts: [], auditLogs: [], exportTasks: [], isMobileMenuOpen: false, isInitialized: false, isDemoMode: false, hasSyncedOnce: false
 };
 
 const appReducer = (state: AppState, action: Action): AppState => {
@@ -81,6 +83,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
         case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true };
+        case 'MARK_SYNCED': return { ...state, hasSyncedOnce: true, isDemoMode: false };
         default: return state;
     }
 };
@@ -90,7 +93,7 @@ const TanxingContext = createContext<{
     dispatch: React.Dispatch<Action>;
     showToast: (message: string, type: Toast['type']) => void;
     syncToCloud: (isForce?: boolean) => Promise<boolean>;
-    pullFromCloud: () => Promise<void>;
+    pullFromCloud: (silent?: boolean) => Promise<void>;
     bootLean: (appId: string, appKey: string, serverURL: string) => Promise<void>;
 }>({ state: emptyState, dispatch: () => null, showToast: () => null, syncToCloud: async () => false, pullFromCloud: async () => {}, bootLean: async () => {} });
 
@@ -113,21 +116,33 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    // 核心修复：更严格的初始化流程
     useEffect(() => {
         const init = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             const savedDb = localStorage.getItem(DB_KEY);
+            
+            // 1. 先加载本地缓存
             if (savedDb) {
                 const localData = JSON.parse(savedDb);
                 dispatch({ type: 'HYDRATE_STATE', payload: { ...localData, connectionStatus: 'disconnected' } });
+            } else {
+                dispatch({ type: 'LOAD_MOCK_DATA' });
             }
+
+            // 2. 如果有云端配置，执行连接并【强制拉取一次】
             if (savedConfig) {
                 const config = JSON.parse(savedConfig);
                 dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
-                await bootLean(config.appId, config.appKey, config.serverURL).catch(() => {});
-            } else if (!savedDb) {
-                dispatch({ type: 'LOAD_MOCK_DATA' });
+                try {
+                    await bootLean(config.appId, config.appKey, config.serverURL);
+                    // 关键：连接成功后立刻尝试拉取云端数据，覆盖本地可能的旧缓存或Mock
+                    await pullFromCloud(true);
+                } catch (e) {
+                    console.warn("Auto-pull failed during init", e);
+                }
             }
+            
             setIsHydrated(true);
         };
         init();
@@ -135,16 +150,24 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         if (!isHydrated) return;
+        
+        // 保存配置到本地
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
+        
+        // 保存数据到本地缓存
         const slimState = { ...state, toasts: [], exportTasks: [], connectionStatus: 'disconnected' as ConnectionStatus };
         try { localStorage.setItem(DB_KEY, JSON.stringify(slimState)); } catch(e) {}
         
-        if (!isInternalUpdateRef.current && state.connectionStatus === 'connected' && !state.isDemoMode) {
-            const timer = setTimeout(() => syncToCloud(), 30000);
+        // 自动同步逻辑：增加 hasSyncedOnce 校验，防止 Mock 数据意外上传
+        if (!isInternalUpdateRef.current && 
+            state.connectionStatus === 'connected' && 
+            !state.isDemoMode && 
+            state.hasSyncedOnce) {
+            const timer = setTimeout(() => syncToCloud(), 15000);
             return () => clearTimeout(timer);
         }
         isInternalUpdateRef.current = false;
-    }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus]);
+    }, [state.products, state.orders, state.transactions, state.shipments, state.connectionStatus, state.hasSyncedOnce]);
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
         if (state.connectionStatus !== 'connected' && !isForce) return false;
@@ -168,17 +191,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             let backupObj = null;
             try {
-                // 核心修复：更鲁棒地处理 404/Class 不存在的情况
                 backupObj = await query.first();
             } catch (queryErr: any) {
-                // 兼容不同 LeanCloud 版本/环境下的 404 返回
-                const isNotFound = queryErr.code === 101 || 
-                                   queryErr.message?.includes("doesn't exist") || 
-                                   queryErr.status === 404;
-                if (!isNotFound) {
-                    throw queryErr;
-                }
-                // 如果是 101/404，保持 backupObj 为 null，后续会执行新建逻辑
+                const isNotFound = queryErr.code === 101 || queryErr.message?.includes("doesn't exist");
+                if (!isNotFound) throw queryErr;
             }
             
             if (!backupObj) {
@@ -192,17 +208,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             await backupObj.save();
             dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString() } });
+            dispatch({ type: 'MARK_SYNCED' }); // 标记同步成功，开启后续自动同步
             return true;
         } catch (e: any) {
             console.error("[LeanCloud Sync Failed]", e);
-            // 只有当不是 404 导致的失败时，才通过 UI 报错（因为 404 应该在内部捕获）
             showToast(`同步异常: ${e.message}`, 'error');
             return false;
         }
     };
 
-    const pullFromCloud = async () => {
-        if (!state.leanConfig.serverURL) return showToast('请先配置服务器地址', 'warning');
+    const pullFromCloud = async (silent: boolean = false) => {
+        if (!state.leanConfig.serverURL) {
+            if (!silent) showToast('请先配置服务器地址', 'warning');
+            return;
+        }
         try {
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_BACKUP_NODE');
@@ -211,27 +230,30 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             try {
                 backupObj = await query.first();
             } catch (queryErr: any) {
-                const isNotFound = queryErr.code === 101 || 
-                                   queryErr.message?.includes("doesn't exist") || 
-                                   queryErr.status === 404;
+                const isNotFound = queryErr.code === 101 || queryErr.message?.includes("doesn't exist");
                 if (!isNotFound) throw queryErr;
             }
             
             if (backupObj) {
                 const payloadStr = backupObj.get('payload');
                 const session = backupObj.get('session');
-                if (session === SESSION_ID && !confirm('检测到云端数据由当前会话产生，确定要覆盖本地吗？')) return;
+                
+                // 如果不是静默拉取（即用户手动拉取），且 session 一致，询问
+                if (!silent && session === SESSION_ID) {
+                    if (!confirm('检测到云端数据由当前会话产生，确定要重新覆盖本地吗？')) return;
+                }
 
                 const parsed = JSON.parse(payloadStr);
                 isInternalUpdateRef.current = true;
                 dispatch({ type: 'HYDRATE_STATE', payload: parsed });
-                showToast('全量云端镜像同步完成', 'success');
+                dispatch({ type: 'MARK_SYNCED' }); // 关键：拉取成功也视为激活同步链路
+                if (!silent) showToast('全量云端镜像同步完成', 'success');
             } else {
-                showToast('云端尚无备份记录', 'info');
+                if (!silent) showToast('云端尚无备份记录', 'info');
             }
         } catch (e: any) {
             console.error("[LeanCloud Pull Failed]", e);
-            showToast(`拉取失败: ${e.message}`, 'error');
+            if (!silent) showToast(`拉取失败: ${e.message}`, 'error');
         }
     };
 
