@@ -1,8 +1,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { InboundShipment, Product, InboundShipmentItem, Shipment } from '../types';
-import { WAREHOUSES } from '../constants';
-import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, TruckIcon, Edit3, Check, RotateCcw, ShieldCheck, Download, Calendar, Hash, FileText, BadgeDollarSign, Weight, Coins, Calculator } from 'lucide-react';
+// Add FileText to imports from lucide-react
+import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText } from 'lucide-react';
 
 const InboundShipments: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
@@ -27,6 +27,7 @@ const InboundShipments: React.FC = () => {
     setEditForm(null);
   }, [selectedShipment]);
 
+  // 搜索逻辑
   const filteredProducts = useMemo(() => {
       const q = showCreateModal ? skuSearch : (isEditing ? detailSkuSearch : '');
       if (!q || q.length < 1) return [];
@@ -36,24 +37,23 @@ const InboundShipments: React.FC = () => {
       ).slice(0, 5);
   }, [state.products, skuSearch, detailSkuSearch, isEditing, showCreateModal]);
 
+  // 核心修复：更稳健的 SKU 添加函数
   const handleAddItem = (p: Product) => {
       const defaultQty = p.itemsPerBox || 10;
       const defaultRate = p.logistics?.unitFreightCost || 35;
       const defaultTotalWeight = (p.unitWeight || 0.5) * defaultQty;
 
       if (showCreateModal) {
-          // 检查重复
-          const isDuplicate = plannedItems.some(item => item.product.id === p.id);
-          if (isDuplicate) {
-              showToast(`${p.sku} 已在待发清单中`, 'warning');
-              setSkuSearch('');
-              return;
-          }
-          
-          // 使用函数式更新确保状态一致性
-          setPlannedItems(prev => [...prev, { product: p, quantity: defaultQty }]);
-          setSkuSearch(''); // 清空搜索以准备下一次输入
-          showToast(`已添加 SKU: ${p.sku}`, 'success');
+          setPlannedItems(prev => {
+              if (prev.find(it => it.product.id === p.id)) {
+                  showToast(`${p.sku} 已在清单中`, 'warning');
+                  return prev;
+              }
+              showToast(`已添加: ${p.sku}`, 'success');
+              return [...prev, { product: p, quantity: defaultQty }];
+          });
+          // 延迟清空搜索框，防止列表消失太快导致点击失效
+          setTimeout(() => setSkuSearch(''), 50);
           return;
       }
 
@@ -75,11 +75,12 @@ const InboundShipments: React.FC = () => {
           };
           const updatedItems = [...editForm.items, newItem];
           recalculateTotals(updatedItems);
-          setDetailSkuSearch('');
+          setTimeout(() => setDetailSkuSearch(''), 50);
           showToast(`已追加 SKU: ${p.sku}`, 'success');
       }
   };
 
+  // 核心修复：使用函数式更新，防止编辑时数据被覆盖
   const recalculateTotals = (items: any[]) => {
       let totalWeight = 0;
       let totalVolume = 0;
@@ -91,11 +92,13 @@ const InboundShipments: React.FC = () => {
               totalVolume += vol;
           }
       });
-      setEditForm({ ...editForm, items, totalWeight, totalVolume });
+      setEditForm((prev: any) => prev ? ({ ...prev, items, totalWeight, totalVolume }) : null);
   };
 
-  const updateItemProperty = (productId: string, field: string, value: any) => {
+  // 处理输入框变动 (支持空字符串，防止 NaN 锁定)
+  const updateItemProperty = (productId: string, field: string, rawValue: string) => {
       if (!editForm) return;
+      const value = rawValue === '' ? 0 : parseFloat(rawValue);
       const updatedItems = editForm.items.map((it: any) => {
           if (it.productId === productId) {
               return { ...it, [field]: value };
@@ -133,11 +136,9 @@ const InboundShipments: React.FC = () => {
           const boxes = Math.ceil(item.quantity / (item.product.itemsPerBox || 1));
           const rowW = (item.product.unitWeight || 0.5) * item.quantity;
           const fr = item.product.logistics?.unitFreightCost || 35;
-          
           totalWeight += rowW;
           const vol = ((item.product.dimensions?.l || 0) * (item.product.dimensions?.w || 0) * (item.product.dimensions?.h || 0) / 1000000) * boxes;
           totalVolume += vol;
-          
           return {
               productId: item.product.id, sku: item.product.sku, name: item.product.name,
               quantity: item.quantity, boxes, unitPrice: item.product.price || 0,
@@ -159,14 +160,6 @@ const InboundShipments: React.FC = () => {
       setNewShipmentName('');
   };
 
-  const handleStatusTransition = (status: InboundShipment['status']) => {
-    if (!selectedShipment) return;
-    const updated = { ...selectedShipment, status };
-    dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: updated });
-    setSelectedShipment(updated);
-    showToast(`货件状态已切换至: ${getStatusDisplay(status)}`, 'success');
-  };
-
   const openCreateModal = () => {
       setSkuSearch('');
       setPlannedItems([]);
@@ -182,7 +175,7 @@ const InboundShipments: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Precise Selection Fix v10.2</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Reliability Fix v10.3</p>
                 </div>
             </div>
             <button onClick={openCreateModal} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
@@ -191,6 +184,7 @@ const InboundShipments: React.FC = () => {
         </div>
 
         <div className="flex-1 overflow-hidden flex divide-x divide-white/5">
+            {/* 侧边列表 */}
             <div className="w-1/4 overflow-y-auto p-4 space-y-4 bg-black/40 custom-scrollbar">
                 {state.inboundShipments.map(shipment => (
                     <div 
@@ -211,6 +205,7 @@ const InboundShipments: React.FC = () => {
                 ))}
             </div>
 
+            {/* 主内容区 */}
             <div className="flex-1 bg-black/20 flex flex-col min-w-0 overflow-hidden">
                 {selectedShipment ? (
                     <>
@@ -231,7 +226,13 @@ const InboundShipments: React.FC = () => {
                                         {selectedShipment.status === 'Draft' && (
                                             <>
                                                 <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 进入财务调账</button>
-                                                <button onClick={() => handleStatusTransition('Shipped')} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 确认离场</button>
+                                                <button onClick={() => {
+                                                    const nextStatus = 'Shipped';
+                                                    const updated = { ...selectedShipment, status: nextStatus };
+                                                    dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: updated });
+                                                    setSelectedShipment(updated);
+                                                    showToast(`货件已离场`, 'success');
+                                                }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 确认离场</button>
                                             </>
                                         )}
                                         <button onClick={() => setSelectedShipment(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 transition-all"><X className="w-4 h-4" /></button>
@@ -248,8 +249,8 @@ const InboundShipments: React.FC = () => {
                                             <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center gap-2"><Globe className="w-3 h-3"/> 跨境路由规划</div>
                                             {isEditing ? (
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <input type="text" value={editForm?.sourceWarehouseId || ''} onChange={e => setEditForm((f:any) => ({...f, sourceWarehouseId: e.target.value}))} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="起运地" />
-                                                    <input type="text" value={editForm?.destinationWarehouseId || ''} onChange={e => setEditForm((f:any) => ({...f, destinationWarehouseId: e.target.value}))} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="目的地" />
+                                                    <input type="text" value={editForm?.sourceWarehouseId || ''} onChange={e => setEditForm({...editForm, sourceWarehouseId: e.target.value})} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="起运地" />
+                                                    <input type="text" value={editForm?.destinationWarehouseId || ''} onChange={e => setEditForm({...editForm, destinationWarehouseId: e.target.value})} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="目的地" />
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-4 text-white font-bold text-sm">
@@ -315,20 +316,20 @@ const InboundShipments: React.FC = () => {
                                                                 <td className="py-4 px-2 font-black text-slate-200">{item.sku}</td>
                                                                 <td className="py-4 px-2">
                                                                     {isEditing ? (
-                                                                        <input type="number" value={item.quantity} onChange={e => updateItemProperty(item.productId, 'quantity', parseInt(e.target.value))} className="w-16 bg-black/60 border border-white/10 rounded p-1 text-xs text-white focus:border-indigo-500 outline-none" />
+                                                                        <input type="number" value={item.quantity === 0 ? '' : item.quantity} onChange={e => updateItemProperty(item.productId, 'quantity', e.target.value)} className="w-16 bg-black/60 border border-white/10 rounded p-1 text-xs text-white focus:border-indigo-500 outline-none" />
                                                                     ) : item.quantity}
                                                                 </td>
                                                                 <td className="py-4 px-2 text-blue-400">
                                                                     {isEditing ? (
                                                                         <div className="flex items-center gap-1">
                                                                             <Weight className="w-3 h-3 opacity-30"/>
-                                                                            <input type="number" step="0.01" value={item.rowTotalWeight} onChange={e => updateItemProperty(item.productId, 'rowTotalWeight', parseFloat(e.target.value))} className="w-24 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
+                                                                            <input type="number" step="0.01" value={item.rowTotalWeight === 0 ? '' : item.rowTotalWeight} onChange={e => updateItemProperty(item.productId, 'rowTotalWeight', e.target.value)} className="w-24 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
                                                                         </div>
                                                                     ) : `${rowWeight.toFixed(2)}kg`}
                                                                 </td>
                                                                 <td className="py-4 px-2 text-blue-400">
                                                                     {isEditing ? (
-                                                                        <input type="number" value={item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', parseFloat(e.target.value))} className="w-16 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
+                                                                        <input type="number" value={item.freightRate === 0 ? '' : item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', e.target.value)} className="w-16 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
                                                                     ) : `¥${rate}`}
                                                                 </td>
                                                                 <td className="py-4 px-2 text-blue-100 font-bold">
@@ -339,7 +340,7 @@ const InboundShipments: React.FC = () => {
                                                                 </td>
                                                                 <td className="py-4 px-2 text-indigo-400 font-bold">
                                                                     {isEditing ? (
-                                                                        <input type="number" step="0.01" value={item.unitPrice} onChange={e => updateItemProperty(item.productId, 'unitPrice', parseFloat(e.target.value))} className="w-20 bg-indigo-500/5 border border-indigo-500/20 rounded p-1 text-xs text-indigo-300 focus:border-indigo-500 outline-none font-bold" />
+                                                                        <input type="number" step="0.01" value={item.unitPrice === 0 ? '' : item.unitPrice} onChange={e => updateItemProperty(item.productId, 'unitPrice', e.target.value)} className="w-20 bg-indigo-500/5 border border-indigo-500/20 rounded p-1 text-xs text-indigo-300 focus:border-indigo-500 outline-none font-bold" />
                                                                     ) : `$${unitPrice.toFixed(2)}`}
                                                                 </td>
                                                                 <td className="py-4 px-2 text-right font-black text-indigo-300 text-sm">
@@ -411,6 +412,7 @@ const InboundShipments: React.FC = () => {
             </div>
         </div>
 
+        {/* 新建货件弹窗 */}
         {showCreateModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-2xl bg-black/60" onClick={() => setShowCreateModal(false)}>
                 <div className="ios-glass-panel w-full max-w-4xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 bg-[#0f0f12] border border-white/20" onClick={e => e.stopPropagation()}>
@@ -449,9 +451,9 @@ const InboundShipments: React.FC = () => {
                                         <div key={item.product.id} className="bg-white/2 border border-white/5 p-4 rounded-2xl flex items-center justify-between group hover:bg-white/5 transition-all">
                                             <div className="text-sm font-black text-white">{item.product.sku}</div>
                                             <div className="flex items-center gap-6">
-                                                <input type="number" value={item.quantity} onChange={e => {
-                                                    const qty = parseInt(e.target.value) || 0;
-                                                    setPlannedItems(prev => prev.map(it => it.product.id === item.product.id ? { ...it, quantity: qty } : it));
+                                                <input type="number" value={item.quantity === 0 ? '' : item.quantity} onChange={e => {
+                                                    const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                                                    setPlannedItems(prev => prev.map(it => it.product.id === item.product.id ? { ...it, quantity: val } : it));
                                                 }} className="w-24 bg-black/60 border border-white/10 rounded-lg p-2 text-sm text-white font-mono text-center outline-none" />
                                                 <button onClick={() => setPlannedItems(prev => prev.filter(it => it.product.id !== item.product.id))} className="p-2 text-slate-700 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4"/></button>
                                             </div>
