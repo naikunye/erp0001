@@ -34,15 +34,21 @@ const InboundShipments: React.FC = () => {
   }, [state.products, skuSearch, detailSkuSearch, isEditing]);
 
   const handleAddItem = (p: Product) => {
+      // 默认数量和逻辑
+      const defaultQty = p.itemsPerBox || 10;
+      const defaultRate = p.logistics?.unitFreightCost || 35;
+      const defaultTotalWeight = (p.unitWeight || 0.5) * defaultQty;
+
       const newItem = {
           productId: p.id,
           sku: p.sku,
           name: p.name,
-          quantity: p.itemsPerBox || 10,
+          quantity: defaultQty,
           boxes: 1,
           unitPrice: p.price || 0,
-          weight: p.unitWeight || 0.5,
-          freightRate: p.logistics?.unitFreightCost || 35
+          // 修正：存储行总重而不是单品重
+          rowTotalWeight: defaultTotalWeight,
+          freightRate: defaultRate
       };
 
       if (isEditing && editForm) {
@@ -52,7 +58,7 @@ const InboundShipments: React.FC = () => {
           setDetailSkuSearch('');
       } else {
           if (plannedItems.find(item => item.product.id === p.id)) return;
-          setPlannedItems([...plannedItems, { product: p, quantity: p.itemsPerBox || 10 }]);
+          setPlannedItems([...plannedItems, { product: p, quantity: defaultQty }]);
           setSkuSearch('');
       }
   };
@@ -62,8 +68,9 @@ const InboundShipments: React.FC = () => {
       let totalVolume = 0;
       items.forEach((it: any) => {
           const product = state.products.find(p => p.id === it.productId);
+          // 累加每一行的总重
+          totalWeight += Number(it.rowTotalWeight || 0);
           if (product) {
-              totalWeight += Number(it.quantity) * Number(it.weight || 0);
               const vol = ((product.dimensions?.l || 0) * (product.dimensions?.w || 0) * (product.dimensions?.h || 0) / 1000000) * Number(it.boxes);
               totalVolume += vol;
           }
@@ -108,15 +115,17 @@ const InboundShipments: React.FC = () => {
       let totalWeight = 0; let totalVolume = 0;
       const shipmentItems = plannedItems.map(item => {
           const boxes = Math.ceil(item.quantity / (item.product.itemsPerBox || 1));
-          const w = item.product.unitWeight || 0.5;
+          const rowW = (item.product.unitWeight || 0.5) * item.quantity;
           const fr = item.product.logistics?.unitFreightCost || 35;
-          totalWeight += item.quantity * w;
+          
+          totalWeight += rowW;
           const vol = ((item.product.dimensions?.l || 0) * (item.product.dimensions?.w || 0) * (item.product.dimensions?.h || 0) / 1000000) * boxes;
           totalVolume += vol;
+          
           return {
               productId: item.product.id, sku: item.product.sku, name: item.product.name,
               quantity: item.quantity, boxes, unitPrice: item.product.price || 0,
-              weight: w, freightRate: fr
+              rowTotalWeight: rowW, freightRate: fr
           };
       });
 
@@ -132,9 +141,6 @@ const InboundShipments: React.FC = () => {
       setShowCreateModal(false);
   };
 
-  /**
-   * FIX: Added missing handleStatusTransition to handle state changes for inbound shipments.
-   */
   const handleStatusTransition = (status: InboundShipment['status']) => {
     if (!selectedShipment) return;
     const updated = { ...selectedShipment, status };
@@ -145,6 +151,7 @@ const InboundShipments: React.FC = () => {
 
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative bg-black/20 font-sans">
+        {/* Header 省略保持一致... */}
         <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/2 backdrop-blur-xl">
             <div className="flex items-center gap-4">
                 <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-900/40">
@@ -152,7 +159,7 @@ const InboundShipments: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Dual Metric Alignment v9.0</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Precise Allocation v10.0</p>
                 </div>
             </div>
             <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
@@ -200,7 +207,7 @@ const InboundShipments: React.FC = () => {
                                     <>
                                         {selectedShipment.status === 'Draft' && (
                                             <>
-                                                <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 进入调账模式</button>
+                                                <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 进入财务调账</button>
                                                 <button onClick={() => handleStatusTransition('Shipped')} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 确认离场</button>
                                             </>
                                         )}
@@ -230,14 +237,14 @@ const InboundShipments: React.FC = () => {
                                         <div className="ios-glass-card p-6 border-l-4 border-l-amber-500">
                                             <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center gap-2"><Scale className="w-3 h-3"/> 载荷数据核算 (Total)</div>
                                             <div className="flex items-center gap-10">
-                                                <div><span className="text-[10px] text-slate-600 block uppercase font-bold">总计重</span><span className="text-xl font-black text-white font-mono">{Number(isEditing ? editForm?.totalWeight : selectedShipment.totalWeight).toFixed(1)} KG</span></div>
+                                                <div><span className="text-[10px] text-slate-600 block uppercase font-bold">批次总重</span><span className="text-xl font-black text-white font-mono">{Number(isEditing ? editForm?.totalWeight : selectedShipment.totalWeight).toFixed(1)} KG</span></div>
                                                 <div className="w-px h-8 bg-white/5"></div>
                                                 <div><span className="text-[10px] text-slate-600 block uppercase font-bold">总体积</span><span className="text-xl font-black text-white font-mono">{Number(isEditing ? editForm?.totalVolume : selectedShipment.totalVolume).toFixed(3)} CBM</span></div>
                                             </div>
                                         </div>
                                     </div>
 
-                                    {/* 核心改动：物料矩阵展示逻辑 */}
+                                    {/* 关键重构：物料矩阵 */}
                                     <div className="ios-glass-card p-6 overflow-hidden">
                                         <div className="flex justify-between items-center mb-6">
                                             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><LayoutList className="w-4 h-4 text-indigo-400"/> 数字化物料矩阵 (Item Matrix)</h4>
@@ -263,22 +270,22 @@ const InboundShipments: React.FC = () => {
                                                 <thead className="text-slate-500 font-black uppercase border-b border-white/5">
                                                     <tr>
                                                         <th className="pb-3 px-2 text-[10px]">SKU 识别码</th>
-                                                        <th className="pb-3 px-2 text-[10px] w-20">数量</th>
-                                                        <th className="pb-3 px-2 text-[10px] w-28 text-blue-400">计费重(KG/pcs)</th>
-                                                        <th className="pb-3 px-2 text-[10px] w-24 text-blue-400">运费价(¥/KG)</th>
-                                                        <th className="pb-3 px-2 text-[10px] text-blue-200 w-32">物流小计 (Total ¥)</th>
-                                                        <th className="pb-3 px-2 text-[10px] text-indigo-400 w-28">单品分摊 (Unit ¥)</th>
-                                                        <th className="pb-3 px-2 text-[10px] text-indigo-400 w-28">申报单价 ($)</th>
-                                                        <th className="pb-3 px-2 text-right text-indigo-300">申报总值 ($)</th>
+                                                        <th className="pb-3 px-2 text-[10px] w-24">数量(PCS)</th>
+                                                        <th className="pb-3 px-2 text-[10px] w-32 text-blue-400">行总计重(KG)</th>
+                                                        <th className="pb-3 px-2 text-[10px] w-28 text-blue-400">运费价(¥/KG)</th>
+                                                        <th className="pb-3 px-2 text-[10px] text-blue-200 w-36">物流小计 (¥)</th>
+                                                        <th className="pb-3 px-2 text-[10px] text-emerald-400 w-32 bg-emerald-500/5">单品分摊 (¥/pcs)</th>
+                                                        <th className="pb-3 px-2 text-[10px] text-indigo-400 w-28">申报单价($)</th>
+                                                        <th className="pb-3 px-2 text-right text-indigo-300">申报总值($)</th>
                                                         {isEditing && <th className="pb-3 px-2 text-right w-12"></th>}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-white/5 font-mono">
                                                     {(isEditing ? editForm?.items : selectedShipment.items || []).map((item: any, i: number) => {
-                                                        const unitWeight = Number(item.weight || 0);
+                                                        const rowWeight = Number(item.rowTotalWeight || 0); // 这一行货物的总重量
                                                         const rate = Number(item.freightRate || 0);
-                                                        const unitFreightCost = unitWeight * rate; // 单个商品的运费
-                                                        const lineTotalFreight = unitFreightCost * item.quantity; // 这一行总运费
+                                                        const lineTotalFreight = rowWeight * rate; // 行总运费
+                                                        const unitFreightCost = item.quantity > 0 ? (lineTotalFreight / item.quantity) : 0; // 单件分摊 = 总运费 / 数量
                                                         const unitPrice = Number(item.unitPrice || 0);
                                                         
                                                         return (
@@ -289,22 +296,26 @@ const InboundShipments: React.FC = () => {
                                                                         <input type="number" value={item.quantity} onChange={e => updateItemProperty(item.productId, 'quantity', parseInt(e.target.value))} className="w-16 bg-black/60 border border-white/10 rounded p-1 text-xs text-white focus:border-indigo-500 outline-none" />
                                                                     ) : item.quantity}
                                                                 </td>
+                                                                {/* 修改点 1：输入该 SKU 在该批次的总重量 */}
                                                                 <td className="py-4 px-2 text-blue-400">
                                                                     {isEditing ? (
-                                                                        <input type="number" step="0.01" value={item.weight} onChange={e => updateItemProperty(item.productId, 'weight', parseFloat(e.target.value))} className="w-20 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
-                                                                    ) : `${unitWeight.toFixed(2)}kg`}
+                                                                        <div className="flex items-center gap-1">
+                                                                            <Weight className="w-3 h-3 opacity-30"/>
+                                                                            <input type="number" step="0.01" value={item.rowTotalWeight} onChange={e => updateItemProperty(item.productId, 'rowTotalWeight', parseFloat(e.target.value))} className="w-24 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
+                                                                        </div>
+                                                                    ) : `${rowWeight.toFixed(2)}kg`}
                                                                 </td>
                                                                 <td className="py-4 px-2 text-blue-400">
                                                                     {isEditing ? (
-                                                                        <input type="number" value={item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', parseFloat(e.target.value))} className="w-16 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
+                                                                        <input type="number" value={item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', parseFloat(e.target.value))} className="w-16 bg-black/60 border border-white/10 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
                                                                     ) : `¥${rate}`}
                                                                 </td>
-                                                                {/* 修正点：展示物流小计，与申报总值对齐 */}
-                                                                <td className="py-4 px-2 text-blue-100 font-black text-sm">
+                                                                {/* 行总运费 */}
+                                                                <td className="py-4 px-2 text-blue-100 font-bold">
                                                                     ¥ {lineTotalFreight.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                                 </td>
-                                                                {/* 新增/保留点：展示真正的单品分摊 */}
-                                                                <td className="py-4 px-2 text-slate-500 text-[10px]">
+                                                                {/* 修改点 2：核心计算逻辑 - 单品分摊 = 行总运费 / 数量 */}
+                                                                <td className="py-4 px-2 bg-emerald-500/5 text-emerald-400 font-black text-sm">
                                                                     ¥ {unitFreightCost.toFixed(2)}
                                                                 </td>
                                                                 <td className="py-4 px-2 text-indigo-400 font-bold">
@@ -326,12 +337,12 @@ const InboundShipments: React.FC = () => {
                                                 </tbody>
                                                 <tfoot className="border-t-2 border-white/5 font-black uppercase text-[10px] bg-white/2">
                                                     <tr>
-                                                        <td colSpan={4} className="py-5 px-2 text-slate-500 text-right italic">综合运费分摊成本 (CNY):</td>
-                                                        <td className="py-5 px-2 text-blue-400 text-base">
-                                                            ¥ {(isEditing ? editForm?.items : selectedShipment.items || []).reduce((acc: any, it: any) => acc + (Number(it.weight || 0) * Number(it.freightRate || 0) * Number(it.quantity || 0)), 0).toLocaleString()}
+                                                        <td colSpan={4} className="py-5 px-2 text-slate-500 text-right italic">本批次运费总额 (CNY):</td>
+                                                        <td className="py-5 px-2 text-blue-400 text-lg">
+                                                            ¥ {(isEditing ? editForm?.items : selectedShipment.items || []).reduce((acc: any, it: any) => acc + (Number(it.rowTotalWeight || 0) * Number(it.freightRate || 0)), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                         </td>
                                                         <td colSpan={2} className="py-5 px-2 text-slate-500 text-right italic">总申报货值 (USD):</td>
-                                                        <td className="py-5 px-2 text-indigo-300 text-right text-base font-mono">
+                                                        <td className="py-5 px-2 text-indigo-300 text-right text-lg font-mono">
                                                             $ {(isEditing ? editForm?.items : selectedShipment.items || []).reduce((acc: any, it: any) => acc + (Number(it.quantity || 0) * Number(it.unitPrice || 0)), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                         </td>
                                                         {isEditing && <td></td>}
@@ -345,21 +356,22 @@ const InboundShipments: React.FC = () => {
                                         <div className="p-6 bg-indigo-500/5 border border-indigo-500/10 rounded-2xl flex items-start gap-4">
                                             <ShieldCheck className="w-6 h-6 text-indigo-400 shrink-0" />
                                             <div>
-                                                <h5 className="text-xs font-bold text-white uppercase mb-1">合规自检：对齐完成 (Aligned)</h5>
-                                                <p className="text-[10px] text-indigo-300/60 leading-relaxed font-medium">物流成本已根据单件重、运费价与发货总数进行三级分摊。小计金额已与申报货值实时对齐。</p>
+                                                <h5 className="text-xs font-bold text-white uppercase mb-1">财务核算协议：Batch-First</h5>
+                                                <p className="text-[10px] text-indigo-300/60 leading-relaxed font-medium">当前采用“行总重过磅”录入模式。系统会自动根据总重、单价、SKU件数三维交叉计算最真实的单品分摊成本。</p>
                                             </div>
                                         </div>
                                         <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-start gap-4">
                                             <Calculator className="w-6 h-6 text-blue-400 shrink-0" />
                                             <div>
-                                                <h5 className="text-xs font-bold text-white uppercase mb-1">精密财务核算</h5>
-                                                <p className="text-[10px] text-blue-300/60 leading-relaxed font-medium">系统自动将运费小计反算至单品分摊。保存后，单品分摊成本将回传至「财务穿透」模块的 SKU 盈利模型。</p>
+                                                <h5 className="text-xs font-bold text-white uppercase mb-1">分摊算法同步</h5>
+                                                <p className="text-[10px] text-blue-300/60 leading-relaxed font-medium">此分摊结果（¥/pcs）将作为核心成本因子，自动注入财务中心 SKU 盈亏穿透模型。</p>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             )}
                             
+                            {/* 单证生成预览部分保持一致... */}
                             {(activeDocTab === 'ci' || activeDocTab === 'pl') && (
                                 <div className="h-[500px] flex flex-col items-center justify-center text-slate-700 bg-black/40 rounded-3xl border-2 border-dashed border-white/5">
                                     <FileText className="w-12 h-12 opacity-10 mb-6 animate-pulse" />
@@ -434,7 +446,7 @@ const InboundShipments: React.FC = () => {
                     </div>
                     <div className="p-8 border-t border-white/5 bg-white/2 flex justify-between items-center">
                         <div className="flex gap-10">
-                            <div><span className="text-[10px] text-slate-500 font-black uppercase block">载荷重</span><span className="text-xl font-black text-white font-mono">{(plannedItems.reduce((acc, it) => acc + (Number(it.quantity) * (it.product.unitWeight || 0.5)), 0)).toFixed(1)} KG</span></div>
+                            <div><span className="text-[10px] text-slate-500 font-black uppercase block">预估行重</span><span className="text-xl font-black text-white font-mono">{(plannedItems.reduce((acc, it) => acc + (Number(it.quantity) * (it.product.unitWeight || 0.5)), 0)).toFixed(1)} KG</span></div>
                         </div>
                         <div className="flex gap-4">
                             <button onClick={() => setShowCreateModal(false)} className="px-8 py-3 text-slate-500 font-black text-xs uppercase hover:text-white transition-colors">取消</button>
