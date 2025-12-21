@@ -234,6 +234,18 @@ export interface AuditLog {
     details: string;
 }
 
+// Fix: Added missing StockJournalEntry interface to resolve import error in TanxingContext
+export interface StockJournalEntry {
+    id: string;
+    timestamp: string;
+    sku: string;
+    change: number;
+    previousStock: number;
+    newStock: number;
+    reason: string;
+    operator: string;
+}
+
 export interface Supplier {
     id: string;
     name: string;
