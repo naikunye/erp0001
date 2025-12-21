@@ -28,38 +28,43 @@ const InboundShipments: React.FC = () => {
   }, [selectedShipment]);
 
   const filteredProducts = useMemo(() => {
-      const q = isEditing ? detailSkuSearch : skuSearch;
+      const q = showCreateModal ? skuSearch : (isEditing ? detailSkuSearch : '');
       if (!q) return [];
       return state.products.filter(p => p.sku.toLowerCase().includes(q.toLowerCase()) || p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 5);
-  }, [state.products, skuSearch, detailSkuSearch, isEditing]);
+  }, [state.products, skuSearch, detailSkuSearch, isEditing, showCreateModal]);
 
   const handleAddItem = (p: Product) => {
-      // 默认数量和逻辑
       const defaultQty = p.itemsPerBox || 10;
       const defaultRate = p.logistics?.unitFreightCost || 35;
       const defaultTotalWeight = (p.unitWeight || 0.5) * defaultQty;
 
-      const newItem = {
-          productId: p.id,
-          sku: p.sku,
-          name: p.name,
-          quantity: defaultQty,
-          boxes: 1,
-          unitPrice: p.price || 0,
-          // 修正：存储行总重而不是单品重
-          rowTotalWeight: defaultTotalWeight,
-          freightRate: defaultRate
-      };
+      // 核心修复点：优先处理新建弹窗逻辑
+      if (showCreateModal) {
+          if (plannedItems.find(item => item.product.id === p.id)) {
+              showToast('清单中已存在该 SKU', 'warning');
+              return;
+          }
+          setPlannedItems([...plannedItems, { product: p, quantity: defaultQty }]);
+          setSkuSearch(''); // 添加后清空搜索框
+          return;
+      }
 
+      // 后续处理详情页编辑逻辑
       if (isEditing && editForm) {
           if (editForm.items.find((it: any) => it.productId === p.id)) return;
+          const newItem = {
+              productId: p.id,
+              sku: p.sku,
+              name: p.name,
+              quantity: defaultQty,
+              boxes: 1,
+              unitPrice: p.price || 0,
+              rowTotalWeight: defaultTotalWeight,
+              freightRate: defaultRate
+          };
           const updatedItems = [...editForm.items, newItem];
           recalculateTotals(updatedItems);
-          setDetailSkuSearch('');
-      } else {
-          if (plannedItems.find(item => item.product.id === p.id)) return;
-          setPlannedItems([...plannedItems, { product: p, quantity: defaultQty }]);
-          setSkuSearch('');
+          setDetailSkuSearch(''); // 添加后清空详情页搜索框
       }
   };
 
@@ -68,10 +73,9 @@ const InboundShipments: React.FC = () => {
       let totalVolume = 0;
       items.forEach((it: any) => {
           const product = state.products.find(p => p.id === it.productId);
-          // 累加每一行的总重
           totalWeight += Number(it.rowTotalWeight || 0);
           if (product) {
-              const vol = ((product.dimensions?.l || 0) * (product.dimensions?.w || 0) * (product.dimensions?.h || 0) / 1000000) * Number(it.boxes);
+              const vol = ((product.dimensions?.l || 0) * (product.dimensions?.w || 0) * (product.dimensions?.h || 0) / 1000000) * Number(it.boxes || 1);
               totalVolume += vol;
           }
       });
@@ -139,6 +143,8 @@ const InboundShipments: React.FC = () => {
       dispatch({ type: 'CREATE_INBOUND_SHIPMENT', payload: newInbound });
       showToast('发货协议已部署', 'success');
       setShowCreateModal(false);
+      setPlannedItems([]);
+      setNewShipmentName('');
   };
 
   const handleStatusTransition = (status: InboundShipment['status']) => {
@@ -149,9 +155,14 @@ const InboundShipments: React.FC = () => {
     showToast(`货件状态已切换至: ${getStatusDisplay(status)}`, 'success');
   };
 
+  const openCreateModal = () => {
+      setSkuSearch('');
+      setPlannedItems([]);
+      setShowCreateModal(true);
+  };
+
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative bg-black/20 font-sans">
-        {/* Header 省略保持一致... */}
         <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/2 backdrop-blur-xl">
             <div className="flex items-center gap-4">
                 <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-900/40">
@@ -159,10 +170,10 @@ const InboundShipments: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Precise Allocation v10.0</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Selection Logic Fix v10.1</p>
                 </div>
             </div>
-            <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
+            <button onClick={openCreateModal} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
                 <Plus className="w-4 h-4" /> 部署新发货协议
             </button>
         </div>
@@ -244,7 +255,6 @@ const InboundShipments: React.FC = () => {
                                         </div>
                                     </div>
 
-                                    {/* 关键重构：物料矩阵 */}
                                     <div className="ios-glass-card p-6 overflow-hidden">
                                         <div className="flex justify-between items-center mb-6">
                                             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2"><LayoutList className="w-4 h-4 text-indigo-400"/> 数字化物料矩阵 (Item Matrix)</h4>
@@ -255,7 +265,7 @@ const InboundShipments: React.FC = () => {
                                                     {filteredProducts.length > 0 && (
                                                         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-white/5">
                                                             {filteredProducts.map(p => (
-                                                                <div key={p.id} onClick={() => handleAddItem(p)} className="p-3 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
+                                                                <div key={p.id} onClick={(e) => { e.stopPropagation(); handleAddItem(p); }} className="p-3 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
                                                                     <div className="text-[10px] font-black text-white">{p.sku}</div>
                                                                     <Plus className="w-3.5 h-3.5 text-indigo-400" />
                                                                 </div>
@@ -282,10 +292,10 @@ const InboundShipments: React.FC = () => {
                                                 </thead>
                                                 <tbody className="divide-y divide-white/5 font-mono">
                                                     {(isEditing ? editForm?.items : selectedShipment.items || []).map((item: any, i: number) => {
-                                                        const rowWeight = Number(item.rowTotalWeight || 0); // 这一行货物的总重量
+                                                        const rowWeight = Number(item.rowTotalWeight || 0);
                                                         const rate = Number(item.freightRate || 0);
-                                                        const lineTotalFreight = rowWeight * rate; // 行总运费
-                                                        const unitFreightCost = item.quantity > 0 ? (lineTotalFreight / item.quantity) : 0; // 单件分摊 = 总运费 / 数量
+                                                        const lineTotalFreight = rowWeight * rate;
+                                                        const unitFreightCost = item.quantity > 0 ? (lineTotalFreight / item.quantity) : 0;
                                                         const unitPrice = Number(item.unitPrice || 0);
                                                         
                                                         return (
@@ -296,7 +306,6 @@ const InboundShipments: React.FC = () => {
                                                                         <input type="number" value={item.quantity} onChange={e => updateItemProperty(item.productId, 'quantity', parseInt(e.target.value))} className="w-16 bg-black/60 border border-white/10 rounded p-1 text-xs text-white focus:border-indigo-500 outline-none" />
                                                                     ) : item.quantity}
                                                                 </td>
-                                                                {/* 修改点 1：输入该 SKU 在该批次的总重量 */}
                                                                 <td className="py-4 px-2 text-blue-400">
                                                                     {isEditing ? (
                                                                         <div className="flex items-center gap-1">
@@ -307,14 +316,12 @@ const InboundShipments: React.FC = () => {
                                                                 </td>
                                                                 <td className="py-4 px-2 text-blue-400">
                                                                     {isEditing ? (
-                                                                        <input type="number" value={item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', parseFloat(e.target.value))} className="w-16 bg-black/60 border border-white/10 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
+                                                                        <input type="number" value={item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', parseFloat(e.target.value))} className="w-16 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
                                                                     ) : `¥${rate}`}
                                                                 </td>
-                                                                {/* 行总运费 */}
                                                                 <td className="py-4 px-2 text-blue-100 font-bold">
                                                                     ¥ {lineTotalFreight.toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                                 </td>
-                                                                {/* 修改点 2：核心计算逻辑 - 单品分摊 = 行总运费 / 数量 */}
                                                                 <td className="py-4 px-2 bg-emerald-500/5 text-emerald-400 font-black text-sm">
                                                                     ¥ {unitFreightCost.toFixed(2)}
                                                                 </td>
@@ -371,7 +378,6 @@ const InboundShipments: React.FC = () => {
                                 </div>
                             )}
                             
-                            {/* 单证生成预览部分保持一致... */}
                             {(activeDocTab === 'ci' || activeDocTab === 'pl') && (
                                 <div className="h-[500px] flex flex-col items-center justify-center text-slate-700 bg-black/40 rounded-3xl border-2 border-dashed border-white/5">
                                     <FileText className="w-12 h-12 opacity-10 mb-6 animate-pulse" />
@@ -393,7 +399,6 @@ const InboundShipments: React.FC = () => {
             </div>
         </div>
 
-        {/* 新建 Modal 保持一致 */}
         {showCreateModal && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-2xl bg-black/60" onClick={() => setShowCreateModal(false)}>
                 <div className="ios-glass-panel w-full max-w-4xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 bg-[#0f0f12] border border-white/20" onClick={e => e.stopPropagation()}>
@@ -419,7 +424,7 @@ const InboundShipments: React.FC = () => {
                                     {filteredProducts.length > 0 && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-white/5">
                                             {filteredProducts.map(p => (
-                                                <div key={p.id} onClick={() => handleAddItem(p)} className="p-4 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
+                                                <div key={p.id} onClick={(e) => { e.stopPropagation(); handleAddItem(p); }} className="p-4 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
                                                     <div className="text-sm font-black text-white">{p.sku}</div>
                                                     <Plus className="w-5 h-5 text-slate-700 group-hover:text-indigo-400 group-hover:scale-125 transition-all" />
                                                 </div>
