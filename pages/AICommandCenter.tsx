@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Terminal, Sparkles, Send, Loader2, Cpu, Zap, Activity, 
