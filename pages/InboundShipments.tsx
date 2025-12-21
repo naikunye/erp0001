@@ -29,8 +29,11 @@ const InboundShipments: React.FC = () => {
 
   const filteredProducts = useMemo(() => {
       const q = showCreateModal ? skuSearch : (isEditing ? detailSkuSearch : '');
-      if (!q) return [];
-      return state.products.filter(p => p.sku.toLowerCase().includes(q.toLowerCase()) || p.name.toLowerCase().includes(q.toLowerCase())).slice(0, 5);
+      if (!q || q.length < 1) return [];
+      return state.products.filter(p => 
+          p.sku.toLowerCase().includes(q.toLowerCase()) || 
+          p.name.toLowerCase().includes(q.toLowerCase())
+      ).slice(0, 5);
   }, [state.products, skuSearch, detailSkuSearch, isEditing, showCreateModal]);
 
   const handleAddItem = (p: Product) => {
@@ -38,20 +41,28 @@ const InboundShipments: React.FC = () => {
       const defaultRate = p.logistics?.unitFreightCost || 35;
       const defaultTotalWeight = (p.unitWeight || 0.5) * defaultQty;
 
-      // 核心修复点：优先处理新建弹窗逻辑
       if (showCreateModal) {
-          if (plannedItems.find(item => item.product.id === p.id)) {
-              showToast('清单中已存在该 SKU', 'warning');
+          // 检查重复
+          const isDuplicate = plannedItems.some(item => item.product.id === p.id);
+          if (isDuplicate) {
+              showToast(`${p.sku} 已在待发清单中`, 'warning');
+              setSkuSearch('');
               return;
           }
-          setPlannedItems([...plannedItems, { product: p, quantity: defaultQty }]);
-          setSkuSearch(''); // 添加后清空搜索框
+          
+          // 使用函数式更新确保状态一致性
+          setPlannedItems(prev => [...prev, { product: p, quantity: defaultQty }]);
+          setSkuSearch(''); // 清空搜索以准备下一次输入
+          showToast(`已添加 SKU: ${p.sku}`, 'success');
           return;
       }
 
-      // 后续处理详情页编辑逻辑
       if (isEditing && editForm) {
-          if (editForm.items.find((it: any) => it.productId === p.id)) return;
+          if (editForm.items.find((it: any) => it.productId === p.id)) {
+              showToast('清单中已存在该 SKU', 'warning');
+              setDetailSkuSearch('');
+              return;
+          }
           const newItem = {
               productId: p.id,
               sku: p.sku,
@@ -64,7 +75,8 @@ const InboundShipments: React.FC = () => {
           };
           const updatedItems = [...editForm.items, newItem];
           recalculateTotals(updatedItems);
-          setDetailSkuSearch(''); // 添加后清空详情页搜索框
+          setDetailSkuSearch('');
+          showToast(`已追加 SKU: ${p.sku}`, 'success');
       }
   };
 
@@ -170,7 +182,7 @@ const InboundShipments: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Selection Logic Fix v10.1</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Precise Selection Fix v10.2</p>
                 </div>
             </div>
             <button onClick={openCreateModal} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
@@ -265,7 +277,7 @@ const InboundShipments: React.FC = () => {
                                                     {filteredProducts.length > 0 && (
                                                         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-white/5">
                                                             {filteredProducts.map(p => (
-                                                                <div key={p.id} onClick={(e) => { e.stopPropagation(); handleAddItem(p); }} className="p-3 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
+                                                                <div key={p.id} onMouseDown={(e) => { e.preventDefault(); handleAddItem(p); }} className="p-3 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
                                                                     <div className="text-[10px] font-black text-white">{p.sku}</div>
                                                                     <Plus className="w-3.5 h-3.5 text-indigo-400" />
                                                                 </div>
@@ -424,7 +436,7 @@ const InboundShipments: React.FC = () => {
                                     {filteredProducts.length > 0 && (
                                         <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-white/5">
                                             {filteredProducts.map(p => (
-                                                <div key={p.id} onClick={(e) => { e.stopPropagation(); handleAddItem(p); }} className="p-4 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
+                                                <div key={p.id} onMouseDown={(e) => { e.preventDefault(); handleAddItem(p); }} className="p-4 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center transition-all group">
                                                     <div className="text-sm font-black text-white">{p.sku}</div>
                                                     <Plus className="w-5 h-5 text-slate-700 group-hover:text-indigo-400 group-hover:scale-125 transition-all" />
                                                 </div>
@@ -439,9 +451,9 @@ const InboundShipments: React.FC = () => {
                                             <div className="flex items-center gap-6">
                                                 <input type="number" value={item.quantity} onChange={e => {
                                                     const qty = parseInt(e.target.value) || 0;
-                                                    setPlannedItems(plannedItems.map(it => it.product.id === item.product.id ? { ...it, quantity: qty } : it));
+                                                    setPlannedItems(prev => prev.map(it => it.product.id === item.product.id ? { ...it, quantity: qty } : it));
                                                 }} className="w-24 bg-black/60 border border-white/10 rounded-lg p-2 text-sm text-white font-mono text-center outline-none" />
-                                                <button onClick={() => setPlannedItems(plannedItems.filter(it => it.product.id !== item.product.id))} className="p-2 text-slate-700 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4"/></button>
+                                                <button onClick={() => setPlannedItems(prev => prev.filter(it => it.product.id !== item.product.id))} className="p-2 text-slate-700 hover:text-red-400 transition-all"><Trash2 className="w-4 h-4"/></button>
                                             </div>
                                         </div>
                                     ))}
