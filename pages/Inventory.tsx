@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
-import { ReplenishmentItem, Product, AuditLog } from '../types';
+import { ReplenishmentItem, Product, AuditLog, Shipment } from '../types';
 import { 
   PackageCheck, Search, Download, X, 
   Sparkles, Calculator, 
@@ -15,7 +15,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-// --- Components ---
+// --- Helper Functions ---
 
 const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     if (!trackingNo) return '#';
@@ -26,6 +26,17 @@ const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
     if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
     return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+};
+
+// 状态映射颜色工具
+const getLiveStatusStyle = (status: string) => {
+    switch (status) {
+        case '已送达': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
+        case '运输中': return 'text-blue-400 bg-blue-500/10 border-blue-500/30 animate-pulse';
+        case '异常': 
+        case '延迟': return 'text-red-400 bg-red-500/10 border-red-500/30';
+        default: return 'text-slate-400 bg-slate-800 border-slate-700';
+    }
 };
 
 const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
@@ -262,6 +273,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const adSpendUSD = formData.economics?.adCost || 0;
     const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
     
+    // Fixed typo: changed 'lastLeg' to 'lastLegUSD' to fix the compilation error
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
@@ -828,9 +840,8 @@ const Inventory: React.FC = () => {
             const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
             
             let activeTotalBillingWeight = 0;
-            // 核心修复：列表总重量显示优先采用计算后的计费总重
             if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
-                activeTotalBillingWeight = p.logistics.billingWeight; // 优先手动覆盖的整批计费重
+                activeTotalBillingWeight = p.logistics.billingWeight; 
             } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
                 activeTotalBillingWeight = p.logistics.unitBillingWeight * p.stock;
             } else {
@@ -838,9 +849,8 @@ const Inventory: React.FC = () => {
             }
 
             const rate = p.logistics?.unitFreightCost || 0;
-            const baseFreightCost = activeTotalBillingWeight * rate;
             const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
-            const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
+            const autoTotalFreightCNY = (activeTotalBillingWeight * rate) + batchFeesCNY;
             
             const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
             
@@ -868,6 +878,11 @@ const Inventory: React.FC = () => {
             const totalPotentialProfit = unitProfit * stock;
             const totalFreightDisplayCNY = effectiveTotalFreightCNY + (unitConsumablesCNY * stock);
 
+            // --- 核心联动：查找匹配的物流追踪节点 ---
+            const matchingShipment = state.shipments.find(s => 
+                p.logistics?.trackingNo && s.trackingNo === p.logistics.trackingNo
+            );
+
             return {
                 ...p,
                 dailyBurnRate,
@@ -883,15 +898,12 @@ const Inventory: React.FC = () => {
                 totalPotentialProfit: totalPotentialProfit,
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0,
                 totalWeight: activeTotalBillingWeight, 
-                boxes: p.boxCount || 0
+                boxes: p.boxCount || 0,
+                // 将实时追踪状态注入 ReplenishmentItem
+                liveTrackingStatus: matchingShipment ? matchingShipment.status : null
             };
         });
-    }, [state.products, productStats]);
-
-    const filteredItems = replenishmentItems.filter(i => 
-        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        i.sku.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    }, [state.products, state.orders, state.shipments, productStats]);
 
     const handleSaveProduct = (updatedProduct: Product) => {
         const exists = state.products.find(p => p.id === updatedProduct.id);
@@ -994,6 +1006,11 @@ const Inventory: React.FC = () => {
         }
         document.body.removeChild(textArea);
     };
+
+    const filteredItems = replenishmentItems.filter(i => 
+        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        i.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    );
 
     return (
         <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-black/20">
@@ -1104,10 +1121,19 @@ const Inventory: React.FC = () => {
                                 <td className="px-4 py-4 align-top">
                                     <div className="space-y-1.5">
                                         <div className="flex items-center gap-2 text-xs text-blue-400 font-bold">
-                                            {/* 核心修复：根据物流方式显示动态图标 */}
                                             {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5" /> : <Plane className="w-3.5 h-3.5" />}
                                             <span>{item.logistics?.method || 'Air'}</span>
                                         </div>
+                                        
+                                        {/* --- 物流提醒联动展示 --- */}
+                                        {(item as any).liveTrackingStatus && (
+                                            <div className={`text-[9px] px-2 py-0.5 rounded border w-fit font-black uppercase flex items-center gap-1 shadow-lg ${getLiveStatusStyle((item as any).liveTrackingStatus)}`}>
+                                                {((item as any).liveTrackingStatus === '异常' || (item as any).liveTrackingStatus === '延迟') && <AlertTriangle className="w-2.5 h-2.5" />}
+                                                {(item as any).liveTrackingStatus === '已送达' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                                                {(item as any).liveTrackingStatus}
+                                            </div>
+                                        )}
+
                                         <a 
                                             href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)}
                                             target="_blank"
