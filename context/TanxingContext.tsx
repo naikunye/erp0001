@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import AV from 'leancloud-storage';
 import { 
@@ -101,10 +102,39 @@ const emptyState: AppState = {
     isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, influencers: []
 };
 
+/**
+ * 核心优化：本地存储“减重”保存
+ * 如果数据超过 localStorage 限制，自动尝试剔除大字段保存，确保不崩溃
+ */
+const safeLocalSave = (state: AppState) => {
+    try {
+        const json = JSON.stringify(state);
+        localStorage.setItem(DB_KEY, json);
+    } catch (e: any) {
+        if (e.name === 'QuotaExceededError') {
+            console.warn('LocalStorage Quota Exceeded. Stripping large fields...');
+            // 策略：剔除 Base64 图片、长日志、冗余历史
+            const lightweightState = {
+                ...state,
+                products: (state.products || []).map(p => ({ ...p, images: [], image: undefined })),
+                stockJournal: (state.stockJournal || []).slice(0, 10),
+                auditLogs: (state.auditLogs || []).slice(0, 10),
+                automationLogs: (state.automationLogs || []).slice(0, 5)
+            };
+            try {
+                localStorage.setItem(DB_KEY, JSON.stringify(lightweightState));
+                console.log('Lightweight State cached locally.');
+            } catch (innerError) {
+                console.error('Even lightweight state too large for localStorage');
+            }
+        }
+    }
+};
+
 const appReducer = (state: AppState, action: Action): AppState => {
     const markDirty = (newState: Partial<AppState>): AppState => {
         const updated = { ...state, ...newState, syncAllowed: true, saveStatus: 'dirty' as SaveStatus };
-        localStorage.setItem(DB_KEY, JSON.stringify(updated));
+        safeLocalSave(updated);
         return updated;
     };
 
@@ -155,7 +185,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
             const updated = { 
                 ...state, 
                 ...action.payload,
-                // 核心修复：数据注塑时必须保留当前的 leanConfig，除非 payload 里明确有更好的
                 leanConfig: { ...state.leanConfig, ...(action.payload.leanConfig || {}) },
                 products: Array.isArray(action.payload.products) ? action.payload.products : (state.products || []),
                 transactions: Array.isArray(action.payload.transactions) ? action.payload.transactions : (state.transactions || []),
@@ -167,8 +196,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
                 suppliers: Array.isArray(action.payload.suppliers) ? action.payload.suppliers : (state.suppliers || []),
                 influencers: Array.isArray(action.payload.influencers) ? action.payload.influencers : (state.influencers || []),
             };
-            // 核心修复：从云端拉取后，立即固化到本地，防止刷新瞬间的空白
-            localStorage.setItem(DB_KEY, JSON.stringify(updated));
+            safeLocalSave(updated);
             return updated;
         }
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, suppliers: MOCK_SUPPLIERS, isInitialized: true };
@@ -257,7 +285,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 } 
             });
             
-            // 同步后也刷新一下本地存储，确保双端对齐
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } });
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
@@ -319,25 +346,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const savedDb = localStorage.getItem(DB_KEY);
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             
-            // 核心修复步骤 1：无论有无云端配置，先加载本地离线数据，确保“瞬时加载”
             if (savedDb) {
                 try { 
                     dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) }); 
-                    console.log('Local DB Hydrated');
                 } catch(e) {}
             }
 
-            // 核心修复步骤 2：在本地数据就绪后，异步尝试云端握手
             if (savedConfig) {
                 try {
                     const config = JSON.parse(savedConfig);
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                     await bootLean(config.appId, config.appKey, config.serverURL);
-                    // 异步更新，不阻塞 UI 初始化
                     pullFromCloud(true); 
                 } catch (e) {}
             } else if (!savedDb) {
-                // 如果本地既没缓存，云端又没配置，才加载 Mock 数据
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
             
