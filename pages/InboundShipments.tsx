@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { InboundShipment, Product, InboundShipmentItem, Shipment } from '../types';
-import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText, Plane, Ship, Link2, ExternalLink, Tag } from 'lucide-react';
+import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText, Plane, Ship, Link2, ExternalLink, Tag, Zap, RefreshCw } from 'lucide-react';
 
 const InboundShipments: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
@@ -11,9 +11,9 @@ const InboundShipments: React.FC = () => {
   const [selectedShipment, setSelectedShipment] = useState<InboundShipment | null>(null);
   const [activeDocTab, setActiveDocTab] = useState<'details' | 'ci' | 'pl'>('details');
   
-  // 搜索相关状态
   const [skuSearch, setSkuSearch] = useState('');
   const [detailSkuSearch, setDetailSkuSearch] = useState('');
+  const [isSyncingToMatrix, setIsSyncingToMatrix] = useState(false);
 
   // 编辑模式核心状态
   const [isEditing, setIsEditing] = useState(false);
@@ -42,9 +42,66 @@ const InboundShipments: React.FC = () => {
   useEffect(() => {
     setIsEditing(false);
     setEditForm(null);
+    setAiSyncStatus(null);
   }, [selectedShipment]);
 
+  const [aiSyncStatus, setAiSyncStatus] = useState<string | null>(null);
+
   // --- 4. 业务核心交互函数 ---
+
+  // 执行同步至物流追踪模块的逻辑
+  const syncToTrackingMatrix = async (shipment: InboundShipment) => {
+      if (shipment.status === 'Draft') return;
+      setIsSyncingToMatrix(true);
+      
+      // 模拟网络延迟
+      await new Promise(resolve => setTimeout(resolve, 800));
+
+      try {
+          // 查找是否已经存在对应的追踪节点 (根据 notes 里的标记 ID 查找，防止修改单号后找不到)
+          const existingTracking = state.shipments.find(s => s.notes?.includes(shipment.id));
+          
+          const skuSummary = shipment.items.map(i => i.sku).slice(0, 2).join(', ') + (shipment.items.length > 2 ? '...' : '');
+          
+          if (existingTracking) {
+              // 修正模式：更新现有节点
+              const updatedTracking: Shipment = {
+                  ...existingTracking,
+                  trackingNo: shipment.trackingNumber || existingTracking.trackingNo,
+                  carrier: shipment.carrier || existingTracking.carrier,
+                  origin: shipment.sourceWarehouseId,
+                  destination: shipment.destinationWarehouseId,
+                  productName: `批次: ${shipment.name} (${skuSummary})`,
+                  lastUpdate: `数据已同步修正 (TS: ${new Date().toLocaleTimeString()})`
+              };
+              dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedTracking });
+              showToast('物流追踪节点已同步更新', 'success');
+          } else {
+              // 补入模式：如果之前没生成（比如直接跳过草稿），现在生成
+              const trackingNode: Shipment = {
+                  id: `SH-${Date.now()}`,
+                  trackingNo: shipment.trackingNumber || 'PENDING',
+                  carrier: shipment.carrier || 'Global Carrier',
+                  status: '运输中',
+                  origin: shipment.sourceWarehouseId,
+                  destination: shipment.destinationWarehouseId,
+                  productName: `批次: ${shipment.name} (${skuSummary})`,
+                  shipDate: shipment.shippedDate || new Date().toISOString().split('T')[0],
+                  lastUpdate: '资产离场，同步至全球追踪矩阵',
+                  events: [
+                      { date: shipment.shippedDate || shipment.createdDate, time: '10:00', location: shipment.sourceWarehouseId, description: '货件协议激活，同步至追踪系统', status: 'Normal' }
+                  ],
+                  notes: `由物流中枢 ${shipment.id} 自动同步`
+              };
+              dispatch({ type: 'ADD_SHIPMENT', payload: trackingNode });
+              showToast('已在追踪矩阵中创建新节点', 'success');
+          }
+      } catch (e) {
+          showToast('矩阵同步链路异常', 'error');
+      } finally {
+          setIsSyncingToMatrix(false);
+      }
+  };
 
   const handleAddItem = (p: Product) => {
       const defaultQty = p.itemsPerBox || 10;
@@ -128,38 +185,29 @@ const InboundShipments: React.FC = () => {
       recalculateAndSetEditForm(updatedItems);
   };
 
-  const handleSaveEdit = () => {
+  const handleSaveEdit = async () => {
       if (!editForm) return;
       if (!editForm.name.trim()) return showToast('协议名称不能为空', 'warning');
       
       dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: editForm });
       
+      // 保存后自动触发一次同步（如果是已离场状态）
       if (editForm.status === 'Shipped') {
-          const trackingNode = state.shipments.find(s => s.trackingNo === selectedShipment?.trackingNumber);
-          if (trackingNode) {
-              const updatedTracking: Shipment = {
-                  ...trackingNode,
-                  trackingNo: editForm.trackingNumber || trackingNode.trackingNo,
-                  carrier: editForm.carrier || trackingNode.carrier,
-                  origin: editForm.sourceWarehouseId,
-                  destination: editForm.destinationWarehouseId,
-                  productName: `批次: ${editForm.name} (已同步修正)`
-              };
-              dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedTracking });
-              showToast('协议与追踪节点同步修正成功', 'success');
-          }
+          await syncToTrackingMatrix(editForm);
       } else {
-          showToast('物流协议已固化', 'success');
+          showToast('协议内容已局部修正', 'success');
       }
 
       setSelectedShipment(editForm);
       setIsEditing(false);
   };
 
-  const handleShipOut = () => {
+  const handleShipOut = async () => {
       if (!selectedShipment) return;
       if (!selectedShipment.trackingNumber) {
-          showToast('请先点击“修正”录入物流单号后再执行离场', 'warning');
+          showToast('请先录入正式运单号再执行离场', 'warning');
+          setEditForm({...selectedShipment});
+          setIsEditing(true);
           return;
       }
 
@@ -171,24 +219,8 @@ const InboundShipments: React.FC = () => {
       dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: updated });
       setSelectedShipment(updated);
 
-      const skuSummary = updated.items.map(i => i.sku).slice(0, 2).join(', ') + (updated.items.length > 2 ? '...' : '');
-      const trackingNode: Shipment = {
-          id: `SH-${Date.now()}`,
-          trackingNo: updated.trackingNumber,
-          carrier: updated.carrier || 'Global Carrier',
-          status: '运输中',
-          origin: updated.sourceWarehouseId,
-          destination: updated.destinationWarehouseId,
-          productName: `批次: ${updated.name} (${skuSummary})`,
-          shipDate: updated.shippedDate,
-          lastUpdate: '资产离场，正在前往国际分拨中心',
-          events: [
-              { date: updated.shippedDate || '', time: '10:00', location: updated.sourceWarehouseId, description: '货物已从发货仓离场', status: 'Normal' }
-          ],
-          notes: `由物流中枢 ${updated.id} 自动同步生成`
-      };
-      dispatch({ type: 'ADD_SHIPMENT', payload: trackingNode });
-      showToast('离场指令已广播！追踪矩阵已就绪', 'success');
+      // 首次离场同步
+      await syncToTrackingMatrix(updated);
   };
 
   const handleCreateNew = () => {
@@ -236,7 +268,7 @@ const InboundShipments: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Quantum Logistics Hub • Dynamic v10.9</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Quantum Logistics Hub • Sync v11.0</p>
                 </div>
             </div>
             <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
@@ -290,6 +322,19 @@ const InboundShipments: React.FC = () => {
                                         <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all">
                                             <Edit3 className="w-3.5 h-3.5"/> 修正协议与内容
                                         </button>
+                                        
+                                        {/* 核心修复：已离场后手动同步按钮 */}
+                                        {selectedShipment.status === 'Shipped' && (
+                                            <button 
+                                                onClick={() => syncToTrackingMatrix(selectedShipment)} 
+                                                disabled={isSyncingToMatrix}
+                                                className="px-4 py-2 bg-indigo-600/20 text-indigo-400 border border-indigo-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-600 hover:text-white transition-all"
+                                            >
+                                                {isSyncingToMatrix ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <Zap className="w-3.5 h-3.5"/>}
+                                                强制同步至追踪矩阵
+                                            </button>
+                                        )}
+
                                         {selectedShipment.status === 'Draft' && (
                                             <button onClick={handleShipOut} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg shadow-indigo-900/40">
                                                 <Send className="w-3.5 h-3.5"/> 确认离场
@@ -305,19 +350,21 @@ const InboundShipments: React.FC = () => {
                         <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
                             {activeDocTab === 'details' && (
                                 <div className="space-y-8 animate-in fade-in duration-300">
-                                    {/* --- 核心修复：增加业务标识编辑 --- */}
-                                    {isEditing && (
-                                        <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500 animate-in slide-in-from-top-2">
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase mb-3 flex items-center gap-2"><Tag className="w-3 h-3 text-indigo-400"/> 协议核心标识 (Agreement Identity)</div>
+                                    {/* 核心修复：业务标识编辑 */}
+                                    <div className={`ios-glass-card p-6 border-l-4 border-l-indigo-500 transition-all ${isEditing ? 'bg-indigo-500/5 ring-1 ring-indigo-500/30' : ''}`}>
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase mb-3 flex items-center gap-2"><Tag className="w-3 h-3 text-indigo-400"/> 协议核心标识 (Agreement Identity)</div>
+                                        {isEditing ? (
                                             <input 
                                                 type="text" 
                                                 value={editForm?.name || ''} 
                                                 onChange={e => setEditForm(prev => prev ? {...prev, name: e.target.value} : null)} 
-                                                className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-indigo-500 outline-none font-bold" 
-                                                placeholder="输入新的协议名称标识..." 
+                                                className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-indigo-500 outline-none font-bold shadow-inner" 
+                                                placeholder="输入协议名称（修改后将同步至物流列表及追踪模块）..." 
                                             />
-                                        </div>
-                                    )}
+                                        ) : (
+                                            <div className="text-xl font-black text-white italic tracking-tight">{selectedShipment.name}</div>
+                                        )}
+                                    </div>
 
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500 flex flex-col justify-between">
@@ -354,7 +401,7 @@ const InboundShipments: React.FC = () => {
                                                     </div>
                                                     {selectedShipment.status === 'Shipped' && (
                                                         <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 font-black text-[10px]">
-                                                            <Link2 className="w-3 h-3"/> 已联动追踪系统
+                                                            <Link2 className="w-3 h-3"/> 矩阵状态: 同步中
                                                         </div>
                                                     )}
                                                 </div>
@@ -467,7 +514,7 @@ const InboundShipments: React.FC = () => {
                                             <ShieldCheck className="w-6 h-6 text-indigo-400 shrink-0" />
                                             <div>
                                                 <h5 className="text-xs font-black text-white uppercase mb-1">业财同步协议 (Ledger Active)</h5>
-                                                <p className="text-[10px] text-indigo-300/60 leading-relaxed font-medium uppercase">此分摊结果将作为核心成本因子，自动穿透至财务模块。若在离场后修正数据，关联财务报表将执行自动校准。</p>
+                                                <p className="text-[10px] text-indigo-300/60 leading-relaxed font-medium uppercase">此分摊结果将作为核心成本因子，自动穿透至财务模块。若在离场后修正数据，关联财务报表将执行自动校准并同步更新追踪矩阵。</p>
                                             </div>
                                         </div>
                                         <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-start gap-4">
