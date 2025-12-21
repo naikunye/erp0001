@@ -78,6 +78,8 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
     {
         id: 'FBA17G8K9L',
         name: 'Restock Oct 25 - Sea',
+        // Fix: Added missing required 'method' property
+        method: 'Sea',
         sourceWarehouseId: 'WH-CN-01',
         destinationWarehouseId: 'WH-US-FBA',
         status: 'Shipped', // Working -> Shipped -> In Transit -> Closed
@@ -97,6 +99,8 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
     {
         id: 'FBA17H2J3M',
         name: 'Urgent Air - K7500',
+        // Fix: Added missing required 'method' property
+        method: 'Air',
         sourceWarehouseId: 'WH-CN-01',
         destinationWarehouseId: 'WH-US-FBA',
         status: 'Working',

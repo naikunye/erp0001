@@ -1,7 +1,8 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTanxing } from '../context/TanxingContext';
-import { InboundShipment, Product, InboundShipmentItem } from '../types';
-import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText, Plane, Ship } from 'lucide-react';
+import { InboundShipment, Product, InboundShipmentItem, Shipment } from '../types';
+import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText, Plane, Ship, Link2, ExternalLink } from 'lucide-react';
 
 const InboundShipments: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
@@ -13,14 +14,6 @@ const InboundShipments: React.FC = () => {
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<InboundShipment | null>(null);
   const [detailSkuSearch, setDetailSkuSearch] = useState('');
-
-  // 新建货件状态
-  const [newShipmentName, setNewShipmentName] = useState('');
-  const [shippingMethod, setShippingMethod] = useState<'Air' | 'Sea'>('Air');
-  const [sourceNode, setSourceNode] = useState('深圳分拨中心');
-  const [destNode, setDestNode] = useState('FBA-US-WEST');
-  const [plannedItems, setPlannedItems] = useState<{product: Product, quantity: number}[]>([]);
-  const [skuSearch, setSkuSearch] = useState('');
 
   useEffect(() => {
     setIsEditing(false);
@@ -37,10 +30,8 @@ const InboundShipments: React.FC = () => {
       ).slice(0, 5);
   }, [state.products, skuSearch, detailSkuSearch, isEditing, showCreateModal]);
 
-  // 核心修复：更稳健的 SKU 添加函数
   const handleAddItem = (p: Product) => {
       const defaultQty = p.itemsPerBox || 10;
-      // 动态预设运费：空运 35/kg，海运 800/cbm (此处以kg单价为准)
       const defaultRate = shippingMethod === 'Air' ? (p.logistics?.unitFreightCost || 35) : 8; 
       const defaultTotalWeight = (p.unitWeight || 0.5) * defaultQty;
 
@@ -50,7 +41,6 @@ const InboundShipments: React.FC = () => {
                   showToast(`${p.sku} 已在清单中`, 'warning');
                   return prev;
               }
-              showToast(`已添加: ${p.sku}`, 'success');
               return [...prev, { product: p, quantity: defaultQty }];
           });
           setTimeout(() => setSkuSearch(''), 50);
@@ -64,19 +54,12 @@ const InboundShipments: React.FC = () => {
               return;
           }
           const newItem: InboundShipmentItem = {
-              productId: p.id,
-              sku: p.sku,
-              name: p.name,
-              quantity: defaultQty,
-              boxes: 1,
-              unitPrice: p.price || 0,
-              rowTotalWeight: defaultTotalWeight,
-              freightRate: defaultRate
+              productId: p.id, sku: p.sku, name: p.name, quantity: defaultQty,
+              boxes: 1, unitPrice: p.price || 0, rowTotalWeight: defaultTotalWeight, freightRate: defaultRate
           };
           const updatedItems = [...editForm.items, newItem];
           recalculateTotals(updatedItems);
           setTimeout(() => setDetailSkuSearch(''), 50);
-          showToast(`已追加 SKU: ${p.sku}`, 'success');
       }
   };
 
@@ -106,6 +89,7 @@ const InboundShipments: React.FC = () => {
       recalculateTotals(updatedItems);
   };
 
+  // Fix: Added missing handleRemoveDetailItem function
   const handleRemoveDetailItem = (productId: string) => {
       if (!editForm) return;
       const updatedItems = editForm.items.filter((it: any) => it.productId !== productId);
@@ -114,30 +98,59 @@ const InboundShipments: React.FC = () => {
 
   const handleSaveEdit = () => {
       if (!editForm) return;
-      if (!editForm.name.trim()) {
-          showToast('协议标识名称不能为空', 'warning');
-          return;
-      }
+      if (!editForm.name.trim()) return showToast('协议标识名称不能为空', 'warning');
       dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: editForm });
       setSelectedShipment(editForm);
       setIsEditing(false);
-      showToast('货件物流分摊协议已固化', 'success');
+      showToast('货件物流协议已更新', 'success');
+  };
+
+  // --- 核心联动逻辑：确认离场并同步至物流追踪 ---
+  const handleShipOut = () => {
+      if (!selectedShipment) return;
+      if (!selectedShipment.trackingNumber) {
+          showToast('请先编辑并录入物流单号后再执行离场', 'warning');
+          return;
+      }
+
+      // 1. 更新当前货件状态
+      const updatedShipment = { ...selectedShipment, status: 'Shipped' as const, shippedDate: new Date().toISOString().split('T')[0] };
+      dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: updatedShipment });
+      setSelectedShipment(updatedShipment);
+
+      // 2. 自动生成“物流追踪”节点
+      const skuSummary = updatedShipment.items.map(i => i.sku).slice(0, 2).join(', ') + (updatedShipment.items.length > 2 ? '...' : '');
+      const trackingNode: Shipment = {
+          id: `SH-${Date.now()}`,
+          trackingNo: updatedShipment.trackingNumber,
+          carrier: updatedShipment.carrier || 'Global Carrier',
+          status: '运输中',
+          origin: updatedShipment.sourceWarehouseId,
+          destination: updatedShipment.destinationWarehouseId,
+          productName: `批次: ${updatedShipment.name} (${skuSummary})`,
+          shipDate: updatedShipment.shippedDate,
+          lastUpdate: '仓库已离场，正在前往出口节点',
+          events: [
+              { date: updatedShipment.shippedDate || '', time: '10:00', location: updatedShipment.sourceWarehouseId, description: '货物已从发货仓离场', status: 'Normal' }
+          ],
+          notes: `由物流中枢 ${updatedShipment.id} 自动同步生成`
+      };
+      
+      dispatch({ type: 'ADD_SHIPMENT', payload: trackingNode });
+      showToast(`货件离场成功！已同步至全球追踪矩阵`, 'success');
   };
 
   const handleDeleteShipment = () => {
       if (!selectedShipment) return;
-      if (confirm(`确定要彻底销毁协议 ${selectedShipment.id} 吗？此操作不可撤销。`)) {
+      if (confirm(`确定要彻底销毁协议 ${selectedShipment.id} 吗？`)) {
           dispatch({ type: 'DELETE_INBOUND_SHIPMENT', payload: selectedShipment.id });
           setSelectedShipment(null);
-          showToast('协议已从矩阵中销毁', 'info');
+          showToast('协议已销毁', 'info');
       }
   };
 
   const handleCreate = () => {
-      if (!newShipmentName || plannedItems.length === 0) {
-          showToast('请配置协议名称与载荷清单', 'warning');
-          return;
-      }
+      if (!newShipmentName || plannedItems.length === 0) return showToast('请配置协议名称与清单', 'warning');
       let totalWeight = 0; let totalVolume = 0;
       const shipmentItems = plannedItems.map(item => {
           const boxes = Math.ceil(item.quantity / (item.product.itemsPerBox || 1));
@@ -155,8 +168,8 @@ const InboundShipments: React.FC = () => {
 
       const newInbound: InboundShipment = {
           id: `IB-${Date.now().toString().slice(-6)}`,
-          name: newShipmentName, 
-          method: shippingMethod,
+          name: newShipmentName, method: shippingMethod,
+          trackingNumber: newTrackingNo, carrier: newCarrier,
           sourceWarehouseId: sourceNode, destinationWarehouseId: destNode,
           status: 'Draft', items: shipmentItems as any,
           totalWeight: parseFloat(totalWeight.toFixed(2)), totalVolume: parseFloat(totalVolume.toFixed(3)),
@@ -167,27 +180,32 @@ const InboundShipments: React.FC = () => {
       setShowCreateModal(false);
       setPlannedItems([]);
       setNewShipmentName('');
+      setNewTrackingNo('');
+      setNewCarrier('');
   };
 
-  const openCreateModal = () => {
-      setSkuSearch('');
-      setPlannedItems([]);
-      setShowCreateModal(true);
-  };
+  const [newShipmentName, setNewShipmentName] = useState('');
+  const [shippingMethod, setShippingMethod] = useState<'Air' | 'Sea'>('Air');
+  const [newTrackingNo, setNewTrackingNo] = useState('');
+  const [newCarrier, setNewCarrier] = useState('');
+  const [sourceNode, setSourceNode] = useState('深圳分拨中心');
+  const [destNode, setDestNode] = useState('FBA-US-WEST');
+  const [plannedItems, setPlannedItems] = useState<{product: Product, quantity: number}[]>([]);
+  const [skuSearch, setSkuSearch] = useState('');
 
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative bg-black/20 font-sans">
         <div className="p-5 border-b border-white/5 flex justify-between items-center bg-white/2 backdrop-blur-xl">
             <div className="flex items-center gap-4">
-                <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg shadow-blue-900/40">
+                <div className="p-2.5 bg-blue-600 rounded-xl text-white shadow-lg">
                     <Globe className="w-6 h-6" />
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Multimodal Fix v10.4</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Sync Integration v10.5</p>
                 </div>
             </div>
-            <button onClick={openCreateModal} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
+            <button onClick={() => setShowCreateModal(true)} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
                 <Plus className="w-4 h-4" /> 部署新发货协议
             </button>
         </div>
@@ -210,14 +228,11 @@ const InboundShipments: React.FC = () => {
                         </div>
                         <h3 className="text-sm font-bold text-white mb-4 truncate">{shipment.name}</h3>
                         <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase">
-                            <span className="flex items-center gap-1"><Scale className="w-3 h-3"/> {Number(shipment.totalWeight || 0).toFixed(1)} KG</span>
+                            <span className="flex items-center gap-1 font-mono">{shipment.trackingNumber || '未录单'}</span>
                             <span>{shipment.createdDate}</span>
                         </div>
                     </div>
                 ))}
-                {state.inboundShipments.length === 0 && (
-                    <div className="text-center py-20 text-slate-600 italic text-xs uppercase tracking-widest">暂无活跃协议</div>
-                )}
             </div>
 
             {/* 主内容区 */}
@@ -240,16 +255,11 @@ const InboundShipments: React.FC = () => {
                                     <>
                                         {selectedShipment.status === 'Draft' && (
                                             <>
-                                                <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 调账</button>
-                                                <button onClick={() => {
-                                                    const updated = { ...selectedShipment, status: 'Shipped' as const };
-                                                    dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: updated });
-                                                    setSelectedShipment(updated);
-                                                    showToast(`货件已离场`, 'success');
-                                                }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 离场</button>
+                                                <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 完善协议/单号</button>
+                                                <button onClick={handleShipOut} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 确认离场并同步</button>
                                             </>
                                         )}
-                                        <button onClick={handleDeleteShipment} className="p-2 bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/30 rounded-xl transition-all shadow-lg shadow-red-900/10" title="销毁此协议"><Trash2 className="w-4 h-4" /></button>
+                                        <button onClick={handleDeleteShipment} className="p-2 bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/30 rounded-xl transition-all" title="销毁此协议"><Trash2 className="w-4 h-4" /></button>
                                         <button onClick={() => setSelectedShipment(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 transition-all"><X className="w-4 h-4" /></button>
                                     </>
                                 )}
@@ -260,7 +270,7 @@ const InboundShipments: React.FC = () => {
                             {activeDocTab === 'details' && (
                                 <div className="space-y-8 animate-in fade-in duration-300">
                                     <div className="grid grid-cols-2 gap-6">
-                                        <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500">
+                                        <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500 flex flex-col justify-between">
                                             <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center justify-between">
                                                 <div className="flex items-center gap-2"><Globe className="w-3 h-3"/> 跨境路由规划</div>
                                                 <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded border border-white/10 text-indigo-400 font-black">
@@ -278,13 +288,27 @@ const InboundShipments: React.FC = () => {
                                                 </div>
                                             )}
                                         </div>
-                                        <div className="ios-glass-card p-6 border-l-4 border-l-amber-500">
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center gap-2"><Scale className="w-3 h-3"/> 载荷数据核算 (Total)</div>
-                                            <div className="flex items-center gap-10">
-                                                <div><span className="text-[10px] text-slate-600 block uppercase font-bold">批次总重</span><span className="text-xl font-black text-white font-mono">{Number(isEditing ? editForm?.totalWeight : selectedShipment.totalWeight).toFixed(1)} KG</span></div>
-                                                <div className="w-px h-8 bg-white/5"></div>
-                                                <div><span className="text-[10px] text-slate-600 block uppercase font-bold">总体积</span><span className="text-xl font-black text-white font-mono">{Number(isEditing ? editForm?.totalVolume : selectedShipment.totalVolume).toFixed(3)} CBM</span></div>
-                                            </div>
+                                        
+                                        <div className="ios-glass-card p-6 border-l-4 border-l-blue-500">
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center gap-2"><Truck className="w-3 h-3 text-blue-400"/> 物流单据关联 (Tracking)</div>
+                                            {isEditing ? (
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <input type="text" value={editForm?.carrier || ''} onChange={e => setEditForm(prev => prev ? {...prev, carrier: e.target.value} : null)} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="承运商 (DHL/UPS...)" />
+                                                    <input type="text" value={editForm?.trackingNumber || ''} onChange={e => setEditForm(prev => prev ? {...prev, trackingNumber: e.target.value} : null)} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="运单号" />
+                                                </div>
+                                            ) : (
+                                                <div className="flex items-center justify-between">
+                                                    <div className="flex flex-col gap-1">
+                                                        <span className="text-[10px] text-slate-600 font-black">CARRIER: <span className="text-white uppercase font-mono">{selectedShipment.carrier || 'TBD'}</span></span>
+                                                        <span className="text-lg font-black text-white font-mono tracking-tight">{selectedShipment.trackingNumber || 'AWAITING_ID'}</span>
+                                                    </div>
+                                                    {selectedShipment.status === 'Shipped' && (
+                                                        <div className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 font-black text-[10px]">
+                                                            <Link2 className="w-3 h-3"/> 已联动追踪
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
 
@@ -330,9 +354,8 @@ const InboundShipments: React.FC = () => {
                                                         const lineTotalFreight = rowWeight * rate;
                                                         const unitFreightCost = item.quantity > 0 ? (lineTotalFreight / item.quantity) : 0;
                                                         const unitPrice = Number(item.unitPrice || 0);
-                                                        
                                                         return (
-                                                            <tr key={i} className="hover:bg-white/2 group transition-colors">
+                                                            <tr key={i} className="hover:bg-white/2 transition-colors">
                                                                 <td className="py-4 px-2 font-black text-slate-200">{item.sku}</td>
                                                                 <td className="py-4 px-2">
                                                                     {isEditing ? (
@@ -352,20 +375,14 @@ const InboundShipments: React.FC = () => {
                                                                         <input type="number" value={item.freightRate === 0 ? '' : item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', e.target.value)} className="w-16 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300 focus:border-blue-500 outline-none font-bold" />
                                                                     ) : `¥${rate}`}
                                                                 </td>
-                                                                <td className="py-4 px-2 text-blue-100 font-bold">
-                                                                    ¥ {lineTotalFreight.toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                                                </td>
-                                                                <td className="py-4 px-2 bg-emerald-500/5 text-emerald-400 font-black text-sm">
-                                                                    ¥ {unitFreightCost.toFixed(2)}
-                                                                </td>
+                                                                <td className="py-4 px-2 text-blue-100 font-bold">¥ {lineTotalFreight.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                                                <td className="py-4 px-2 bg-emerald-500/5 text-emerald-400 font-black text-sm">¥ {unitFreightCost.toFixed(2)}</td>
                                                                 <td className="py-4 px-2 text-indigo-400 font-bold">
                                                                     {isEditing ? (
                                                                         <input type="number" step="0.01" value={item.unitPrice === 0 ? '' : item.unitPrice} onChange={e => updateItemProperty(item.productId, 'unitPrice', e.target.value)} className="w-20 bg-indigo-500/5 border border-indigo-500/20 rounded p-1 text-xs text-indigo-300 focus:border-indigo-500 outline-none font-bold" />
                                                                     ) : `$${unitPrice.toFixed(2)}`}
                                                                 </td>
-                                                                <td className="py-4 px-2 text-right font-black text-indigo-300 text-sm">
-                                                                    ${(Number(item.quantity || 0) * unitPrice).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                                                </td>
+                                                                <td className="py-4 px-2 text-right font-black text-indigo-300 text-sm">${(Number(item.quantity || 0) * unitPrice).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
                                                                 {isEditing && (
                                                                     <td className="py-4 px-2 text-right">
                                                                         <button onClick={() => handleRemoveDetailItem(item.productId)} className="p-1.5 text-slate-700 hover:text-red-400 transition-colors hover:bg-red-400/10 rounded-lg"><Trash2 className="w-4 h-4"/></button>
@@ -375,19 +392,6 @@ const InboundShipments: React.FC = () => {
                                                         );
                                                     })}
                                                 </tbody>
-                                                <tfoot className="border-t-2 border-white/5 font-black uppercase text-[10px] bg-white/2">
-                                                    <tr>
-                                                        <td colSpan={4} className="py-5 px-2 text-slate-500 text-right italic">本批次运费总额 (CNY):</td>
-                                                        <td className="py-5 px-2 text-blue-400 text-lg">
-                                                            ¥ {(isEditing ? editForm?.items : selectedShipment.items || []).reduce((acc: any, it: any) => acc + (Number(it.rowTotalWeight || 0) * Number(it.freightRate || 0)), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                                        </td>
-                                                        <td colSpan={2} className="py-5 px-2 text-slate-500 text-right italic">总申报货值 (USD):</td>
-                                                        <td className="py-5 px-2 text-indigo-300 text-right text-lg font-mono">
-                                                            $ {(isEditing ? editForm?.items : selectedShipment.items || []).reduce((acc: any, it: any) => acc + (Number(it.quantity || 0) * Number(it.unitPrice || 0)), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
-                                                        </td>
-                                                        {isEditing && <td></td>}
-                                                    </tr>
-                                                </tfoot>
                                             </table>
                                         </div>
                                     </div>
@@ -397,7 +401,7 @@ const InboundShipments: React.FC = () => {
                                             <ShieldCheck className="w-6 h-6 text-indigo-400 shrink-0" />
                                             <div>
                                                 <h5 className="text-xs font-bold text-white uppercase mb-1">财务核算协议：Batch-First</h5>
-                                                <p className="text-[10px] text-indigo-300/60 leading-relaxed font-medium">当前采用“行总重过磅”录入模式。系统会自动根据总重、单价、SKU件数三维交叉计算最真实的单品分摊成本。</p>
+                                                <p className="text-[10px] text-indigo-300/60 leading-relaxed font-medium">当前协议已锁定。系统会自动根据总重、单价、SKU件数三维交叉计算最真实的单品分摊成本。</p>
                                             </div>
                                         </div>
                                         <div className="p-6 bg-blue-500/5 border border-blue-500/10 rounded-2xl flex items-start gap-4">
@@ -438,7 +442,7 @@ const InboundShipments: React.FC = () => {
                 <div className="ios-glass-panel w-full max-w-4xl h-[85vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-300 bg-[#0f0f12] border border-white/20" onClick={e => e.stopPropagation()}>
                     <div className="p-8 border-b border-white/5 flex justify-between items-center bg-white/5">
                         <h3 className="text-2xl font-black text-white italic uppercase tracking-tighter">部署全球货件协议 (Setup)</h3>
-                        <button onClick={() => setShowCreateModal(false)} className="p-3 hover:bg-white/10 rounded-2xl transition-all"><X className="w-6 h-6 text-slate-500" /></button>
+                        <button onClick={() => setShowCreateModal(false)} className="p-3 hover:bg-white/10 rounded-2xl transition-all"><X className="w-6 h-6 text-slate-50" /></button>
                     </div>
                     <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
                         <div className="grid grid-cols-12 gap-10">
@@ -458,6 +462,17 @@ const InboundShipments: React.FC = () => {
                                 <div className="space-y-2">
                                     <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">协议名称</label>
                                     <input type="text" value={newShipmentName} onChange={e => setNewShipmentName(e.target.value)} placeholder="例如：FBA 西部节点补货" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:border-blue-500 outline-none font-bold" />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">物流单号 (Tracking No.)</label>
+                                        <input type="text" value={newTrackingNo} onChange={e => setNewTrackingNo(e.target.value)} placeholder="运单号..." className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-blue-500" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">承运商 (Carrier)</label>
+                                        <input type="text" value={newCarrier} onChange={e => setNewCarrier(e.target.value)} placeholder="DHL/UPS/船名..." className="w-full bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-blue-500" />
+                                    </div>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4">
