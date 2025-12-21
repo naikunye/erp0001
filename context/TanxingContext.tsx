@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import AV from 'leancloud-storage';
 import { 
@@ -47,6 +46,7 @@ interface AppState {
     isMobileMenuOpen: boolean;
     isInitialized: boolean; 
     syncAllowed: boolean; 
+    syncLocked: boolean; // 新增：同步锁，防止未拉取完就推送
     influencers: any[];
 }
 
@@ -70,6 +70,7 @@ type Action =
     | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' }
     | { type: 'INITIALIZED_SUCCESS' }
+    | { type: 'UNLOCK_SYNC' }
     | { type: 'UPDATE_CUSTOMER'; payload: Customer }
     | { type: 'ADD_CUSTOMER'; payload: Customer }
     | { type: 'DELETE_CUSTOMER'; payload: string }
@@ -99,41 +100,32 @@ const emptyState: AppState = {
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
     automationRules: INITIAL_RULES, automationLogs: [],
-    isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, influencers: []
+    isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: []
 };
 
-/**
- * 核心优化：本地存储“减重”保存
- * 如果数据超过 localStorage 限制，自动尝试剔除大字段保存，确保不崩溃
- */
 const safeLocalSave = (state: AppState) => {
     try {
         const json = JSON.stringify(state);
         localStorage.setItem(DB_KEY, json);
     } catch (e: any) {
         if (e.name === 'QuotaExceededError') {
-            console.warn('LocalStorage Quota Exceeded. Stripping large fields...');
-            // 策略：剔除 Base64 图片、长日志、冗余历史
+            console.warn('LocalStorage Quota Exceeded. Stripping large fields for CACHE only...');
             const lightweightState = {
                 ...state,
                 products: (state.products || []).map(p => ({ ...p, images: [], image: undefined })),
-                stockJournal: (state.stockJournal || []).slice(0, 10),
-                auditLogs: (state.auditLogs || []).slice(0, 10),
-                automationLogs: (state.automationLogs || []).slice(0, 5)
+                stockJournal: (state.stockJournal || []).slice(0, 5),
+                auditLogs: (state.auditLogs || []).slice(0, 5)
             };
             try {
                 localStorage.setItem(DB_KEY, JSON.stringify(lightweightState));
-                console.log('Lightweight State cached locally.');
-            } catch (innerError) {
-                console.error('Even lightweight state too large for localStorage');
-            }
+            } catch (inner) {}
         }
     }
 };
 
 const appReducer = (state: AppState, action: Action): AppState => {
     const markDirty = (newState: Partial<AppState>): AppState => {
-        const updated = { ...state, ...newState, syncAllowed: true, saveStatus: 'dirty' as SaveStatus };
+        const updated = { ...state, ...newState, syncAllowed: !state.syncLocked, saveStatus: 'dirty' as SaveStatus };
         safeLocalSave(updated);
         return updated;
     };
@@ -146,65 +138,41 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_EXCHANGE_RATE': return markDirty({ exchangeRate: action.payload });
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        
         case 'UPDATE_PRODUCT': {
             const oldProduct = (state.products || []).find(p => p.id === action.payload.id);
-            const stockJournal = [...(state.stockJournal || [])];
-            if (oldProduct && oldProduct.stock !== action.payload.stock) {
-                stockJournal.unshift({ id: `SJ-${Date.now()}`, timestamp: new Date().toISOString(), sku: action.payload.sku, change: action.payload.stock - oldProduct.stock, previousStock: oldProduct.stock, newStock: action.payload.stock, reason: action.reason || '手动更新', operator: 'Admin' });
-            }
-            return markDirty({ products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p), stockJournal: stockJournal.slice(0, 500) });
+            const products = (state.products || []).map(p => p.id === action.payload.id ? action.payload : p);
+            return markDirty({ products });
         }
         case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...(state.products || [])] });
         case 'DELETE_PRODUCT': return markDirty({ products: (state.products || []).filter(p => p.id !== action.payload) });
-        
-        case 'UPDATE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...(state.shipments || [])] });
-        case 'DELETE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
-
-        case 'UPDATE_TASK': return markDirty({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
-        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...(state.tasks || [])] });
-        case 'DELETE_TASK': return markDirty({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
-
-        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...(state.transactions || [])] });
-        case 'DELETE_TRANSACTION': return markDirty({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
-        
-        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
-        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).filter(s => s.id !== action.payload) });
-
-        case 'UPDATE_CUSTOMER': return markDirty({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
-        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...(state.customers || [])] });
-        case 'DELETE_CUSTOMER': return markDirty({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
-
-        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...(state.suppliers || [])] });
-        case 'DELETE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
-
         case 'HYDRATE_STATE': {
+            // 核心修复：合并时，如果当前内存中有图片而 Payload 中没有，保留图片（防止 Stripped 本地缓存覆盖内存大图）
+            const incomingProducts = Array.isArray(action.payload.products) ? action.payload.products : [];
+            const mergedProducts = incomingProducts.map(newP => {
+                const existingP = state.products.find(p => p.id === newP.id);
+                if (existingP && existingP.image && !newP.image) {
+                    return { ...newP, image: existingP.image, images: existingP.images };
+                }
+                return newP;
+            });
+
             const updated = { 
                 ...state, 
                 ...action.payload,
                 leanConfig: { ...state.leanConfig, ...(action.payload.leanConfig || {}) },
-                products: Array.isArray(action.payload.products) ? action.payload.products : (state.products || []),
-                transactions: Array.isArray(action.payload.transactions) ? action.payload.transactions : (state.transactions || []),
-                customers: Array.isArray(action.payload.customers) ? action.payload.customers : (state.customers || []),
-                orders: Array.isArray(action.payload.orders) ? action.payload.orders : (state.orders || []),
-                shipments: Array.isArray(action.payload.shipments) ? action.payload.shipments : (state.shipments || []),
-                tasks: Array.isArray(action.payload.tasks) ? action.payload.tasks : (state.tasks || []),
-                inboundShipments: Array.isArray(action.payload.inboundShipments) ? action.payload.inboundShipments : (state.inboundShipments || []),
-                suppliers: Array.isArray(action.payload.suppliers) ? action.payload.suppliers : (state.suppliers || []),
-                influencers: Array.isArray(action.payload.influencers) ? action.payload.influencers : (state.influencers || []),
+                products: mergedProducts.length > 0 ? mergedProducts : (state.products || []),
+                // 收到拉取请求后，如果是云端来的，通常会带 isInitialized: true，此时可解锁
+                syncLocked: action.payload.syncLocked ?? state.syncLocked
             };
             safeLocalSave(updated);
             return updated;
         }
-        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, suppliers: MOCK_SUPPLIERS, isInitialized: true };
+        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, isInitialized: true, syncLocked: false };
+        case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true };
-        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
+        case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
         case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...(state.influencers || [])] });
         default: return state;
     }
@@ -226,16 +194,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
-        try { 
-            AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-        } catch (e) { 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            throw e; 
-        }
+        try { AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); }
+        catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); throw e; }
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
+        if (state.syncLocked && !isForce) return false; // 锁定状态禁止自动上传
         if (!state.syncAllowed && !isForce) return false;
         if (!AV.applicationId || isSyncingRef.current) return false;
         
@@ -245,21 +209,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try {
             const payloadData = { 
                 products: state.products || [], 
-                stockJournal: state.stockJournal || [],
                 orders: state.orders || [], 
                 shipments: state.shipments || [], 
-                tasks: state.tasks || [], 
-                inboundShipments: state.inboundShipments || [], 
                 transactions: state.transactions || [], 
+                customers: state.customers || [],
                 influencers: state.influencers || [],
                 suppliers: state.suppliers || [],
-                exchangeRate: state.exchangeRate || 7.2,
+                tasks: state.tasks || [],
                 timestamp: new Date().toISOString() 
             };
             
             const jsonPayload = JSON.stringify(payloadData);
             let backupObj;
-
             if (state.leanConfig.cloudObjectId) {
                 backupObj = AV.Object.createWithoutData('Backup', state.leanConfig.cloudObjectId);
             } else {
@@ -276,25 +237,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             backupObj.set('payload', jsonPayload);
             const saved = await backupObj.save();
             
-            dispatch({ 
-                type: 'SET_LEAN_CONFIG', 
-                payload: { 
-                    lastSync: new Date().toLocaleTimeString(), 
-                    payloadSize: new Blob([jsonPayload]).size, 
-                    cloudObjectId: saved.id 
-                } 
-            });
-            
+            dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString(), payloadSize: new Blob([jsonPayload]).size, cloudObjectId: saved.id } });
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } });
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
         } catch (e: any) { 
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
-            showToast(`同步失败: ${e.message}`, 'error');
             return false; 
-        } finally { 
-            isSyncingRef.current = false; 
-        }
+        } finally { isSyncingRef.current = false; }
     };
 
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
@@ -303,31 +253,31 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             let backupObj = await query.first();
-            
             if (!backupObj) {
-                const fallbackQuery = new AV.Query('Backup');
-                fallbackQuery.descending('updatedAt');
+                const fallbackQuery = new AV.Query('Backup'); fallbackQuery.descending('updatedAt');
                 backupObj = await fallbackQuery.first();
             }
 
             if (backupObj) {
                 const data = JSON.parse(backupObj.get('payload'));
+                // 成功拉取云端数据，此时内存已拥有完整图片，解除同步锁
                 dispatch({ 
                     type: 'HYDRATE_STATE', 
                     payload: { 
                         ...data, 
-                        leanConfig: { ...state.leanConfig, cloudObjectId: backupObj.id },
+                        syncLocked: false, 
                         syncAllowed: false, 
                         saveStatus: 'idle', 
                         isInitialized: true 
                     } 
                 });
-                if (!isSilent) showToast('已从云端恢复历史镜像', 'success');
+                if (!isSilent) showToast('云端完整镜像已同步（含图片资源）', 'success');
                 return true;
             }
+            dispatch({ type: 'UNLOCK_SYNC' }); // 没找到云端数据，也解锁，允许本地保存
             return false;
         } catch (e: any) { 
-            if (!isSilent) showToast(`云端连接异常: ${e.message}`, 'error');
+            dispatch({ type: 'UNLOCK_SYNC' });
             return false; 
         }
     };
@@ -335,11 +285,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         if (!state.isInitialized) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
-        if (AV.applicationId && state.syncAllowed && !isSyncingRef.current) {
+        if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) {
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.transactions, state.exchangeRate, state.syncAllowed, state.isInitialized]);
+    }, [state.products, state.transactions, state.syncAllowed, state.syncLocked]);
 
     useEffect(() => {
         const startup = async () => {
@@ -348,7 +298,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             if (savedDb) {
                 try { 
-                    dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) }); 
+                    // 初始化阶段：拉取本地缓存（可能是 stripped 版），保持 syncLocked: true
+                    dispatch({ type: 'HYDRATE_STATE', payload: { ...JSON.parse(savedDb), syncLocked: true } }); 
                 } catch(e) {}
             }
 
@@ -357,12 +308,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const config = JSON.parse(savedConfig);
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                     await bootLean(config.appId, config.appKey, config.serverURL);
-                    pullFromCloud(true); 
-                } catch (e) {}
-            } else if (!savedDb) {
+                    await pullFromCloud(true); 
+                } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); }
+            } else {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
-            
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
         startup();

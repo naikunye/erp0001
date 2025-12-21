@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -1096,7 +1095,12 @@ const Inventory: React.FC = () => {
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex gap-3">
                                         <div className="w-12 h-12 bg-white/5 rounded border border-white/10 shrink-0 overflow-hidden relative">
-                                            {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon className="w-5 h-5 text-slate-600 m-auto mt-3"/>}
+                                            {/* 核心修复：显示图片时增加 fallback 判断，如果 image 丢失尝试从 images 数组恢复 */}
+                                            {(item.image || (item.images && item.images.length > 0)) ? (
+                                                <img src={item.image || item.images![0]} className="w-full h-full object-cover" />
+                                            ) : (
+                                                <ImageIcon className="w-5 h-5 text-slate-600 m-auto mt-3"/>
+                                            )}
                                             {item.images && item.images.length > 1 && (
                                                 <div className="absolute bottom-0 right-0 bg-black/60 text-[9px] text-white px-1 rounded-tl-sm">+{item.images.length-1}</div>
                                             )}
