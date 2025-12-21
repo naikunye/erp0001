@@ -46,7 +46,7 @@ interface AppState {
     isMobileMenuOpen: boolean;
     isInitialized: boolean; 
     syncAllowed: boolean; 
-    syncLocked: boolean; 
+    syncLocked: boolean; // 新增：同步锁，防止未拉取完就推送
     influencers: any[];
 }
 
@@ -103,38 +103,22 @@ const emptyState: AppState = {
     isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: []
 };
 
-/**
- * 核心优化：智能本地存储机制
- * 5MB 限制内，优先保护图片，清理非必要日志
- */
 const safeLocalSave = (state: AppState) => {
     try {
-        localStorage.setItem(DB_KEY, JSON.stringify(state));
+        const json = JSON.stringify(state);
+        localStorage.setItem(DB_KEY, json);
     } catch (e: any) {
         if (e.name === 'QuotaExceededError') {
-            console.warn('LocalStorage Quota Exceeded. Pruning non-essential logs to keep images...');
-            
-            // 减重策略 1：清理冗余历史记录
-            const step1 = {
+            console.warn('LocalStorage Quota Exceeded. Stripping large fields for CACHE only...');
+            const lightweightState = {
                 ...state,
-                auditLogs: [], // 清空审计日志
-                automationLogs: [], // 清空自动日志
-                stockJournal: (state.stockJournal || []).slice(0, 5), // 只留5条库存变动
-                transactions: (state.transactions || []).slice(0, 20) // 只留最近20条流水
+                products: (state.products || []).map(p => ({ ...p, images: [], image: undefined })),
+                stockJournal: (state.stockJournal || []).slice(0, 5),
+                auditLogs: (state.auditLogs || []).slice(0, 5)
             };
-            
             try {
-                localStorage.setItem(DB_KEY, JSON.stringify(step1));
-                console.log('Cache saved after pruning logs.');
-            } catch (innerE) {
-                // 减重策略 2：如果还是存不下（图片太多），则清理图片
-                console.warn('Still exceeds quota. Pruning images from local cache as last resort.');
-                const step2 = {
-                    ...step1,
-                    products: (state.products || []).map(p => ({ ...p, image: undefined, images: [] }))
-                };
-                localStorage.setItem(DB_KEY, JSON.stringify(step2));
-            }
+                localStorage.setItem(DB_KEY, JSON.stringify(lightweightState));
+            } catch (inner) {}
         }
     }
 };
@@ -154,22 +138,19 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_EXCHANGE_RATE': return markDirty({ exchangeRate: action.payload });
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        
         case 'UPDATE_PRODUCT': {
+            const oldProduct = (state.products || []).find(p => p.id === action.payload.id);
             const products = (state.products || []).map(p => p.id === action.payload.id ? action.payload : p);
             return markDirty({ products });
         }
         case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...(state.products || [])] });
         case 'DELETE_PRODUCT': return markDirty({ products: (state.products || []).filter(p => p.id !== action.payload) });
-
         case 'HYDRATE_STATE': {
+            // 核心修复：合并时，如果当前内存中有图片而 Payload 中没有，保留图片（防止 Stripped 本地缓存覆盖内存大图）
             const incomingProducts = Array.isArray(action.payload.products) ? action.payload.products : [];
-            
-            // 深度合并策略：如果云端拉回来的数据里没图，但本地内存已经有图了，不要用空值覆盖
             const mergedProducts = incomingProducts.map(newP => {
                 const existingP = state.products.find(p => p.id === newP.id);
-                // 仅当新数据完全没有图片字段时，保留内存中的图片
-                if (existingP && existingP.image && (!newP.image || newP.image === "")) {
+                if (existingP && existingP.image && !newP.image) {
                     return { ...newP, image: existingP.image, images: existingP.images };
                 }
                 return newP;
@@ -178,7 +159,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
             const updated = { 
                 ...state, 
                 ...action.payload,
+                leanConfig: { ...state.leanConfig, ...(action.payload.leanConfig || {}) },
                 products: mergedProducts.length > 0 ? mergedProducts : (state.products || []),
+                // 收到拉取请求后，如果是云端来的，通常会带 isInitialized: true，此时可解锁
                 syncLocked: action.payload.syncLocked ?? state.syncLocked
             };
             safeLocalSave(updated);
@@ -211,17 +194,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
-        try { 
-            AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-        } catch (e) { 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            throw e; 
-        }
+        try { AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); }
+        catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); throw e; }
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
-        if (state.syncLocked && !isForce) return false;
+        if (state.syncLocked && !isForce) return false; // 锁定状态禁止自动上传
         if (!state.syncAllowed && !isForce) return false;
         if (!AV.applicationId || isSyncingRef.current) return false;
         
@@ -275,9 +253,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             let backupObj = await query.first();
-            
+            if (!backupObj) {
+                const fallbackQuery = new AV.Query('Backup'); fallbackQuery.descending('updatedAt');
+                backupObj = await fallbackQuery.first();
+            }
+
             if (backupObj) {
                 const data = JSON.parse(backupObj.get('payload'));
+                // 成功拉取云端数据，此时内存已拥有完整图片，解除同步锁
                 dispatch({ 
                     type: 'HYDRATE_STATE', 
                     payload: { 
@@ -288,10 +271,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         isInitialized: true 
                     } 
                 });
-                if (!isSilent) showToast('云端镜像同步完成', 'success');
+                if (!isSilent) showToast('云端完整镜像已同步（含图片资源）', 'success');
                 return true;
             }
-            dispatch({ type: 'UNLOCK_SYNC' });
+            dispatch({ type: 'UNLOCK_SYNC' }); // 没找到云端数据，也解锁，允许本地保存
             return false;
         } catch (e: any) { 
             dispatch({ type: 'UNLOCK_SYNC' });
@@ -315,8 +298,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             if (savedDb) {
                 try { 
-                    const localData = JSON.parse(savedDb);
-                    dispatch({ type: 'HYDRATE_STATE', payload: { ...localData, syncLocked: true } }); 
+                    // 初始化阶段：拉取本地缓存（可能是 stripped 版），保持 syncLocked: true
+                    dispatch({ type: 'HYDRATE_STATE', payload: { ...JSON.parse(savedDb), syncLocked: true } }); 
                 } catch(e) {}
             }
 
@@ -325,8 +308,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const config = JSON.parse(savedConfig);
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                     await bootLean(config.appId, config.appKey, config.serverURL);
-                    // 重要：这里不 await，让 UI 先加载本地数据
-                    pullFromCloud(true); 
+                    await pullFromCloud(true); 
                 } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); }
             } else {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
