@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { TanxingProvider, useTanxing } from './context/TanxingContext';
 import Sidebar from './components/Sidebar';
@@ -16,13 +17,15 @@ import CalculatorCenter from './pages/CalculatorCenter';
 import OperationsTasks from './pages/OperationsTasks';
 import AICommandCenter from './pages/AICommandCenter';
 import InboundShipments from './pages/InboundShipments';
+import Automation from './pages/Automation';
+import VirtualWarehouse from './pages/VirtualWarehouse';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import Suppliers from './pages/Suppliers'; 
 import Profile from './pages/Profile';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
-import { Hexagon, ArrowRight, Loader2, Cpu, Zap } from 'lucide-react';
+import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
 import Logger from './utils/logger';
 
 const MainLayout: React.FC = () => {
@@ -32,10 +35,8 @@ const MainLayout: React.FC = () => {
   const [loginForm, setLoginForm] = useState({ email: 'admin@tanxing.com', password: '' });
   const [loginLoading, setLoginLoading] = useState(false);
   
-  // --- 核心修复：同步主题到 body 标签 ---
   useEffect(() => {
       if (state.theme) {
-          // 清除所有旧主题类，添加新主题类
           document.body.className = `theme-${state.theme}`;
           Logger.info(`Theme applied: theme-${state.theme}`);
       }
@@ -83,6 +84,8 @@ const MainLayout: React.FC = () => {
       case 'tasks': return '运营协同中心 (Operations Hub)';
       case 'ai-command': return 'AI 指令控制台 (Quantum Command)';
       case 'logistics-hub': return '物流中枢 (Logistics Matrix)';
+      case 'automation': return '逻辑神经中枢 (Logic Hooks)';
+      case 'virtual-warehouse': return '虚拟仓库数字孪生 (Digital Twin)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -105,6 +108,8 @@ const MainLayout: React.FC = () => {
       case 'tasks': return <OperationsTasks />;
       case 'ai-command': return <AICommandCenter />;
       case 'logistics-hub': return <InboundShipments />;
+      case 'automation': return <Automation />;
+      case 'virtual-warehouse': return <VirtualWarehouse />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };

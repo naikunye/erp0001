@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { Search, Package, ArrowRight, Sparkles, Command, CornerDownLeft, Loader2 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
@@ -13,7 +12,6 @@ const GlobalSearch: React.FC = () => {
   
   const { state } = useTanxing();
 
-  // --- Keyboard Shortcuts ---
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
       if (e.key === 'k' && (e.metaKey || e.ctrlKey)) {
@@ -28,16 +26,12 @@ const GlobalSearch: React.FC = () => {
     return () => document.removeEventListener('keydown', down);
   }, []);
 
-  // Focus input when opened
   useEffect(() => {
       if(isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  // --- AI Command Logic ---
   const handleKeyDown = async (e: React.KeyboardEvent) => {
       if (e.key === 'Enter' && query) {
-          // If query is simple, just let the standard filter run.
-          // If query looks like a command, use AI.
           if (query.length > 3 && !query.startsWith('#')) {
               await executeAiCommand();
           }
@@ -68,7 +62,7 @@ const GlobalSearch: React.FC = () => {
           `;
 
           const response = await ai.models.generateContent({
-              model: 'gemini-2.5-flash-lite', // Use Flash-Lite for speed
+              model: 'gemini-2.5-flash-lite', 
               contents: prompt,
               config: { responseMimeType: "application/json" }
           });
@@ -93,54 +87,51 @@ const GlobalSearch: React.FC = () => {
 
   if (!isOpen) return null;
 
-  // --- Standard Local Filtering ---
-  const filteredProducts = state.products.filter(p => 
-      p.name.toLowerCase().includes(query.toLowerCase()) || p.sku.toLowerCase().includes(query.toLowerCase())
+  const products = state.products || [];
+  const filteredProducts = products.filter(p => 
+      (p.name || '').toLowerCase().includes(query.toLowerCase()) || 
+      (p.sku || '').toLowerCase().includes(query.toLowerCase())
   ).slice(0, 3);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-start justify-center pt-[20vh] px-4 backdrop-blur-sm bg-black/60 transition-opacity duration-200" onClick={() => setIsOpen(false)}>
       <div className="w-full max-w-2xl bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 ring-1 ring-white/10" onClick={e => e.stopPropagation()}>
         
-        {/* Search Input Area */}
         <div className="flex items-center px-4 py-4 border-b border-slate-800 bg-slate-950/50">
           <div className={`mr-4 transition-all duration-300 ${isAiProcessing ? 'text-indigo-500 animate-pulse' : 'text-slate-500'}`}>
               {isAiProcessing ? <Sparkles className="w-6 h-6" /> : <Command className="w-6 h-6" />}
           </div>
           <input
             ref={inputRef}
-            className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500 text-lg font-medium"
+            className="flex-1 bg-transparent border-none outline-none text-white placeholder-slate-500 text-lg font-bold"
             placeholder="搜索数据或输入 AI 指令..."
             value={query}
             onChange={e => setQuery(e.target.value)}
             onKeyDown={handleKeyDown}
           />
           <div className="flex gap-2">
-              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700">ESC 关闭</span>
-              {query && <span className="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded flex items-center gap-1"><CornerDownLeft className="w-3 h-3"/> 执行</span>}
+              <span className="text-[10px] bg-slate-800 text-slate-400 px-2 py-1 rounded border border-slate-700 font-black uppercase">ESC 关闭</span>
+              {query && <span className="text-[10px] bg-indigo-600 text-white px-2 py-1 rounded flex items-center gap-1 font-black uppercase tracking-tighter"><CornerDownLeft className="w-3 h-3"/> 执行指令</span>}
           </div>
         </div>
         
-        {/* Results Area */}
-        <div className="max-h-[60vh] overflow-y-auto p-2">
-            
-            {/* AI Feedback Banner */}
+        <div className="max-h-[60vh] overflow-y-auto p-2 custom-scrollbar">
             {(isAiProcessing || aiSuggestion) && (
                 <div className="mb-2 p-3 bg-indigo-900/20 border border-indigo-500/20 rounded-xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2">
                     {isAiProcessing ? <Loader2 className="w-4 h-4 text-indigo-400 animate-spin" /> : <Sparkles className="w-4 h-4 text-indigo-400" />}
-                    <span className="text-sm text-indigo-200">
+                    <span className="text-sm text-indigo-200 font-bold">
                         {isAiProcessing ? "AI 正在解析您的意图..." : aiSuggestion}
                     </span>
                 </div>
             )}
 
             {!query && !aiSuggestion && (
-                <div className="p-8 text-center text-slate-500 text-sm flex flex-col items-center gap-3">
+                <div className="p-8 text-center text-slate-500 text-sm flex flex-col items-center gap-3 italic">
                     <Sparkles className="w-8 h-8 opacity-20" />
-                    <p>您可以输入自然语言指令，Tanxing AI 将为您导航。</p>
+                    <p className="font-bold">您可以输入自然语言指令，Tanxing AI 将为您导航。</p>
                     <div className="flex gap-2 text-xs">
-                        <span className="bg-slate-800 px-2 py-1 rounded">"跳转到财务总览"</span>
-                        <span className="bg-slate-800 px-2 py-1 rounded">"查看库存状态"</span>
+                        <span className="bg-slate-800 px-2 py-1 rounded border border-white/5">"跳转到财务总览"</span>
+                        <span className="bg-slate-800 px-2 py-1 rounded border border-white/5">"查看库存状态"</span>
                     </div>
                 </div>
             )}
@@ -151,21 +142,21 @@ const GlobalSearch: React.FC = () => {
                         <div className="mb-2">
                             <div className="px-3 py-2 text-xs font-bold text-slate-500 uppercase tracking-wider flex justify-between">
                                 <span>相关产品 (Products)</span>
-                                <span className="bg-slate-800 px-1.5 rounded text-[10px]">{filteredProducts.length}</span>
+                                <span className="bg-slate-800 px-1.5 rounded text-[10px] font-mono">{filteredProducts.length}</span>
                             </div>
                             {filteredProducts.map(p => (
                                 <div key={p.id} className="flex items-center gap-3 px-3 py-3 rounded-xl hover:bg-slate-800/80 cursor-pointer group transition-colors border border-transparent hover:border-slate-700">
                                     <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-400"><Package className="w-5 h-5"/></div>
-                                    <div className="flex-1">
+                                    <div className="flex-1 min-w-0">
                                         <div className="text-sm text-white font-bold flex items-center gap-2">
-                                            {p.sku} 
-                                            {p.stock < 10 && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 rounded border border-red-500/20">缺货风险</span>}
+                                            <span className="font-mono">{p.sku}</span>
+                                            {(p.stock || 0) < 10 && <span className="text-[10px] bg-red-500/20 text-red-400 px-1.5 rounded border border-red-500/20 font-black">缺货风险</span>}
                                         </div>
-                                        <div className="text-xs text-slate-400">{p.name}</div>
+                                        <div className="text-xs text-slate-400 truncate">{p.name}</div>
                                     </div>
-                                    <div className="text-right">
-                                        <div className="text-xs text-slate-300 font-mono">{p.stock} 件</div>
-                                        <div className="text-[10px] text-slate-500">¥{p.price}</div>
+                                    <div className="text-right shrink-0">
+                                        <div className="text-xs text-slate-300 font-mono font-bold">{p.stock || 0} 件</div>
+                                        <div className="text-[10px] text-slate-500 font-bold uppercase">¥{p.price || 0}</div>
                                     </div>
                                     <ArrowRight className="w-4 h-4 text-slate-600 opacity-0 group-hover:opacity-100 transition-all -translate-x-2 group-hover:translate-x-0" />
                                 </div>
@@ -176,9 +167,9 @@ const GlobalSearch: React.FC = () => {
             )}
         </div>
         
-        <div className="px-4 py-2 bg-slate-950/80 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between items-center">
-            <span className="flex items-center gap-1"><Sparkles className="w-3 h-3 text-indigo-500"/> Powered by Gemini 2.5 Flash-Lite</span>
-            <div className="flex gap-4">
+        <div className="px-4 py-2 bg-slate-950/80 border-t border-slate-800 text-[10px] text-slate-500 flex justify-between items-center font-bold">
+            <span className="flex items-center gap-1 uppercase tracking-tighter"><Sparkles className="w-3 h-3 text-indigo-500"/> Powered by Gemini 2.5 Flash-Lite</span>
+            <div className="flex gap-4 uppercase tracking-tighter">
                 <span>Tab 键选择</span>
                 <span>Enter 键确认</span>
             </div>

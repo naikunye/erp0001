@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { Supplier } from '../types';
@@ -9,7 +8,9 @@ const Suppliers: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
 
-  const filteredSuppliers = state.suppliers.filter(s => 
+  const suppliers = state.suppliers || [];
+
+  const filteredSuppliers = suppliers.filter(s => 
       s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
       s.category.toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -41,7 +42,7 @@ const Suppliers: React.FC = () => {
           return;
       }
 
-      if (state.suppliers.find(s => s.id === selectedSupplier.id)) {
+      if (suppliers.find(s => s.id === selectedSupplier.id)) {
           dispatch({ type: 'UPDATE_SUPPLIER', payload: selectedSupplier });
           showToast('供应商信息已更新', 'success');
       } else {
@@ -70,7 +71,7 @@ const Suppliers: React.FC = () => {
                 <Factory className="w-5 h-5 text-indigo-500" />
                 供应商管理 (SRM)
             </h2>
-            <span className="px-2 py-0.5 bg-white/5 text-slate-400 text-xs rounded border border-white/10">{state.suppliers.length}</span>
+            <span className="px-2 py-0.5 bg-white/5 text-slate-400 text-xs rounded border border-white/10">{suppliers.length}</span>
         </div>
         
         <div className="flex gap-3 w-full sm:w-auto">
@@ -151,7 +152,7 @@ const Suppliers: React.FC = () => {
                   <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
                           <Factory className="w-5 h-5 text-indigo-500" />
-                          {selectedSupplier.id.startsWith('SUP-') && state.suppliers.find(s => s.id === selectedSupplier.id) ? '编辑供应商' : '新增供应商'}
+                          {selectedSupplier.id.startsWith('SUP-') && suppliers.find(s => s.id === selectedSupplier.id) ? '编辑供应商' : '新增供应商'}
                       </h3>
                       <button onClick={() => setSelectedSupplier(null)}><X className="w-5 h-5 text-slate-500 hover:text-white" /></button>
                   </div>

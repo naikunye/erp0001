@@ -32,7 +32,9 @@ const InboundShipments: React.FC = () => {
   const filteredProducts = useMemo(() => {
       const q = showCreateModal ? skuSearch : (isEditing ? detailSkuSearch : '');
       if (!q || q.length < 1) return [];
-      return state.products.filter(p => 
+      // 增加安全回退
+      const products = state.products || [];
+      return products.filter(p => 
           p.sku.toLowerCase().includes(q.toLowerCase()) || 
           p.name.toLowerCase().includes(q.toLowerCase())
       ).slice(0, 5);
@@ -56,7 +58,8 @@ const InboundShipments: React.FC = () => {
       await new Promise(resolve => setTimeout(resolve, 800));
 
       try {
-          const existingTracking = state.shipments.find(s => s.notes?.includes(shipment.id));
+          const shipments = state.shipments || [];
+          const existingTracking = shipments.find(s => s.notes?.includes(shipment.id));
           const skuSummary = shipment.items.map(i => i.sku).slice(0, 2).join(', ') + (shipment.items.length > 2 ? '...' : '');
           
           if (existingTracking) {
@@ -138,9 +141,10 @@ const InboundShipments: React.FC = () => {
   const recalculateAndSetEditForm = (items: InboundShipmentItem[]) => {
       let totalWeight = 0;
       let totalVolume = 0;
+      const products = state.products || [];
       items.forEach(it => {
           totalWeight += Number(it.rowTotalWeight || 0);
-          const p = state.products.find(prod => prod.id === it.productId);
+          const p = products.find(prod => prod.id === it.productId);
           if (p) {
               const boxes = Math.ceil(it.quantity / (p.itemsPerBox || 1));
               const vol = ((p.dimensions?.l || 0) * (p.dimensions?.w || 0) * (p.dimensions?.h || 0) / 1000000) * boxes;
@@ -158,11 +162,12 @@ const InboundShipments: React.FC = () => {
   const updateItemProperty = (productId: string, field: string, rawValue: string) => {
       if (!editForm) return;
       const value = rawValue === '' ? 0 : parseFloat(rawValue);
+      const products = state.products || [];
       const updatedItems = editForm.items.map(it => {
           if (it.productId === productId) {
               const updated = { ...it, [field]: value };
               if (field === 'quantity') {
-                  const p = state.products.find(prod => prod.id === productId);
+                  const p = products.find(prod => prod.id === productId);
                   updated.boxes = Math.ceil(value / (p?.itemsPerBox || 1));
               }
               return updated;
@@ -229,6 +234,8 @@ const InboundShipments: React.FC = () => {
       setPlannedItems([]); setNewShipmentName(''); setNewTrackingNo(''); setNewCarrier('');
   };
 
+  const inboundShipments = state.inboundShipments || [];
+
   // --- 5. 渲染 ---
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative bg-black/20 font-sans print:bg-white print:p-0 print:m-0 print:border-none">
@@ -251,7 +258,7 @@ const InboundShipments: React.FC = () => {
         <div className="flex-1 overflow-hidden flex divide-x divide-white/5 print:divide-none">
             {/* Left Column */}
             <div className="w-1/4 overflow-y-auto p-4 space-y-4 bg-black/40 custom-scrollbar print:hidden">
-                {state.inboundShipments.map(shipment => (
+                {inboundShipments.map(shipment => (
                     <div key={shipment.id} className={`p-5 rounded-2xl border transition-all cursor-pointer relative ${selectedShipment?.id === shipment.id ? 'bg-blue-600/10 border-blue-500/50 shadow-inner' : 'bg-white/2 border-white/5 hover:bg-white/5'}`} onClick={() => setSelectedShipment(shipment)}>
                         <div className="flex justify-between items-start mb-3">
                             <div className="flex items-center gap-2">

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -15,8 +16,6 @@ import {
   ArrowRight
 } from 'lucide-react';
 
-// --- Helper Functions ---
-
 const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     if (!trackingNo) return '#';
     const c = carrier.toLowerCase();
@@ -28,7 +27,6 @@ const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
 };
 
-// 状态映射颜色工具
 const getLiveStatusStyle = (status: string) => {
     switch (status) {
         case '已送达': return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/30';
@@ -70,9 +68,8 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     );
 };
 
-// --- History Panel ---
 const HistoryPanel: React.FC<{ sku: string; logs: AuditLog[]; onClose: () => void }> = ({ sku, logs, onClose }) => {
-    const filteredLogs = logs.filter(log => log.action.includes(sku));
+    const filteredLogs = (logs || []).filter(log => log.action.includes(sku));
 
     return (
         <div className="absolute inset-0 z-50 bg-[#0a0a0c] flex flex-col animate-in slide-in-from-right duration-300">
@@ -124,7 +121,6 @@ const HistoryPanel: React.FC<{ sku: string; logs: AuditLog[]; onClose: () => voi
     );
 };
 
-// --- Edit Modal ---
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
     const { state } = useTanxing();
     const [showHistory, setShowHistory] = useState(false);
@@ -273,7 +269,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const adSpendUSD = formData.economics?.adCost || 0;
     const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
     
-    // Fixed typo: changed 'lastLeg' to 'lastLegUSD' to fix the compilation error
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
@@ -282,7 +277,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
             <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217] relative" onClick={e => e.stopPropagation()}>
-               {showHistory && <HistoryPanel sku={formData.sku} logs={state.auditLogs} onClose={() => setShowHistory(false)} />}
+               {showHistory && <HistoryPanel sku={formData.sku} logs={state.auditLogs || []} onClose={() => setShowHistory(false)} />}
                
                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                    <div>
@@ -453,7 +448,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        <BarChart3 className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
                                        <input type="number" value={formData.dailyBurnRate} onChange={e => handleChange('dailyBurnRate', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded pl-9 pr-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
                                    </div>
-                                   <div className="text-[10px] text-emerald-500 text-right mt-1 cursor-pointer hover:underline font-bold">可售天数: {(formData.stock / (formData.dailyBurnRate || 1)).toFixed(0)}天</div>
+                                   <div className="text-[10px] text-emerald-500 text-right mt-1 cursor-pointer hover:underline font-bold">可售天数: {formData.dailyBurnRate > 0 ? (formData.stock / formData.dailyBurnRate).toFixed(0) : '∞'}天</div>
                                </div>
                            </div>
                        </div>
@@ -799,11 +794,11 @@ const Inventory: React.FC = () => {
         const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(now.getDate() - 30);
         const sixtyDaysAgo = new Date(); sixtyDaysAgo.setDate(now.getDate() - 60);
 
-        state.orders.forEach(order => {
+        (state.orders || []).forEach(order => {
             const orderDate = new Date(order.date);
             if (order.status === 'cancelled') return;
 
-            order.lineItems?.forEach(item => {
+            (order.lineItems || []).forEach(item => {
                 if (!stats[item.productId]) stats[item.productId] = { revenue30d: 0, revenuePrev30d: 0 };
                 
                 const amount = item.price * item.quantity;
@@ -818,7 +813,7 @@ const Inventory: React.FC = () => {
     }, [state.orders]);
 
     const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
-        return state.products
+        return (state.products || [])
             .filter(p => !p.deletedAt)
             .map(p => {
             const dailyBurnRate = p.dailyBurnRate || 0;
@@ -878,8 +873,7 @@ const Inventory: React.FC = () => {
             const totalPotentialProfit = unitProfit * stock;
             const totalFreightDisplayCNY = effectiveTotalFreightCNY + (unitConsumablesCNY * stock);
 
-            // --- 核心联动：查找匹配的物流追踪节点 ---
-            const matchingShipment = state.shipments.find(s => 
+            const matchingShipment = (state.shipments || []).find(s => 
                 p.logistics?.trackingNo && s.trackingNo === p.logistics.trackingNo
             );
 
@@ -899,14 +893,13 @@ const Inventory: React.FC = () => {
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0,
                 totalWeight: activeTotalBillingWeight, 
                 boxes: p.boxCount || 0,
-                // 将实时追踪状态注入 ReplenishmentItem
                 liveTrackingStatus: matchingShipment ? matchingShipment.status : null
-            };
+            } as ReplenishmentItem;
         });
     }, [state.products, state.orders, state.shipments, productStats]);
 
     const handleSaveProduct = (updatedProduct: Product) => {
-        const exists = state.products.find(p => p.id === updatedProduct.id);
+        const exists = (state.products || []).find(p => p.id === updatedProduct.id);
         if (exists) {
             dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
         } else {
@@ -1007,9 +1000,9 @@ const Inventory: React.FC = () => {
         document.body.removeChild(textArea);
     };
 
-    const filteredItems = replenishmentItems.filter(i => 
-        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        i.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredItems = (replenishmentItems || []).filter(i => 
+        (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (i.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     return (
@@ -1023,9 +1016,9 @@ const Inventory: React.FC = () => {
                     <div className="text-xs text-slate-500 mt-1 flex gap-2">
                         <span>SKU 总数: <span className="text-white font-mono font-bold">{filteredItems.length}</span></span>
                         <span className="w-px h-3 bg-white/10"></span>
-                        <span>资金占用: <span className="text-emerald-400 font-mono font-bold">¥{filteredItems.reduce((a,b)=>a+b.totalInvestment, 0).toLocaleString()}</span></span>
+                        <span>资金占用: <span className="text-emerald-400 font-mono font-bold">¥{filteredItems.reduce((a,b)=>a+(b.totalInvestment || 0), 0).toLocaleString()}</span></span>
                         <span className="w-px h-3 bg-white/10"></span>
-                        <span>预估总利: <span className="text-blue-400 font-mono font-bold">${filteredItems.reduce((a,b)=>a+b.totalPotentialProfit, 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span></span>
+                        <span>预估总利: <span className="text-blue-400 font-mono font-bold">${filteredItems.reduce((a,b)=>a+(b.totalPotentialProfit || 0), 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}</span></span>
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -1125,12 +1118,11 @@ const Inventory: React.FC = () => {
                                             <span>{item.logistics?.method || 'Air'}</span>
                                         </div>
                                         
-                                        {/* --- 物流提醒联动展示 --- */}
-                                        {(item as any).liveTrackingStatus && (
-                                            <div className={`text-[9px] px-2 py-0.5 rounded border w-fit font-black uppercase flex items-center gap-1 shadow-lg ${getLiveStatusStyle((item as any).liveTrackingStatus)}`}>
-                                                {((item as any).liveTrackingStatus === '异常' || (item as any).liveTrackingStatus === '延迟') && <AlertTriangle className="w-2.5 h-2.5" />}
-                                                {(item as any).liveTrackingStatus === '已送达' && <CheckCircle2 className="w-2.5 h-2.5" />}
-                                                {(item as any).liveTrackingStatus}
+                                        {item.liveTrackingStatus && (
+                                            <div className={`text-[9px] px-2 py-0.5 rounded border w-fit font-black uppercase flex items-center gap-1 shadow-lg ${getLiveStatusStyle(item.liveTrackingStatus)}`}>
+                                                {(item.liveTrackingStatus === '异常' || item.liveTrackingStatus === '延迟') && <AlertTriangle className="w-2.5 h-2.5" />}
+                                                {item.liveTrackingStatus === '已送达' && <CheckCircle2 className="w-2.5 h-2.5" />}
+                                                {item.liveTrackingStatus}
                                             </div>
                                         )}
 
@@ -1150,9 +1142,9 @@ const Inventory: React.FC = () => {
 
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono space-y-1">
-                                        <div className="text-sm font-bold text-emerald-400">¥{item.totalInvestment.toLocaleString()}</div>
-                                        <div className="text-[10px] text-slate-500">货值: ¥{item.goodsCost.toLocaleString()}</div>
-                                        <div className="text-[10px] text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
+                                        <div className="text-sm font-bold text-emerald-400">¥{(item.totalInvestment || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">货值: ¥{(item.goodsCost || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">运费: ¥{(item.freightCost || 0).toLocaleString()}</div>
                                     </div>
                                 </td>
 
@@ -1180,14 +1172,14 @@ const Inventory: React.FC = () => {
                                             <div className="flex justify-between items-center">
                                                 <span className="text-[10px] text-slate-400 flex items-center gap-1"><Wallet className="w-3 h-3 text-indigo-400" /> 单品</span>
                                                 <span className={`text-xs font-bold ${item.profit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    ${item.profit.toFixed(2)}
+                                                    ${(item.profit || 0).toFixed(2)}
                                                 </span>
                                             </div>
                                             <div className="h-px bg-white/5 w-full"></div>
                                             <div className="flex justify-between items-center">
                                                 <span className="text-[10px] text-slate-400">库存总利</span>
                                                 <span className={`text-xs font-bold ${item.totalPotentialProfit > 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                                                    ${item.totalPotentialProfit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
+                                                    ${(item.totalPotentialProfit || 0).toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 0})}
                                                 </span>
                                             </div>
                                         </div>

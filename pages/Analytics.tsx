@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
@@ -28,7 +27,8 @@ const Analytics: React.FC = () => {
 
   // --- 核心修复：全成本分摊矩阵计算 (对齐 Inventory.tsx) ---
   const analysisData = useMemo(() => {
-    const activeProducts = state.products.filter(p => !p.deletedAt);
+    const products = state.products || [];
+    const activeProducts = products.filter(p => !p.deletedAt);
     
     let totalPotentialProfitUSD = 0;
     let totalStockValueCNY = 0;
@@ -117,7 +117,6 @@ const Analytics: React.FC = () => {
       } catch (e) {
           setAiInsight("AI 诊断服务暂不可用。");
       } finally {
-          // Fixed typo: setIsThinking to setIsAiThinking
           setIsAiThinking(false);
       }
   };

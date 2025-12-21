@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { Influencer } from '../types';
@@ -13,16 +12,16 @@ import {
   ResponsiveContainer, BarChart as ReBarChart, Bar, Cell
 } from 'recharts';
 
-// --- ROI 模拟器 ---
 const ROISimulator = () => {
     const { state } = useTanxing();
+    const products = state.products || [];
     const [budget, setBudget] = useState(1000);
     const [expectedCPA, setExpectedCPA] = useState(10);
-    const [selectedSku, setSelectedSku] = useState(state.products[0]?.sku || '');
+    const [selectedSku, setSelectedSku] = useState(products[0]?.sku || '');
 
     const product = useMemo(() => 
-        state.products.find(p => p.sku === selectedSku) || state.products[0], 
-    [selectedSku, state.products]);
+        products.find(p => p.sku === selectedSku) || products[0], 
+    [selectedSku, products]);
 
     const exchangeRate = 7.2;
     const estOrders = Math.floor(budget / expectedCPA);
@@ -63,7 +62,7 @@ const ROISimulator = () => {
                                 onChange={e => setSelectedSku(e.target.value)} 
                                 className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white outline-none focus:border-indigo-500"
                             >
-                                {state.products.map(p => <option key={p.id} value={p.sku}>{p.sku} - {p.name}</option>)}
+                                {products.map(p => <option key={p.id} value={p.sku}>{p.sku} - {p.name}</option>)}
                             </select>
                         </div>
                         <div>
@@ -134,18 +133,18 @@ const ROISimulator = () => {
     );
 };
 
-// --- 红人管理 ---
 const InfluencerCRM = () => {
     const { state, dispatch, showToast } = useTanxing();
+    const influencers = state.influencers || [];
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [newInf, setNewInf] = useState<Partial<Influencer>>({
         name: '', handle: '', platform: 'TikTok', followers: 0, country: 'US', status: 'To Contact'
     });
 
-    const filteredInfluencers = state.influencers.filter(i => 
-        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        i.handle.toLowerCase().includes(searchTerm.toLowerCase())
+    const filteredInfluencers = influencers.filter(i => 
+        (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (i.handle || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleSaveInfluencer = () => {
@@ -154,7 +153,7 @@ const InfluencerCRM = () => {
             id: `INF-${Date.now()}`,
             name: newInf.name!,
             handle: newInf.handle!,
-            platform: newInf.platform as any,
+            platform: (newInf.platform as any) || 'TikTok',
             followers: newInf.followers || 0,
             country: newInf.country || 'US',
             status: 'To Contact',
@@ -170,7 +169,7 @@ const InfluencerCRM = () => {
             <div className="flex justify-between items-center bg-black/20 p-4 rounded-xl border border-white/10 backdrop-blur-md">
                 <div className="relative">
                     <Search className="w-4 h-4 text-slate-500 absolute left-3 top-2.5" />
-                    <input type="text" placeholder="检索红人账号..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-xs text-white focus:border-indigo-500 w-80 outline-none"/>
+                    <input type="text" placeholder="检索红人账号..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="pl-10 pr-4 py-2 bg-black/40 border border-white/10 rounded-lg text-xs text-white focus:border-indigo-500 w-80 outline-none uppercase font-bold tracking-tighter"/>
                 </div>
                 <button onClick={() => setShowAddModal(true)} className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-bold flex items-center gap-2 shadow-lg active:scale-95 transition-all">
                     <Plus className="w-4 h-4" /> 记录新合作
@@ -183,7 +182,7 @@ const InfluencerCRM = () => {
                         <div key={stage} className="flex-1 bg-white/2 border border-white/5 rounded-2xl flex flex-col min-w-[300px]">
                             <div className="p-4 border-b border-white/5 bg-white/5 flex justify-between items-center">
                                 <span className="text-xs font-black text-slate-500 uppercase tracking-widest">{stage}</span>
-                                <span className="bg-black/40 px-2 py-0.5 rounded text-[10px] font-bold text-slate-400">
+                                <span className="bg-black/40 px-2 py-0.5 rounded text-[10px] font-bold text-slate-400 font-mono">
                                     {filteredInfluencers.filter(i => i.status === stage).length}
                                 </span>
                             </div>
@@ -206,7 +205,7 @@ const InfluencerCRM = () => {
             {showAddModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm" onClick={() => setShowAddModal(false)}>
                     <div className="ios-glass-panel w-full max-w-md rounded-3xl p-6 shadow-2xl animate-in zoom-in-95" onClick={e => e.stopPropagation()}>
-                        <h3 className="text-lg font-bold text-white mb-6">记录新红人合作</h3>
+                        <h3 className="text-lg font-bold text-white mb-6 uppercase italic tracking-tight">记录新红人合作</h3>
                         <div className="space-y-4">
                             <div><label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">红人昵称</label><input onChange={e => setNewInf({...newInf, name: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white focus:border-indigo-500 outline-none" /></div>
                             <div><label className="text-[10px] text-slate-500 font-bold uppercase mb-1 block">账号 Handle (@)</label><input onChange={e => setNewInf({...newInf, handle: e.target.value})} className="w-full bg-black/40 border border-white/10 rounded-xl p-3 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="@username" /></div>
@@ -223,7 +222,6 @@ const InfluencerCRM = () => {
     );
 };
 
-// --- 主页面入口 ---
 const Marketing: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'strategy' | 'influencer'>('strategy');
 
@@ -249,7 +247,6 @@ const Marketing: React.FC = () => {
         </div>
 
         <div className="flex-1 bg-white/5 border border-white/10 rounded-3xl p-6 relative overflow-hidden">
-            {/* Background Decorative Element */}
             <div className="absolute top-0 right-0 w-64 h-64 bg-indigo-500/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
             
             <div className="relative z-10 h-full">
@@ -258,7 +255,6 @@ const Marketing: React.FC = () => {
             </div>
         </div>
         
-        {/* Footer Hint */}
         <div className="flex items-center gap-2 px-4 py-2 bg-indigo-900/10 border border-indigo-500/20 rounded-xl w-fit">
             <Info className="w-3.5 h-3.5 text-indigo-400" />
             <p className="text-[10px] text-indigo-300/80 font-bold uppercase tracking-widest">

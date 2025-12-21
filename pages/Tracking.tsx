@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { Shipment } from '../types';
@@ -15,7 +16,6 @@ const Tracking: React.FC = () => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
 
-  // Edit Modal State
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Shipment>>({});
 
@@ -48,13 +48,13 @@ const Tracking: React.FC = () => {
       return '15%';
   };
 
-  const filteredShipments = state.shipments.filter(s => 
-    s.trackingNo.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.productName?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredShipments = (state.shipments || []).filter(s => 
+    (s.trackingNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.productName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getTrackingUrl = (carrier: string, trackingNo: string) => {
-      const c = carrier.toLowerCase();
+      const c = (carrier || '').toLowerCase();
       if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
       if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
       if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
@@ -144,7 +144,6 @@ const Tracking: React.FC = () => {
 
   return (
     <div className="ios-glass-panel rounded-3xl border border-white/10 shadow-2xl flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden">
-      {/* Header */}
       <div className="p-5 border-b border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/5 backdrop-blur-xl relative z-20">
         <div className="flex items-center gap-4">
             <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-lg shadow-indigo-900/40">
@@ -155,8 +154,8 @@ const Tracking: React.FC = () => {
                     全球重要物流情报 (Logistics Matrix)
                 </h2>
                 <div className="flex gap-4 text-[10px] font-bold text-slate-500 uppercase tracking-widest mt-1">
-                    <span className="flex items-center gap-1"><Layers className="w-3 h-3 text-indigo-400"/> 运行中: {state.shipments.filter(s=>s.status!=='已送达').length}</span>
-                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-400"/> 已完成: {state.shipments.filter(s=>s.status==='已送达').length}</span>
+                    <span className="flex items-center gap-1"><Layers className="w-3 h-3 text-indigo-400"/> 运行中: {(state.shipments || []).filter(s=>s.status!=='已送达').length}</span>
+                    <span className="flex items-center gap-1"><CheckCircle2 className="w-3 h-3 text-emerald-400"/> 已完成: {(state.shipments || []).filter(s=>s.status==='已送达').length}</span>
                 </div>
             </div>
         </div>
@@ -183,7 +182,6 @@ const Tracking: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-hidden flex relative z-10">
-          {/* List Side */}
           <div className={`${selectedShipment ? 'hidden lg:block w-[420px]' : 'w-full'} border-r border-white/10 overflow-y-auto p-4 space-y-4 bg-black/20 custom-scrollbar`}>
               {filteredShipments.map(shipment => {
                   const statusKey = translateStatus(shipment.status);
@@ -292,7 +290,6 @@ const Tracking: React.FC = () => {
               })}
           </div>
 
-          {/* Details Side */}
           {selectedShipment ? (
               <div className="flex-1 overflow-y-auto bg-black/40 flex flex-col animate-in fade-in">
                   <div className="p-8 border-b border-white/10 bg-white/2 flex justify-between items-start shrink-0 backdrop-blur-md">
@@ -363,7 +360,7 @@ const Tracking: React.FC = () => {
                           </h3>
                           <div className="space-y-8 relative pl-4">
                               <div className="absolute left-[23px] top-4 bottom-4 w-[2px] bg-gradient-to-b from-indigo-500/50 via-white/5 to-transparent"></div>
-                              {selectedShipment.events.length > 0 ? selectedShipment.events.map((event, idx) => (
+                              {(selectedShipment.events || []).length > 0 ? selectedShipment.events.map((event, idx) => (
                                   <div key={idx} className="relative flex items-start gap-6 animate-in slide-in-from-left duration-500" style={{animationDelay: `${idx*100}ms`}}>
                                       <div className={`w-10 h-10 rounded-2xl border-2 flex items-center justify-center shrink-0 z-10 transition-all ${idx === 0 ? 'bg-indigo-600 border-indigo-400 text-white shadow-[0_0_20px_rgba(79,70,229,0.4)]' : 'bg-slate-900 border-slate-800 text-slate-700'}`}>
                                           {idx === 0 ? <Navigation className="w-5 h-5 fill-current" /> : <div className="w-2 h-2 rounded-full bg-current"></div>}
@@ -398,7 +395,6 @@ const Tracking: React.FC = () => {
           )}
       </div>
 
-      {/* Edit Modal */}
       {showEditModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/60" onClick={() => setShowEditModal(false)}>
               <div className="ios-glass-panel w-full max-w-xl rounded-3xl shadow-2xl p-8 animate-in zoom-in-95 duration-200 border border-white/20" onClick={e => e.stopPropagation()}>

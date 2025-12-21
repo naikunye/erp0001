@@ -15,9 +15,9 @@ const OperationsTasks: React.FC = () => {
   const [editingTask, setEditingTask] = useState<Task | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const filteredTasks = state.tasks.filter(t => 
-    t.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    t.assignee.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredTasks = (state.tasks || []).filter(t => 
+    (t.title || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+    (t.assignee || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const getPriorityColor = (p: string) => {
@@ -33,7 +33,7 @@ const OperationsTasks: React.FC = () => {
       switch(status) {
           case 'todo': return { width: '15%', color: 'bg-slate-500', shadow: '' };
           case 'in_progress': return { width: '45%', color: 'bg-blue-500', shadow: 'shadow-[0_0_10px_#3b82f6]' };
-          case 'review': return { width: '85%', color: 'bg-amber-500', shadow: 'shadow-[0_0_10px_#f59e0b]' };
+          case 'review': return { width: '85%', color: 'bg-orange-500', shadow: 'shadow-[0_0_10px_#f59e0b]' };
           case 'done': return { width: '100%', color: 'bg-emerald-500', shadow: 'shadow-[0_0_10px_#10b981]' };
           default: return { width: '0%', color: 'bg-slate-700', shadow: '' };
       }
@@ -42,7 +42,7 @@ const OperationsTasks: React.FC = () => {
   const isBlocked = (task: Task) => {
     if (!task.dependsOn || task.dependsOn.length === 0) return false;
     return task.dependsOn.some(depId => {
-      const depTask = state.tasks.find(t => t.id === depId);
+      const depTask = (state.tasks || []).find(t => t.id === depId);
       return depTask && depTask.status !== 'done';
     });
   };
@@ -50,7 +50,7 @@ const OperationsTasks: React.FC = () => {
   const getBlockedByNames = (task: Task) => {
     if (!task.dependsOn) return [];
     return task.dependsOn
-      .map(depId => state.tasks.find(t => t.id === depId)?.title)
+      .map(depId => (state.tasks || []).find(t => t.id === depId)?.title)
       .filter(Boolean);
   };
 
@@ -88,7 +88,7 @@ const OperationsTasks: React.FC = () => {
 
   const handleSave = () => {
     if (!editingTask || !editingTask.title) return;
-    const exists = state.tasks.find(t => t.id === editingTask.id);
+    const exists = (state.tasks || []).find(t => t.id === editingTask.id);
     if (exists) {
         dispatch({ type: 'UPDATE_TASK', payload: editingTask });
         showToast('任务更新成功', 'success');
@@ -176,7 +176,6 @@ const OperationsTasks: React.FC = () => {
                     </div>
                 )}
 
-                {/* Quantum Progress Bar */}
                 <div className="mb-4">
                     <div className="flex justify-between items-center mb-1">
                         <span className="text-[8px] font-bold text-slate-600 uppercase tracking-tighter">Completion Profile</span>
@@ -193,7 +192,7 @@ const OperationsTasks: React.FC = () => {
                 <div className="flex items-center justify-between pt-3 border-t border-white/5">
                     <div className="flex items-center gap-2">
                         <div className="w-6 h-6 rounded-full bg-indigo-600 flex items-center justify-center text-[10px] font-bold text-white border border-white/10">
-                        {task.assignee.charAt(0)}
+                        {task.assignee?.charAt(0)}
                         </div>
                         <span className="text-[10px] text-slate-400">{task.assignee}</span>
                     </div>
@@ -259,7 +258,6 @@ const OperationsTasks: React.FC = () => {
         </div>
       </div>
 
-      {/* Task Edit Modal */}
       {isModalOpen && editingTask && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/60 animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
               <div className="ios-glass-panel w-full max-w-2xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
@@ -339,16 +337,15 @@ const OperationsTasks: React.FC = () => {
                           </div>
                       </div>
 
-                      {/* Dependency Management Section */}
                       <div className="pt-4 border-t border-white/5">
                           <label className="text-[10px] text-slate-500 font-bold uppercase mb-3 flex items-center gap-2">
                              <Link2 className="w-3 h-3 text-indigo-400" /> 设置前置依赖 (Dependencies)
                           </label>
                           <div className="bg-black/40 border border-white/10 rounded-2xl p-4 max-h-48 overflow-y-auto space-y-2 custom-scrollbar">
-                              {state.tasks.filter(t => t.id !== editingTask.id).length === 0 && (
+                              {(state.tasks || []).filter(t => t.id !== editingTask.id).length === 0 && (
                                   <p className="text-[10px] text-slate-600 text-center py-4 italic uppercase">没有可作为依赖的其他任务</p>
                               )}
-                              {state.tasks.filter(t => t.id !== editingTask.id).map(t => (
+                              {(state.tasks || []).filter(t => t.id !== editingTask.id).map(t => (
                                   <div 
                                     key={t.id}
                                     onClick={() => toggleDependency(t.id)}

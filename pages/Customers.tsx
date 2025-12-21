@@ -7,27 +7,24 @@ import { GoogleGenAI } from "@google/genai";
 
 const Customers: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
-  const customers = state.customers; // Use global state
-  const orders = state.orders;
+  const customers = state.customers || []; 
+  const orders = state.orders || [];
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [activeTab, setActiveTab] = useState<'profile' | 'orders' | 'ai'>('profile');
   
-  // Filter State
   const [showFilter, setShowFilter] = useState(false);
   const [filterSource, setFilterSource] = useState<string>('All');
 
-  // AI State
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Derived Data
   const filteredCustomers = useMemo(() => {
-      return customers.filter(c => {
-        const matchesSearch = c.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                              c.company.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                              c.email.toLowerCase().includes(searchTerm.toLowerCase());
+      return (customers || []).filter(c => {
+        const matchesSearch = (c.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                              (c.company || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+                              (c.email || '').toLowerCase().includes(searchTerm.toLowerCase());
         const matchesFilter = filterSource === 'All' || c.source === filterSource;
         return matchesSearch && matchesFilter;
       });
@@ -35,14 +32,12 @@ const Customers: React.FC = () => {
 
   const customerOrders = useMemo(() => {
       if (!selectedCustomer) return [];
-      // Simple fuzzy match for demo, real world use IDs
-      return orders.filter(o => 
-          o.customerName.toLowerCase().includes(selectedCustomer.name.toLowerCase()) || 
-          (selectedCustomer.company && o.customerName.toLowerCase().includes(selectedCustomer.company.toLowerCase()))
+      return (orders || []).filter(o => 
+          (o.customerName || '').toLowerCase().includes((selectedCustomer.name || '').toLowerCase()) || 
+          (selectedCustomer.company && (o.customerName || '').toLowerCase().includes(selectedCustomer.company.toLowerCase()))
       ).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   }, [selectedCustomer, orders]);
 
-  // Handlers
   const handleAddCustomer = () => {
       const newCustomer: Customer = {
           id: `C-${Date.now()}`,
@@ -114,16 +109,13 @@ const Customers: React.FC = () => {
       setSelectedCustomer({ ...selectedCustomer, [field]: value });
   };
 
-  // AI Analysis Logic
   const handleAiAnalyze = async () => {
       if (!selectedCustomer) return;
       setIsAnalyzing(true);
       setAiAnalysis(null);
 
       try {
-          if (!process.env.API_KEY) throw new Error("API Key missing");
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          
           const orderHistorySummary = customerOrders.slice(0, 5).map(o => 
               `Order ${o.id}: $${o.total} (${o.date}) - Items: ${o.itemsCount}`
           ).join('\n');
@@ -161,8 +153,6 @@ const Customers: React.FC = () => {
 
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative">
-      
-      {/* Header */}
       <div className="p-4 border-b border-white/10 flex flex-col sm:flex-row justify-between items-center gap-4 bg-white/5">
         <div className="flex items-center gap-2">
             <h2 className="text-white font-bold text-lg flex items-center gap-2">
@@ -192,7 +182,6 @@ const Customers: React.FC = () => {
                     <Filter className="w-3.5 h-3.5" />
                     {filterSource !== 'All' && <span>{filterSource}</span>}
                 </button>
-                {/* Filter Dropdown */}
                 {showFilter && (
                     <div className="absolute top-full right-0 mt-2 w-40 ios-glass-panel rounded-lg shadow-xl z-20 animate-in fade-in zoom-in-95 overflow-hidden">
                         <div className="text-[10px] uppercase font-bold text-slate-500 px-3 py-2 bg-white/5 border-b border-white/10">来源筛选</div>
@@ -220,7 +209,6 @@ const Customers: React.FC = () => {
         </div>
       </div>
 
-      {/* Customer List */}
       <div className="flex-1 overflow-auto divide-y divide-white/5">
           <table className="w-full text-left">
             <thead className="bg-white/5 sticky top-0 backdrop-blur-sm z-10">
@@ -239,7 +227,7 @@ const Customers: React.FC = () => {
                         <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm ${customer.avatarColor || 'bg-slate-700'}`}>
-                                    {customer.name.charAt(0).toUpperCase()}
+                                    {customer.name?.charAt(0).toUpperCase()}
                                 </div>
                                 <div>
                                     <div className="text-sm font-bold text-white">{customer.name}</div>
@@ -277,7 +265,7 @@ const Customers: React.FC = () => {
                         </td>
                         <td className="px-6 py-4">
                             <div className="text-sm font-bold text-white font-mono">
-                                ${customer.totalSpend.toLocaleString()}
+                                ${customer.totalSpend?.toLocaleString()}
                             </div>
                             <div className="text-[10px] text-slate-500 mt-0.5">
                                 {customer.ordersCount} 笔订单
@@ -316,17 +304,16 @@ const Customers: React.FC = () => {
           )}
       </div>
 
-      {/* Detail Modal */}
       {selectedCustomer && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-sm bg-black/60" onClick={closeModal}>
               <div className="ios-glass-panel w-full max-w-3xl rounded-2xl border border-white/10 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]" onClick={e => e.stopPropagation()}>
                   <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-white/5">
                       <h3 className="text-lg font-bold text-white flex items-center gap-2">
                           <Users className="w-5 h-5 text-indigo-500" />
-                          {selectedCustomer.id.startsWith('C-') ? '客户档案' : '新建客户'}
+                          {selectedCustomer.id?.startsWith('C-') && customers.some(c => c.id === selectedCustomer.id) ? '客户档案' : '新建客户'}
                       </h3>
                       <div className="flex items-center gap-2">
-                          {selectedCustomer.id.startsWith('C-') && (
+                          {selectedCustomer.id && customers.some(c => c.id === selectedCustomer.id) && (
                               <div className="flex bg-black/40 p-1 rounded-lg border border-white/10 mr-4">
                                   <button onClick={() => setActiveTab('profile')} className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${activeTab === 'profile' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>档案 (Profile)</button>
                                   <button onClick={() => setActiveTab('orders')} className={`px-3 py-1.5 rounded text-xs font-bold transition-all ${activeTab === 'orders' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}>订单 ({customerOrders.length})</button>
@@ -338,7 +325,6 @@ const Customers: React.FC = () => {
                   </div>
 
                   <div className="flex-1 overflow-y-auto p-6 bg-black/20">
-                      {/* --- TAB: PROFILE --- */}
                       {activeTab === 'profile' && (
                           <div className="space-y-6">
                               <div className="grid grid-cols-2 gap-6">
@@ -398,7 +384,6 @@ const Customers: React.FC = () => {
                           </div>
                       )}
 
-                      {/* --- TAB: ORDERS --- */}
                       {activeTab === 'orders' && (
                           <div className="space-y-4">
                               {customerOrders.length > 0 ? (
@@ -412,7 +397,7 @@ const Customers: React.FC = () => {
                                               </div>
                                           </div>
                                           <div className="text-right">
-                                              <div className="text-sm font-bold text-white font-mono">¥{order.total.toLocaleString()}</div>
+                                              <div className="text-sm font-bold text-white font-mono">¥{order.total?.toLocaleString()}</div>
                                               <span className={`text-[10px] px-2 py-0.5 rounded border ${order.status === 'delivered' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-700 text-slate-300 border-slate-600'}`}>
                                                   {order.status}
                                               </span>
@@ -428,7 +413,6 @@ const Customers: React.FC = () => {
                           </div>
                       )}
 
-                      {/* --- TAB: AI INSIGHT --- */}
                       {activeTab === 'ai' && (
                           <div className="space-y-6 animate-in fade-in">
                               <div className="bg-gradient-to-br from-indigo-900/40 to-purple-900/40 border border-indigo-500/30 rounded-xl p-5 relative overflow-hidden">

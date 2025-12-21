@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { 
   Bot, Brain, Zap, Globe, MapPin, Image as ImageIcon, Video, Mic, 
@@ -9,7 +8,6 @@ import {
 import { GoogleGenAI, LiveServerMessage, Modality } from "@google/genai";
 import { useTanxing } from '../context/TanxingContext';
 
-// --- Constants & Types ---
 const TABS = [
   { id: 'chat', label: '全能对话', sub: 'Omni-Chat', icon: Bot },
   { id: 'copy', label: '文案工坊', sub: 'Content Lab', icon: FileText },
@@ -17,7 +15,6 @@ const TABS = [
   { id: 'voice', label: '语音交互', sub: 'Voice', icon: Mic },
 ];
 
-// --- Audio Helper Functions (PCM Decoding/Encoding) ---
 function base64ToUint8Array(base64: string) {
   const binaryString = atob(base64);
   const len = binaryString.length;
@@ -31,6 +28,7 @@ function base64ToUint8Array(base64: string) {
 function arrayBufferToBase64(buffer: ArrayBuffer) {
   let binary = '';
   const bytes = new Uint8Array(buffer);
+  // Fix: Added missing 'len' definition
   const len = bytes.byteLength;
   for (let i = 0; i < len; i++) {
     binary += String.fromCharCode(bytes[i]);
@@ -75,8 +73,6 @@ const fileToGenerativePart = async (file: File): Promise<{ inlineData: { data: s
   });
 };
 
-// --- Components ---
-
 const OmniChat = () => {
     const [mode, setMode] = useState<'thinking' | 'search' | 'maps' | 'lite' | 'standard'>('standard');
     const [input, setInput] = useState('');
@@ -97,7 +93,7 @@ const OmniChat = () => {
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            let model = 'gemini-3-pro-preview';
+            let model = 'gemini-3-flash-preview';
             let config: any = {};
             let tools: any[] = [];
 
@@ -107,18 +103,19 @@ const OmniChat = () => {
                     config = { thinkingConfig: { thinkingBudget: 32768 } };
                     break;
                 case 'search':
-                    model = 'gemini-2.5-flash';
+                    model = 'gemini-3-flash-preview';
                     tools = [{ googleSearch: {} }];
                     break;
                 case 'maps':
+                    // Maps grounding is only supported in 2.5 series models
                     model = 'gemini-2.5-flash';
                     tools = [{ googleMaps: {} }];
                     break;
                 case 'lite':
-                    model = 'gemini-2.5-flash-lite';
+                    model = 'gemini-flash-lite-latest';
                     break;
                 default: 
-                    model = 'gemini-2.5-flash';
+                    model = 'gemini-3-flash-preview';
             }
 
             const response = await ai.models.generateContent({
@@ -156,7 +153,7 @@ const OmniChat = () => {
                 {messages.length === 0 && (
                     <div className="h-full flex flex-col items-center justify-center text-slate-500 opacity-50">
                         <Bot className="w-16 h-16 mb-4" />
-                        <p className="text-xs uppercase tracking-widest font-mono">Gemini 3 Pro Omni Engine Online</p>
+                        <p className="text-xs uppercase tracking-widest font-mono italic">Gemini Omni Engine Online</p>
                     </div>
                 )}
                 {messages.map((msg, idx) => (
@@ -164,6 +161,25 @@ const OmniChat = () => {
                         <div className={`max-w-[80%] p-3 rounded-xl text-sm leading-relaxed whitespace-pre-wrap ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-slate-800 text-slate-200 border border-slate-700 shadow-xl'}`}>
                             {msg.isThinking && <div className="text-[10px] text-purple-400 font-mono mb-1 flex items-center gap-1 border-b border-purple-500/20 pb-1">AI 深度思考已完成 (Thinking Complete)</div>}
                             {msg.text}
+                            {/* Grounding Source Display */}
+                            {msg.grounding?.groundingChunks && msg.grounding.groundingChunks.some((c: any) => c.web || c.maps) && (
+                                <div className="mt-3 pt-2 border-t border-white/10 space-y-1.5">
+                                    <div className="text-[10px] font-black text-slate-500 uppercase tracking-widest flex items-center gap-1">
+                                        <Globe className="w-2.5 h-2.5" /> Sources & References:
+                                    </div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {msg.grounding.groundingChunks.map((chunk: any, i: number) => {
+                                            const source = chunk.web || chunk.maps;
+                                            if (!source) return null;
+                                            return (
+                                                <a key={i} href={source.uri} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 px-2 py-0.5 bg-black/40 rounded border border-white/5 text-[9px] text-indigo-400 hover:text-white hover:border-indigo-500/50 transition-all max-w-[200px]">
+                                                    <span className="truncate">{source.title || source.uri}</span>
+                                                </a>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
                 ))}
@@ -182,12 +198,13 @@ const OmniChat = () => {
 
 const CopywritingLab = () => {
     const { state, showToast } = useTanxing();
-    const [selectedSku, setSelectedSku] = useState(state.products[0]?.sku || '');
+    const products = state.products || [];
+    const [selectedSku, setSelectedSku] = useState(products[0]?.sku || '');
     const [contentType, setContentType] = useState<'script' | 'description' | 'outreach' | 'report'>('script');
     const [result, setResult] = useState('');
     const [isGenerating, setIsGenerating] = useState(false);
 
-    const product = state.products.find(p => p.sku === selectedSku) || state.products[0];
+    const product = products.find(p => p.sku === selectedSku) || products[0];
 
     const handleGenerate = async () => {
         if (!product) return;
@@ -220,7 +237,7 @@ const CopywritingLab = () => {
                         <div>
                             <label className="text-[10px] text-slate-500 font-bold mb-1.5 block">选择业务 SKU</label>
                             <select value={selectedSku} onChange={e => setSelectedSku(e.target.value)} className="w-full bg-black/40 border border-white/10 rounded-xl p-2.5 text-sm text-white focus:border-purple-500 outline-none">
-                                {state.products.map(p => <option key={p.id} value={p.sku}>{p.sku} - {p.name}</option>)}
+                                {products.map(p => <option key={p.id} value={p.sku}>{p.sku} - {p.name}</option>)}
                             </select>
                         </div>
                         <div className="grid grid-cols-1 gap-2">
@@ -280,6 +297,16 @@ const CreativeStudio = () => {
 
     const handleGenerate = async () => {
         if (!prompt && tool !== 'image-edit') return;
+
+        // Mandatory check for API key selection for Veo/Pro models
+        const isHighQualityRequested = tool === 'video-gen' || (tool === 'image-gen' && (imageSize === '2K' || imageSize === '4K'));
+        if (isHighQualityRequested) {
+            if (!(await (window as any).aistudio.hasSelectedApiKey())) {
+                await (window as any).aistudio.openSelectKey();
+                // Assume success as per guidelines
+            }
+        }
+
         setLoading(true);
         setResultUrl(null);
         setStatusMsg('正在初始化创意引擎...');
@@ -287,8 +314,9 @@ const CreativeStudio = () => {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             if (tool === 'image-gen') {
                 setStatusMsg('正在生成图像...');
+                const model = (imageSize === '2K' || imageSize === '4K') ? 'gemini-3-pro-image-preview' : 'gemini-2.5-flash-image';
                 const response = await ai.models.generateContent({
-                    model: 'gemini-3-pro-image-preview',
+                    model,
                     contents: { parts: [{ text: prompt }] },
                     config: { imageConfig: { aspectRatio: aspectRatio as any, imageSize: imageSize as any } }
                 });
@@ -338,7 +366,7 @@ const CreativeStudio = () => {
                     )}
                     <div className="grid grid-cols-2 gap-4">
                         <div><label className="text-xs font-bold text-slate-400 mb-1 block">纵横比</label><select value={aspectRatio} onChange={e => setAspectRatio(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded p-2 text-xs text-white"><option value="1:1">1:1</option><option value="16:9">16:9</option><option value="9:16">9:16</option></select></div>
-                        {tool === 'image-gen' && <div><label className="text-xs font-bold text-slate-400 mb-1 block">画质</label><select value={imageSize} onChange={e => setImageSize(e.target.value)} className="w-full bg-black/60 border border-white/10 rounded p-2 text-xs text-white"><option value="1K">1K</option><option value="2K">2K</option><option value="4K">4K</option></select></div>}
+                        {tool === 'image-gen' && <div><label className="text-xs font-bold text-slate-400 mb-1 block">画质</label><select value={imageSize} onChange={setImageSize as any} className="w-full bg-black/60 border border-white/10 rounded p-2 text-xs text-white"><option value="1K">1K (Standard)</option><option value="2K">2K (High-Quality)</option><option value="4K">4K (Premium)</option></select></div>}
                     </div>
                 </div>
                 <button onClick={handleGenerate} disabled={loading || (!prompt && tool !== 'image-edit')} className="mt-auto w-full py-3 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold rounded-xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-2">
@@ -363,7 +391,7 @@ const VoiceLab = () => {
     const audioStream = useRef<MediaStream | null>(null);
     const sessionRef = useRef<any>(null);
     const nextStartTime = useRef<number>(0);
-    const scheduledSources = useRef<AudioBufferSourceNode[]>([]);
+    
     useEffect(() => { return () => { if (sessionRef.current) sessionRef.current.close(); if (audioStream.current) audioStream.current.getTracks().forEach(track => track.stop()); }; }, []);
 
     const handleLiveConnect = async () => {
@@ -384,6 +412,7 @@ const VoiceLab = () => {
                         const processor = inputAudioContext.current!.createScriptProcessor(4096, 1, 1);
                         processor.onaudioprocess = (e) => {
                             const pcmData16 = floatTo16BitPCM(e.inputBuffer.getChannelData(0));
+                            // Solely rely on sessionPromise resolution
                             sessionPromise.then(s => s.sendRealtimeInput({ media: { mimeType: 'audio/pcm;rate=16000', data: arrayBufferToBase64(pcmData16) } }));
                         };
                         source.connect(processor);
@@ -394,11 +423,18 @@ const VoiceLab = () => {
                         if (audioData) {
                             const buffer = await decodeAudioData(audioData, outputAudioContext.current!);
                             const source = outputAudioContext.current!.createBufferSource();
-                            source.buffer = buffer; source.connect(outputAudioContext.current!.destination);
+                            source.buffer = buffer; 
+                            source.connect(outputAudioContext.current!.destination);
                             const startTime = Math.max(outputAudioContext.current!.currentTime, nextStartTime.current);
                             source.start(startTime);
                             nextStartTime.current = startTime + buffer.duration;
                         }
+                    },
+                    // Added missing onerror callback
+                    onerror: (e: any) => {
+                        console.error('Live session error:', e);
+                        setConnected(false);
+                        setLogs(prev => [...prev, `会话异常: ${e.message || '未知错误'}`]);
                     },
                     onclose: () => setConnected(false)
                 }
@@ -412,7 +448,7 @@ const VoiceLab = () => {
             <div className="ios-glass-card p-6 flex flex-col bg-black/20">
                 <h3 className="text-lg font-bold text-white mb-6 flex items-center gap-2"><Mic className="w-5 h-5 text-red-500" /> 实时对话 (Live)</h3>
                 <div className="flex-1 bg-black/40 rounded-xl p-4 font-mono text-[10px] text-slate-500 border border-white/5 overflow-y-auto mb-6">
-                    {connected ? '> 神经连接已激活，Gemini 正在听您说话...' : '> 等待启动...'}
+                    {connected ? '> 神经连接已激活，Gemini 正在听您说话...' : logs.length > 0 ? logs.map((l, i) => <div key={i}>{`> ${l}`}</div>) : '> 等待启动...'}
                 </div>
                 <button onClick={handleLiveConnect} className={`w-full py-4 rounded-xl font-bold flex items-center justify-center gap-2 transition-all ${connected ? 'bg-red-500/20 text-red-400 border border-red-500/50' : 'bg-red-600 hover:bg-red-500 text-white shadow-xl'}`}>
                     {connected ? <StopCircle className="w-5 h-5" /> : <Play className="w-5 h-5" />} {connected ? '断开实时会话' : '启动实时对话'}
@@ -442,7 +478,6 @@ const VoiceLab = () => {
     );
 };
 
-// --- Main Page Layout ---
 const Intelligence: React.FC = () => {
   const [activeTab, setActiveTab] = useState('chat');
   return (

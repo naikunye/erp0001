@@ -25,19 +25,21 @@ const Orders: React.FC = () => {
       date: new Date().toISOString().split('T')[0]
   });
 
+  const orders = state.orders || [];
+
   const filteredOrders = useMemo(() => {
-      return state.orders.filter(order => {
+      return orders.filter(order => {
           if (order.deletedAt) return false;
-          const matchesSearch = order.id.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                                order.customerName.toLowerCase().includes(searchTerm.toLowerCase());
+          const matchesSearch = (order.id || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+                                (order.customerName || '').toLowerCase().includes(searchTerm.toLowerCase());
           const matchesStatus = statusFilter === 'All' || order.status === statusFilter;
           return matchesSearch && matchesStatus;
       });
-  }, [state.orders, searchTerm, statusFilter]);
+  }, [orders, searchTerm, statusFilter]);
 
   const stats = useMemo(() => {
       const total = filteredOrders.length;
-      const revenue = filteredOrders.reduce((acc, o) => acc + o.total, 0);
+      const revenue = filteredOrders.reduce((acc, o) => acc + (o.total || 0), 0);
       const pending = filteredOrders.filter(o => o.status === 'pending').length;
       return { total, revenue, pending };
   }, [filteredOrders]);
@@ -108,7 +110,7 @@ const Orders: React.FC = () => {
                               >
                                   <div className="flex justify-between items-start mb-4">
                                       <span className="font-mono text-[9px] font-bold text-slate-600">ID://{order.id.slice(-8)}</span>
-                                      <span className="font-mono text-sm font-bold text-white tracking-tighter">¥{order.total.toLocaleString()}</span>
+                                      <span className="font-mono text-sm font-bold text-white tracking-tighter">¥{(order.total || 0).toLocaleString()}</span>
                                   </div>
                                   
                                   <div className="text-[15px] font-semibold text-slate-100 mb-6 truncate">{order.customerName}</div>
@@ -120,7 +122,6 @@ const Orders: React.FC = () => {
                                       <div className="text-[10px] text-slate-600 font-mono italic">{order.date}</div>
                                   </div>
 
-                                  {/* Quick Tactical Action */}
                                   <div className="pt-5 border-t border-white/5">
                                       {order.status === 'pending' && (
                                           <button 
@@ -189,7 +190,7 @@ const Orders: React.FC = () => {
                                 {order.status}
                               </span>
                           </td>
-                          <td className="p-5 text-right font-mono font-bold text-white text-base">¥{order.total.toLocaleString()}</td>
+                          <td className="p-5 text-right font-mono font-bold text-white text-base">¥{(order.total || 0).toLocaleString()}</td>
                           <td className="p-5 text-center">
                               <button 
                                   onClick={(e) => handleDeleteOrder(order.id, e)}
@@ -207,7 +208,6 @@ const Orders: React.FC = () => {
 
   return (
     <div className="flex flex-col h-[calc(100vh-6rem)] space-y-6">
-      {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-end gap-6 p-7 ios-glass-panel border-white/5 bg-white/2">
           <div className="flex items-center gap-6">
               <div className="p-3.5 bg-violet-600/10 rounded-2xl border border-violet-500/30 text-violet-400 shadow-[0_0_20px_rgba(139,92,246,0.2)]">
@@ -250,7 +250,6 @@ const Orders: React.FC = () => {
           {viewMode === 'kanban' ? renderKanban() : renderList()}
       </div>
 
-      {/* Detail Modal */}
       {selectedOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 backdrop-blur-md bg-black/60" onClick={() => setSelectedOrder(null)}>
               <div className="ios-glass-panel w-full max-w-4xl border-white/10 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
@@ -297,7 +296,7 @@ const Orders: React.FC = () => {
                               <div className="space-y-5">
                                   <div className="flex justify-between text-xs font-semibold text-slate-500">
                                       <span>BASE VALUE</span>
-                                      <span className="text-slate-300 font-mono">¥{selectedOrder.total}</span>
+                                      <span className="text-slate-300 font-mono">¥{selectedOrder.total || 0}</span>
                                   </div>
                                   <div className="flex justify-between text-xs font-semibold text-slate-500">
                                       <span>SHIPPING FEE</span>
@@ -306,7 +305,7 @@ const Orders: React.FC = () => {
                                   <div className="h-px bg-white/5 my-2"></div>
                                   <div className="flex justify-between items-end">
                                       <span className="text-xs font-bold uppercase text-slate-600">NET GMV</span>
-                                      <span className="text-3xl font-bold text-violet-400 font-mono tracking-tighter">¥{selectedOrder.total}</span>
+                                      <span className="text-3xl font-bold text-violet-400 font-mono tracking-tighter">¥{selectedOrder.total || 0}</span>
                                   </div>
                               </div>
                           </div>

@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { ReplenishmentItem, Product } from '../types';
@@ -11,8 +12,6 @@ import {
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
   Plus, Trash2, Copy
 } from 'lucide-react';
-
-// --- Components ---
 
 const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     let color = 'bg-slate-800 text-slate-400 border-slate-700';
@@ -45,12 +44,9 @@ const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     );
 };
 
-// --- Edit Modal (High Fidelity Restoration) ---
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
-    // Local State for inputs
     const [formData, setFormData] = useState<Product>({
         ...product,
-        // Ensure defaults
         dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
         logistics: product.logistics || { method: 'Air', carrier: '', trackingNo: '', unitFreightCost: 0, targetWarehouse: '' },
         economics: product.economics || { platformFeePercent: 0, creatorFeePercent: 0, fixedCost: 0, lastLegShipping: 0, adCost: 0 },
@@ -74,15 +70,12 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         }));
     };
 
-    // Derived calculations for the "Section 3" badge
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * (Math.ceil(formData.stock / (formData.itemsPerBox || 1)));
     const totalBoxes = Math.ceil(formData.stock / (formData.itemsPerBox || 1));
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
             <div className="bg-[#0f1218] w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl border border-white/10 flex flex-col overflow-hidden animate-in zoom-in-95 duration-200" onClick={e => e.stopPropagation()}>
-               
-               {/* Modal Header */}
                <div className="px-6 py-4 border-b border-white/10 flex justify-between items-center bg-[#18181b]">
                    <div>
                        <h3 className="text-xl font-bold text-white flex items-center gap-2">
@@ -98,18 +91,14 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                    </div>
                </div>
                
-               {/* Modal Content - Bento Grid Layout */}
                <div className="flex-1 overflow-y-auto p-6 bg-[#09090b]">
                    <div className="grid grid-cols-12 gap-6">
-                       
-                       {/* Section 1: Product & Supply Chain (Top Wide) */}
                        <div className="col-span-12 bg-[#18181b] border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">1</div>
                                产品与供应链
                            </div>
                            <div className="flex gap-6">
-                               {/* Image Placeholder */}
                                <div className="w-32 h-32 bg-black/40 rounded-lg border border-white/10 flex flex-col items-center justify-center text-slate-600 shrink-0 relative group cursor-pointer overflow-hidden">
                                    {formData.image ? <img src={formData.image} className="w-full h-full object-cover" /> : <ImageIcon className="w-8 h-8 mb-2" />}
                                    <div className="absolute inset-0 bg-black/60 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
@@ -163,8 +152,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                            </div>
                        </div>
-
-                       {/* Section 2: Procurement & CRM (Left) */}
                        <div className="col-span-5 bg-[#18181b] border border-white/5 rounded-xl p-5 flex flex-col">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">2</div>
@@ -198,12 +185,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        <BarChart3 className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-500" />
                                        <input type="number" value={formData.dailyBurnRate} onChange={e => handleChange('dailyBurnRate', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded pl-9 pr-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
                                    </div>
-                                   <div className="text-[10px] text-emerald-500 text-right mt-1 cursor-pointer hover:underline font-bold">可售天数: {(formData.stock / (formData.dailyBurnRate || 1)).toFixed(0)}天</div>
+                                   <div className="text-[10px] text-emerald-500 text-right mt-1 cursor-pointer hover:underline font-bold">可售天数: {formData.dailyBurnRate > 0 ? (formData.stock / formData.dailyBurnRate).toFixed(0) : '∞'}天</div>
                                </div>
                            </div>
                        </div>
-
-                       {/* Section 3: Packing (Right Top) */}
                        <div className="col-span-7 bg-[#18181b] border border-white/5 rounded-xl p-5 relative overflow-hidden">
                            <div className="absolute top-0 right-0 p-2 bg-amber-500/20 text-amber-500 text-[10px] font-bold rounded-bl-lg border-b border-l border-amber-500/20 shadow-lg">
                                {totalBoxes} 箱 | {totalVolume.toFixed(3)} CBM
@@ -253,8 +238,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                <input type="text" value={formData.lingXingId || ''} onChange={e => handleChange('lingXingId', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-slate-300 font-mono focus:border-blue-500 outline-none" placeholder="IB..." />
                            </div>
                        </div>
-
-                       {/* Section 4: Logistics (Left Bottom) */}
                        <div className="col-span-7 bg-[#18181b] border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">4</div>
@@ -299,30 +282,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                            <span className="text-slate-400 font-bold">⚖️</span>
                                            <input type="number" placeholder="自动计算" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
                                        </div>
-                                       <div className="text-[9px] text-right text-slate-600 mt-1">理论实重: 53.50 kg</div>
-                                   </div>
-                               </div>
-                               <div className="grid grid-cols-2 gap-4">
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">头程总运费 (Total Freight)</label>
-                                       <div className="flex items-center gap-1">
-                                           <span className="text-slate-400 font-bold">¥</span>
-                                           <input type="number" placeholder="手动输入总运费" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" />
-                                       </div>
-                                   </div>
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">耗材/贴标费 (¥)</label>
-                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={30} />
-                                   </div>
-                               </div>
-                               <div className="grid grid-cols-2 gap-4">
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥)</label>
-                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={0} />
-                                   </div>
-                                   <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥)</label>
-                                       <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" defaultValue={0} />
                                    </div>
                                </div>
                                <div>
@@ -331,8 +290,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                 </div>
                            </div>
                        </div>
-
-                       {/* Section 5: Sales (Right Bottom) */}
                        <div className="col-span-5 bg-[#18181b] border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-purple-500/20 text-purple-400 flex items-center justify-center text-xs font-mono">5</div>
@@ -371,20 +328,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                            <label className="text-[9px] text-slate-500 font-bold">每单固定费 ($)</label>
                                            <input type="number" value={formData.economics?.fixedCost} onChange={e => handleNestedChange('economics', 'fixedCost', parseFloat(e.target.value))} className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" />
                                        </div>
-                                       <div className="col-span-2 mt-1">
-                                           <label className="text-[9px] text-slate-500 font-bold">预估退货率 (%)</label>
-                                           <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" defaultValue={3} />
-                                       </div>
-                                       <div className="col-span-2 mt-1">
-                                           <label className="text-[9px] text-slate-500 font-bold">预估运费 ($)</label>
-                                           <input type="number" className="w-full bg-black/40 border border-white/10 rounded px-2 py-1 text-xs text-white" defaultValue={10} />
-                                       </div>
                                    </div>
                                </div>
                            </div>
                        </div>
-
-                       {/* Notes Section (Full Width Bottom) */}
                        <div className="col-span-12 bg-[#18181b] border border-white/5 rounded-xl p-5">
                            <label className="text-xs font-bold text-slate-400 block mb-2">备注信息 (Notes)</label>
                            <textarea 
@@ -394,11 +341,8 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                 placeholder="填写备货注意事项、产品细节说明等..."
                            />
                        </div>
-
                    </div>
                </div>
-
-               {/* Footer */}
                <div className="p-4 border-t border-white/10 bg-[#18181b] flex justify-center items-center">
                    <button onClick={() => onSave(formData)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all">
                        <Save className="w-4 h-4" /> 保存修改并记录日志
@@ -415,13 +359,13 @@ const Replenishment: React.FC = () => {
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
 
     const copyToClipboard = (text: string) => {
+        if (!text) return;
         navigator.clipboard.writeText(text);
         showToast(`SKU ${text} 已复制到剪贴板`, 'success');
     };
 
-    // Transform products to ReplenishmentItems
     const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
-        return state.products.map(p => {
+        return (state.products || []).map(p => {
             const dailyBurnRate = p.dailyBurnRate || 0;
             const stock = p.stock || 0;
             const daysRemaining = dailyBurnRate > 0 ? Math.floor(stock / dailyBurnRate) : 999;
@@ -438,19 +382,19 @@ const Replenishment: React.FC = () => {
                 totalInvestment: stock * (p.costPrice || 0),
                 freightCost: stock * (p.logistics?.unitFreightCost || 0),
                 goodsCost: stock * (p.costPrice || 0),
-                revenue30d: dailyBurnRate * 30 * p.price,
+                revenue30d: dailyBurnRate * 30 * (p.price || 0),
                 growth: 0, 
                 profit: 0,
                 totalPotentialProfit: 0,
                 totalWeight: stock * (p.unitWeight || 0),
                 boxes: Math.ceil(stock / (p.itemsPerBox || 1))
-            };
+            } as ReplenishmentItem;
         });
     }, [state.products]);
 
     const filteredItems = replenishmentItems.filter(i => 
-        i.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-        i.sku.toLowerCase().includes(searchTerm.toLowerCase())
+        (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (i.sku || '').toLowerCase().includes(searchTerm.toLowerCase())
     );
 
     const handleSaveProduct = (updatedProduct: Product) => {
@@ -461,7 +405,6 @@ const Replenishment: React.FC = () => {
 
     return (
         <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-[#0f1218]">
-            {/* Header */}
             <div className="p-4 border-b border-white/10 flex justify-between items-center bg-[#1e1e24]/50 backdrop-blur-md z-20">
                 <div>
                     <h2 className="text-white font-bold text-lg flex items-center gap-2">
@@ -471,7 +414,7 @@ const Replenishment: React.FC = () => {
                     <div className="text-xs text-slate-500 mt-1 flex gap-2">
                         <span>SKU 总数: <span className="text-white font-mono font-bold">{filteredItems.length}</span></span>
                         <span className="w-px h-3 bg-white/10"></span>
-                        <span>资金占用: <span className="text-emerald-400 font-mono font-bold">¥{filteredItems.reduce((a,b)=>a+b.totalInvestment, 0).toLocaleString()}</span></span>
+                        <span>资金占用: <span className="text-emerald-400 font-mono font-bold">¥{filteredItems.reduce((a,b)=>a+(b.totalInvestment || 0), 0).toLocaleString()}</span></span>
                     </div>
                 </div>
                 <div className="flex gap-3">
@@ -494,7 +437,6 @@ const Replenishment: React.FC = () => {
                 </div>
             </div>
 
-            {/* List */}
             <div className="flex-1 overflow-auto bg-[#0a0a0c]">
                 <table className="w-full text-left border-collapse">
                     <thead className="bg-[#1e1e24] sticky top-0 z-10 shadow-sm border-b border-white/5">
@@ -514,8 +456,6 @@ const Replenishment: React.FC = () => {
                         {filteredItems.map(item => (
                             <tr key={item.id} className="hover:bg-white/5 transition-colors group">
                                 <td className="px-4 py-4"><input type="checkbox" className="rounded bg-black/40 border-white/20"/></td>
-                                
-                                {/* SKU / Stage */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2">
@@ -538,8 +478,6 @@ const Replenishment: React.FC = () => {
                                         <StrategyBadge type={item.lifecycle || 'Stable'} />
                                     </div>
                                 </td>
-
-                                {/* Product Info */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex gap-3">
                                         <div className="w-12 h-12 bg-white/5 rounded border border-white/10 shrink-0 overflow-hidden">
@@ -547,42 +485,34 @@ const Replenishment: React.FC = () => {
                                         </div>
                                         <div className="flex flex-col gap-1 min-w-0">
                                             <div className="text-sm font-bold text-white truncate" title={item.name}>{item.name}</div>
-                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {item.supplier || '阳江老罗'}</div>
-                                            {/* PURPLE LX BADGE */}
+                                            <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {item.supplier || '未指定'}</div>
                                             <div className="text-[10px] bg-[#312e81] text-[#a5b4fc] px-1.5 py-0.5 rounded w-fit border border-[#4338ca] font-mono font-bold tracking-tight">
-                                                LX: {item.lingXingId || 'IB112251215RS'}
+                                                LX: {item.lingXingId || 'N/A'}
                                             </div>
                                         </div>
                                     </div>
                                 </td>
-
-                                {/* Logistics */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="space-y-1.5">
                                         <div className="flex items-center gap-2 text-xs text-blue-400 font-bold">
-                                            {/* 核心修复：根据物流方式显示动态图标 */}
                                             {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5" /> : <Plane className="w-3.5 h-3.5" />}
                                             <span>{item.logistics?.method || 'Air'}</span>
                                         </div>
                                         <a href="#" className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono">
-                                            {item.logistics?.trackingNo || '1Z9WV5620495954082'}
+                                            {item.logistics?.trackingNo || 'N/A'}
                                         </a>
                                         <div className="text-[10px] text-slate-500 font-mono">
                                             {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
                                         </div>
                                     </div>
                                 </td>
-
-                                {/* Investment */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono space-y-1">
-                                        <div className="text-sm font-bold text-emerald-400">¥{item.totalInvestment.toLocaleString()}</div>
-                                        <div className="text-[10px] text-slate-500">货值: ¥{item.goodsCost.toLocaleString()}</div>
-                                        <div className="text-[10px] text-slate-500">运费: ¥{item.freightCost.toLocaleString()}</div>
+                                        <div className="text-sm font-bold text-emerald-400">¥{(item.totalInvestment || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">货值: ¥{(item.goodsCost || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">运费: ¥{(item.freightCost || 0).toLocaleString()}</div>
                                     </div>
                                 </td>
-
-                                {/* Inventory */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex flex-col gap-1.5">
                                         <div className="flex items-end gap-1">
@@ -592,7 +522,6 @@ const Replenishment: React.FC = () => {
                                         <div className={`text-[10px] font-bold px-1.5 py-0.5 rounded w-fit border ${item.daysRemaining < 15 ? 'text-red-400 bg-red-900/20 border-red-500/30' : 'text-emerald-400 bg-emerald-900/20 border-emerald-500/30'}`}>
                                             可售: {item.daysRemaining} 天
                                         </div>
-                                        {/* Progress Bar */}
                                         <div className="w-24 h-1.5 bg-slate-800 rounded-full overflow-hidden">
                                             <div 
                                                 className={`h-full ${item.daysRemaining < 15 ? 'bg-red-500' : 'bg-emerald-500'}`} 
@@ -601,27 +530,18 @@ const Replenishment: React.FC = () => {
                                         </div>
                                     </div>
                                 </td>
-
-                                {/* Remarks (New Column) */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="text-xs text-slate-400 max-w-[180px] line-clamp-3 leading-relaxed hover:text-white transition-colors cursor-text" title={item.notes}>
                                         {item.notes || '-'}
                                     </div>
                                 </td>
-
-                                {/* Sales */}
                                 <td className="px-4 py-4 align-top">
                                     <div className="font-mono">
-                                        <div className="text-sm font-bold text-white">${item.revenue30d.toLocaleString()}</div>
+                                        <div className="text-sm font-bold text-white">${(item.revenue30d || 0).toLocaleString()}</div>
                                         <div className="text-[10px] text-slate-500">/30天</div>
-                                        <div className="text-[10px] text-emerald-400 mt-1 flex items-center gap-0.5 font-bold">
-                                            <TrendingUp className="w-3 h-3"/> {(Math.random() * 20 + 5).toFixed(1)}%
-                                        </div>
                                         <div className="text-[10px] text-slate-500 mt-0.5">日销: {item.dailyBurnRate} 件</div>
                                     </div>
                                 </td>
-
-                                {/* Action */}
                                 <td className="px-4 py-4 align-top text-right">
                                     <div className="flex flex-col gap-2 items-end opacity-40 group-hover:opacity-100 transition-opacity">
                                         <button onClick={() => setEditingItem(item)} className="p-1.5 text-slate-400 hover:text-white hover:bg-white/10 rounded transition-colors" title="编辑">

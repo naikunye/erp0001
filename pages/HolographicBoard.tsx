@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Globe, Activity, Terminal, Package, Truck, 
@@ -18,11 +17,15 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
   const [currentTime, setCurrentTime] = useState(new Date());
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const orders = state.orders || [];
+  const products = state.products || [];
+  const shipments = state.shipments || [];
+
   // --- Real Data Calculation ---
-  const totalRevenue = state.orders.reduce((acc, o) => acc + o.total, 0);
-  const pendingOrders = state.orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
-  const lowStockCount = state.products.filter(p => p.stock <= (p.safetyStockDays || 10) * (p.dailyBurnRate || 1)).length;
-  const totalStockValue = state.products.reduce((acc, p) => acc + (p.stock * (p.costPrice || 0)), 0);
+  const totalRevenue = orders.reduce((acc, o) => acc + (o.total || 0), 0);
+  const pendingOrders = orders.filter(o => o.status === 'pending' || o.status === 'processing').length;
+  const lowStockCount = products.filter(p => (p.stock || 0) <= (p.safetyStockDays || 10) * (p.dailyBurnRate || 1)).length;
+  const totalStockValue = products.reduce((acc, p) => acc + ((p.stock || 0) * (p.costPrice || 0)), 0);
 
   // --- Generate Real Logs ---
   useEffect(() => {
@@ -30,19 +33,19 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
       const timeStr = new Date().toLocaleTimeString('zh-CN', {hour12: false});
 
       // 1. Order Logs
-      state.orders.slice(0, 5).forEach(o => {
+      orders.slice(0, 5).forEach(o => {
           generatedLogs.push(`[${o.date}] [Order] 新增订单 ${o.id} (${o.customerName}) - ¥${o.total}`);
       });
 
       // 2. Inventory Logs
-      state.products.forEach(p => {
-          if (p.stock < 10) {
+      products.forEach(p => {
+          if ((p.stock || 0) < 10) {
               generatedLogs.push(`[${timeStr}] [Alert] SKU-${p.sku} 库存严重不足 (${p.stock}件)`);
           }
       });
 
       // 3. Shipment Logs
-      state.shipments.slice(0, 3).forEach(s => {
+      shipments.slice(0, 3).forEach(s => {
           generatedLogs.push(`[${s.lastUpdate}] [Logistics] ${s.trackingNo} 状态更新: ${s.status}`);
       });
 
@@ -50,7 +53,7 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
       generatedLogs.push(`[${timeStr}] [System] 数据节点同步完成`);
       
       setLogs(generatedLogs.reverse());
-  }, [state]);
+  }, [orders, products, shipments]);
 
   // --- Clock ---
   useEffect(() => {
@@ -67,27 +70,25 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
           { name: 'TikTok', value: 0, color: '#db2777' },
           { name: 'Shopify', value: 0, color: '#10b981' },
       ];
-      state.orders.forEach(order => {
-          const source = order.customerName.includes('Amazon') ? 'Amazon' : 
-                         order.customerName.includes('TikTok') ? 'TikTok' : 'Shopify';
+      orders.forEach(order => {
+          const source = (order.customerName || '').includes('Amazon') ? 'Amazon' : 
+                         (order.customerName || '').includes('TikTok') ? 'TikTok' : 'Shopify';
           const target = data.find(d => d.name === source);
-          if (target) target.value += order.total;
+          if (target) target.value += (order.total || 0);
       });
       return data;
-  }, [state.orders]);
+  }, [orders]);
 
   return (
     <div className="h-[calc(100vh-6rem)] bg-black overflow-hidden rounded-2xl relative flex flex-col p-6 font-mono text-cyan-500 selection:bg-cyan-500/30">
-        {/* Background Effects */}
         <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_#0f172a_0%,_#000000_120%)] pointer-events-none"></div>
         <div className="absolute inset-0 bg-[linear-gradient(rgba(6,182,212,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(6,182,212,0.03)_1px,transparent_1px)] bg-[size:30px_30px] pointer-events-none"></div>
         
-        {/* Top Status Bar */}
         <div className="relative z-10 flex justify-between items-end mb-6 border-b border-cyan-900/50 pb-4">
             <div className="flex items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-black tracking-widest text-cyan-50 uppercase">探行·指挥中枢</h1>
-                    <p className="text-xs text-cyan-700 mt-1">REAL-TIME DATA CENTER</p>
+                    <h1 className="text-3xl font-black tracking-widest text-cyan-50 uppercase italic">探行·指挥中枢</h1>
+                    <p className="text-xs text-cyan-700 mt-1 uppercase">Real-Time Data Center</p>
                 </div>
             </div>
             <div className="flex gap-12">
@@ -98,12 +99,8 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
             </div>
         </div>
 
-        {/* Main Content Grid */}
         <div className="relative z-10 grid grid-cols-12 gap-6 flex-1 min-h-0">
-            
-            {/* Left Column: Fulfillment & Logs */}
             <div className="col-span-3 flex flex-col gap-4">
-                {/* Fulfillment Monitor */}
                 <div className="border border-cyan-900/50 bg-black/40 p-4 rounded-xl relative overflow-hidden group hover:border-cyan-500/50 transition-all">
                     <div className="absolute top-0 right-0 p-3 opacity-20 group-hover:opacity-40 transition-opacity"><Package className="w-16 h-16" /></div>
                     <h3 className="text-cyan-500 text-xs font-bold uppercase mb-4 flex items-center gap-2">
@@ -122,7 +119,6 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Live System Logs */}
                 <div className="flex-1 border border-cyan-900/50 bg-black/40 backdrop-blur-sm p-4 rounded-xl flex flex-col overflow-hidden relative">
                     <h3 className="text-cyan-500 text-xs font-bold uppercase mb-3 flex items-center gap-2 border-b border-cyan-900/30 pb-2">
                         <Terminal className="w-4 h-4" /> 实时业务流 (Logs)
@@ -138,9 +134,7 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
                 </div>
             </div>
 
-            {/* Center Column: Core Metrics & Map */}
             <div className="col-span-6 flex flex-col gap-6 relative">
-                {/* Big Number Cards */}
                 <div className="grid grid-cols-1 gap-4">
                     <div 
                         onClick={() => onNavigate('finance')}
@@ -155,7 +149,6 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
                     </div>
                 </div>
 
-                {/* Visualization Area */}
                 <div className="flex-1 border border-cyan-800/30 bg-black/40 rounded-xl relative overflow-hidden flex flex-col">
                     <div className="p-4 border-b border-cyan-900/30 flex justify-between items-center">
                         <h3 className="text-cyan-400 text-sm font-bold flex items-center gap-2">
@@ -164,7 +157,6 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
                     </div>
                     
                     <div className="flex-1 p-6">
-                        {/* Channel Bar Chart */}
                         <div className="w-full h-full">
                             <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={channelData}>
@@ -185,10 +177,7 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
                 </div>
             </div>
 
-            {/* Right Column: Risks & Overview */}
             <div className="col-span-3 flex flex-col gap-6">
-                
-                {/* Asset Brief */}
                 <div className="p-6 border border-cyan-900/50 rounded-xl bg-cyan-950/10">
                     <div className="flex justify-between items-center mb-2">
                         <span className="text-xs text-cyan-600 font-bold uppercase">当前库存资产</span>
@@ -197,12 +186,11 @@ const HolographicBoard: React.FC<HolographicBoardProps> = ({ onNavigate }) => {
                     <div className="text-2xl font-mono font-bold text-white">
                         ¥{(totalStockValue / 10000).toFixed(2)}w
                     </div>
-                    <div className="text-[10px] text-cyan-700 mt-1">
+                    <div className="text-[10px] text-cyan-700 mt-1 uppercase font-bold tracking-tighter">
                         基于采购成本核算
                     </div>
                 </div>
 
-                {/* Risk Alert Area */}
                 <div className="flex-1 border border-red-900/30 bg-red-950/5 p-4 rounded-xl relative overflow-hidden">
                     <h3 className="text-red-500 text-xs font-bold uppercase mb-4 flex items-center gap-2">
                         <AlertOctagon className="w-4 h-4" /> 异常监控 (Risks)
