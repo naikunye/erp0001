@@ -10,54 +10,9 @@ import {
     MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS, MOCK_SUPPLIERS
 } from '../constants';
 
-const DB_NAME = 'TANXING_IDB';
-const STORE_NAME = 'STATE_STORE';
+const DB_KEY = 'TANXING_DB_V14'; 
 const CONFIG_KEY = 'TANXING_CONFIG_V14'; 
 export let SESSION_ID = Math.random().toString(36).substring(7);
-
-/**
- * IndexedDB 极简异步包装器
- */
-const idb = {
-    db: null as IDBDatabase | null,
-    async init() {
-        if (this.db) return this.db;
-        return new Promise<IDBDatabase>((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
-            request.onupgradeneeded = () => {
-                request.result.createObjectStore(STORE_NAME);
-            };
-            request.onsuccess = () => {
-                this.db = request.result;
-                resolve(request.result);
-            };
-            request.onerror = () => reject(request.error);
-        });
-    },
-    async set(key: string, val: any) {
-        const db = await this.init();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put(val, key);
-            tx.oncomplete = () => resolve(true);
-            tx.onerror = () => reject(tx.error);
-        });
-    },
-    async get(key: string) {
-        const db = await this.init();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const req = tx.objectStore(STORE_NAME).get(key);
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-    },
-    async clear() {
-        const db = await this.init();
-        const tx = db.transaction(STORE_NAME, 'readwrite');
-        tx.objectStore(STORE_NAME).clear();
-    }
-};
 
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
@@ -116,7 +71,6 @@ type Action =
     | { type: 'RESET_DATA' }
     | { type: 'INITIALIZED_SUCCESS' }
     | { type: 'UNLOCK_SYNC' }
-    | { type: 'ADD_INFLUENCER'; payload: any }
     | { type: 'UPDATE_CUSTOMER'; payload: Customer }
     | { type: 'ADD_CUSTOMER'; payload: Customer }
     | { type: 'DELETE_CUSTOMER'; payload: string }
@@ -131,7 +85,8 @@ type Action =
     | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'ADD_TASK'; payload: Task }
-    | { type: 'DELETE_TASK'; payload: string };
+    | { type: 'DELETE_TASK'; payload: string }
+    | { type: 'ADD_INFLUENCER'; payload: any };
 
 const INITIAL_RULES: AutomationRule[] = [
     { id: 'rule-1', name: '物流异常自动分派', trigger: 'logistics_exception', action: 'create_task', status: 'active' },
@@ -149,10 +104,39 @@ const emptyState: AppState = {
 };
 
 /**
- * 现在使用 IndexedDB 保存，支持大容量数据
+ * 核心优化：智能本地存储机制
+ * 5MB 限制内，优先保护图片，清理非必要日志
  */
 const safeLocalSave = (state: AppState) => {
-    idb.set('GLOBAL_STATE', state).catch(err => console.error('IndexedDB Save Error:', err));
+    try {
+        localStorage.setItem(DB_KEY, JSON.stringify(state));
+    } catch (e: any) {
+        if (e.name === 'QuotaExceededError') {
+            console.warn('LocalStorage Quota Exceeded. Pruning non-essential logs to keep images...');
+            
+            // 减重策略 1：清理冗余历史记录
+            const step1 = {
+                ...state,
+                auditLogs: [], // 清空审计日志
+                automationLogs: [], // 清空自动日志
+                stockJournal: (state.stockJournal || []).slice(0, 5), // 只留5条库存变动
+                transactions: (state.transactions || []).slice(0, 20) // 只留最近20条流水
+            };
+            
+            try {
+                localStorage.setItem(DB_KEY, JSON.stringify(step1));
+                console.log('Cache saved after pruning logs.');
+            } catch (innerE) {
+                // 减重策略 2：如果还是存不下（图片太多），则清理图片
+                console.warn('Still exceeds quota. Pruning images from local cache as last resort.');
+                const step2 = {
+                    ...step1,
+                    products: (state.products || []).map(p => ({ ...p, image: undefined, images: [] }))
+                };
+                localStorage.setItem(DB_KEY, JSON.stringify(step2));
+            }
+        }
+    }
 };
 
 const appReducer = (state: AppState, action: Action): AppState => {
@@ -180,13 +164,17 @@ const appReducer = (state: AppState, action: Action): AppState => {
 
         case 'HYDRATE_STATE': {
             const incomingProducts = Array.isArray(action.payload.products) ? action.payload.products : [];
+            
+            // 深度合并策略：如果云端拉回来的数据里没图，但本地内存已经有图了，不要用空值覆盖
             const mergedProducts = incomingProducts.map(newP => {
                 const existingP = state.products.find(p => p.id === newP.id);
+                // 仅当新数据完全没有图片字段时，保留内存中的图片
                 if (existingP && existingP.image && (!newP.image || newP.image === "")) {
                     return { ...newP, image: existingP.image, images: existingP.images };
                 }
                 return newP;
             });
+
             const updated = { 
                 ...state, 
                 ...action.payload,
@@ -201,7 +189,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'RESET_DATA': idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
+        case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
         case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...(state.influencers || [])] });
         default: return state;
     }
@@ -300,7 +288,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         isInitialized: true 
                     } 
                 });
-                if (!isSilent) showToast('云端数据同步完成', 'success');
+                if (!isSilent) showToast('云端镜像同步完成', 'success');
                 return true;
             }
             dispatch({ type: 'UNLOCK_SYNC' });
@@ -322,14 +310,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         const startup = async () => {
-            // 首先从 IndexedDB 读取（没有 5MB 限制）
-            const savedDb: any = await idb.get('GLOBAL_STATE');
+            const savedDb = localStorage.getItem(DB_KEY);
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             
             if (savedDb) {
                 try { 
-                    // 核心改进：本地数据现在完整包含图片，秒级加载
-                    dispatch({ type: 'HYDRATE_STATE', payload: { ...savedDb, syncLocked: true } }); 
+                    const localData = JSON.parse(savedDb);
+                    dispatch({ type: 'HYDRATE_STATE', payload: { ...localData, syncLocked: true } }); 
                 } catch(e) {}
             }
 
@@ -338,7 +325,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const config = JSON.parse(savedConfig);
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                     await bootLean(config.appId, config.appKey, config.serverURL);
-                    // 后台静默对账
+                    // 重要：这里不 await，让 UI 先加载本地数据
                     pullFromCloud(true); 
                 } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); }
             } else {
