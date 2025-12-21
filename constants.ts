@@ -82,9 +82,9 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
         destinationWarehouseId: 'WH-US-FBA',
         status: 'Shipped', // Working -> Shipped -> In Transit -> Closed
         items: [
-            /* Added unitPrice to match InboundShipmentItem type */
-            { productId: '2', sku: 'CP-Q1M', name: 'Carplay Q1M', quantity: 200, boxes: 5, unitPrice: 39.60 },
-            { productId: '3', sku: 'BOX2-NEW', name: 'AI BOX2', quantity: 500, boxes: 25, unitPrice: 68.56 },
+            /* Added unitPrice, rowTotalWeight, and freightRate to match InboundShipmentItem type */
+            { productId: '2', sku: 'CP-Q1M', name: 'Carplay Q1M', quantity: 200, boxes: 5, unitPrice: 39.60, rowTotalWeight: 40, freightRate: 35 },
+            { productId: '3', sku: 'BOX2-NEW', name: 'AI BOX2', quantity: 500, boxes: 25, unitPrice: 68.56, rowTotalWeight: 300, freightRate: 8 },
         ],
         totalWeight: 340,
         totalVolume: 1.2,
@@ -101,8 +101,8 @@ export const MOCK_INBOUND_SHIPMENTS: InboundShipment[] = [
         destinationWarehouseId: 'WH-US-FBA',
         status: 'Working',
         items: [
-            /* Added unitPrice to match InboundShipmentItem type */
-            { productId: '4', sku: 'K7500-G', name: 'K7500-B 机械键盘', quantity: 50, boxes: 5, unitPrice: 42.22 },
+            /* Added unitPrice, rowTotalWeight, and freightRate to match InboundShipmentItem type */
+            { productId: '4', sku: 'K7500-G', name: 'K7500-B 机械键盘', quantity: 50, boxes: 5, unitPrice: 42.22, rowTotalWeight: 60, freightRate: 40 },
         ],
         totalWeight: 60,
         totalVolume: 0.25,

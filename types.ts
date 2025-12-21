@@ -75,7 +75,6 @@ export interface Product {
   notes?: string;
 }
 
-/* Added ReplenishmentItem for Inventory and Replenishment pages */
 export interface ReplenishmentItem extends Product {
   dailyBurnRate: number;
   daysRemaining: number;
@@ -111,11 +110,14 @@ export interface InboundShipmentItem {
   boxes: number;
   unitPrice: number;
   hscode?: string;
+  rowTotalWeight: number;
+  freightRate: number;
 }
 
 export interface InboundShipment {
   id: string;
   name: string;
+  method: 'Air' | 'Sea';
   sourceWarehouseId: string;
   destinationWarehouseId: string;
   status: 'Draft' | 'Working' | 'Shipped' | 'Receiving' | 'Closed';
@@ -255,13 +257,11 @@ export interface CalendarEvent {
   sku?: string;
 }
 
-/* Added SalesData for Dashboard and Charts */
 export interface SalesData {
   name: string;
   value: number;
 }
 
-/* Added AdCampaign for Marketing and Finance */
 export interface AdCampaign {
   id: string;
   name: string;
@@ -278,7 +278,6 @@ export interface AdCampaign {
   cpc: number;
 }
 
-/* Added Influencer for Marketing */
 export interface Influencer {
   id: string;
   name: string;
@@ -296,7 +295,6 @@ export interface Influencer {
   tags: string[];
 }
 
-/* Added AuditLog for Context */
 export interface AuditLog {
   id: string;
   timestamp: string;
@@ -305,7 +303,6 @@ export interface AuditLog {
   details: string;
 }
 
-/* Added ExportTask for Context */
 export interface ExportTask {
   id: string;
   name: string;
@@ -313,7 +310,6 @@ export interface ExportTask {
   progress: number;
 }
 
-/* Added Integration for Integrations Page */
 export interface Integration {
   id: string;
   platform: 'Amazon' | 'TikTok' | 'Shopify' | 'eBay' | 'WooCommerce' | 'Walmart';

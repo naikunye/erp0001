@@ -1,8 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTanxing } from '../context/TanxingContext';
-import { InboundShipment, Product, InboundShipmentItem, Shipment } from '../types';
-// Add FileText to imports from lucide-react
-import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText } from 'lucide-react';
+import { InboundShipment, Product, InboundShipmentItem } from '../types';
+import { Globe, Plus, Search, Box, Truck, CheckCircle2, ArrowRight, X, PackageOpen, LayoutList, Scale, Trash2, Save, Send, Edit3, Check, RotateCcw, ShieldCheck, Download, Weight, Calculator, FileText, Plane, Ship } from 'lucide-react';
 
 const InboundShipments: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
@@ -12,11 +11,12 @@ const InboundShipments: React.FC = () => {
   
   // 核心编辑状态
   const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState<any>(null);
+  const [editForm, setEditForm] = useState<InboundShipment | null>(null);
   const [detailSkuSearch, setDetailSkuSearch] = useState('');
 
   // 新建货件状态
   const [newShipmentName, setNewShipmentName] = useState('');
+  const [shippingMethod, setShippingMethod] = useState<'Air' | 'Sea'>('Air');
   const [sourceNode, setSourceNode] = useState('深圳分拨中心');
   const [destNode, setDestNode] = useState('FBA-US-WEST');
   const [plannedItems, setPlannedItems] = useState<{product: Product, quantity: number}[]>([]);
@@ -40,7 +40,8 @@ const InboundShipments: React.FC = () => {
   // 核心修复：更稳健的 SKU 添加函数
   const handleAddItem = (p: Product) => {
       const defaultQty = p.itemsPerBox || 10;
-      const defaultRate = p.logistics?.unitFreightCost || 35;
+      // 动态预设运费：空运 35/kg，海运 800/cbm (此处以kg单价为准)
+      const defaultRate = shippingMethod === 'Air' ? (p.logistics?.unitFreightCost || 35) : 8; 
       const defaultTotalWeight = (p.unitWeight || 0.5) * defaultQty;
 
       if (showCreateModal) {
@@ -52,7 +53,6 @@ const InboundShipments: React.FC = () => {
               showToast(`已添加: ${p.sku}`, 'success');
               return [...prev, { product: p, quantity: defaultQty }];
           });
-          // 延迟清空搜索框，防止列表消失太快导致点击失效
           setTimeout(() => setSkuSearch(''), 50);
           return;
       }
@@ -63,7 +63,7 @@ const InboundShipments: React.FC = () => {
               setDetailSkuSearch('');
               return;
           }
-          const newItem = {
+          const newItem: InboundShipmentItem = {
               productId: p.id,
               sku: p.sku,
               name: p.name,
@@ -80,8 +80,7 @@ const InboundShipments: React.FC = () => {
       }
   };
 
-  // 核心修复：使用函数式更新，防止编辑时数据被覆盖
-  const recalculateTotals = (items: any[]) => {
+  const recalculateTotals = (items: InboundShipmentItem[]) => {
       let totalWeight = 0;
       let totalVolume = 0;
       items.forEach((it: any) => {
@@ -95,7 +94,6 @@ const InboundShipments: React.FC = () => {
       setEditForm((prev: any) => prev ? ({ ...prev, items, totalWeight, totalVolume }) : null);
   };
 
-  // 处理输入框变动 (支持空字符串，防止 NaN 锁定)
   const updateItemProperty = (productId: string, field: string, rawValue: string) => {
       if (!editForm) return;
       const value = rawValue === '' ? 0 : parseFloat(rawValue);
@@ -126,6 +124,15 @@ const InboundShipments: React.FC = () => {
       showToast('货件物流分摊协议已固化', 'success');
   };
 
+  const handleDeleteShipment = () => {
+      if (!selectedShipment) return;
+      if (confirm(`确定要彻底销毁协议 ${selectedShipment.id} 吗？此操作不可撤销。`)) {
+          dispatch({ type: 'DELETE_INBOUND_SHIPMENT', payload: selectedShipment.id });
+          setSelectedShipment(null);
+          showToast('协议已从矩阵中销毁', 'info');
+      }
+  };
+
   const handleCreate = () => {
       if (!newShipmentName || plannedItems.length === 0) {
           showToast('请配置协议名称与载荷清单', 'warning');
@@ -135,7 +142,7 @@ const InboundShipments: React.FC = () => {
       const shipmentItems = plannedItems.map(item => {
           const boxes = Math.ceil(item.quantity / (item.product.itemsPerBox || 1));
           const rowW = (item.product.unitWeight || 0.5) * item.quantity;
-          const fr = item.product.logistics?.unitFreightCost || 35;
+          const fr = shippingMethod === 'Air' ? (item.product.logistics?.unitFreightCost || 35) : 8;
           totalWeight += rowW;
           const vol = ((item.product.dimensions?.l || 0) * (item.product.dimensions?.w || 0) * (item.product.dimensions?.h || 0) / 1000000) * boxes;
           totalVolume += vol;
@@ -148,7 +155,9 @@ const InboundShipments: React.FC = () => {
 
       const newInbound: InboundShipment = {
           id: `IB-${Date.now().toString().slice(-6)}`,
-          name: newShipmentName, sourceWarehouseId: sourceNode, destinationWarehouseId: destNode,
+          name: newShipmentName, 
+          method: shippingMethod,
+          sourceWarehouseId: sourceNode, destinationWarehouseId: destNode,
           status: 'Draft', items: shipmentItems as any,
           totalWeight: parseFloat(totalWeight.toFixed(2)), totalVolume: parseFloat(totalVolume.toFixed(3)),
           createdDate: new Date().toISOString().split('T')[0]
@@ -175,7 +184,7 @@ const InboundShipments: React.FC = () => {
                 </div>
                 <div>
                     <h2 className="text-xl font-bold text-white uppercase italic tracking-tight">跨境物流与单证协同中枢</h2>
-                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Reliability Fix v10.3</p>
+                    <p className="text-[10px] text-slate-500 font-mono mt-1 uppercase tracking-widest">Global Logistics Hub • Multimodal Fix v10.4</p>
                 </div>
             </div>
             <button onClick={openCreateModal} className="flex items-center gap-2 px-6 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-xl font-bold text-xs uppercase transition-all shadow-xl active:scale-95">
@@ -193,7 +202,10 @@ const InboundShipments: React.FC = () => {
                         onClick={() => setSelectedShipment(shipment)}
                     >
                         <div className="flex justify-between items-start mb-3">
-                            <span className="text-[10px] font-mono font-bold text-slate-500">{shipment.id}</span>
+                            <div className="flex items-center gap-2">
+                                {shipment.method === 'Air' ? <Plane className="w-3.5 h-3.5 text-blue-400" /> : <Ship className="w-3.5 h-3.5 text-indigo-400" />}
+                                <span className="text-[10px] font-mono font-bold text-slate-500">{shipment.id}</span>
+                            </div>
                             <span className={`text-[9px] px-2 py-0.5 rounded-full border uppercase font-black ${getStatusColor(shipment.status)}`}>{getStatusDisplay(shipment.status)}</span>
                         </div>
                         <h3 className="text-sm font-bold text-white mb-4 truncate">{shipment.name}</h3>
@@ -203,6 +215,9 @@ const InboundShipments: React.FC = () => {
                         </div>
                     </div>
                 ))}
+                {state.inboundShipments.length === 0 && (
+                    <div className="text-center py-20 text-slate-600 italic text-xs uppercase tracking-widest">暂无活跃协议</div>
+                )}
             </div>
 
             {/* 主内容区 */}
@@ -225,16 +240,16 @@ const InboundShipments: React.FC = () => {
                                     <>
                                         {selectedShipment.status === 'Draft' && (
                                             <>
-                                                <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 进入财务调账</button>
+                                                <button onClick={() => { setEditForm({...selectedShipment}); setIsEditing(true); }} className="px-4 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-blue-600 hover:text-white transition-all"><Edit3 className="w-3.5 h-3.5"/> 调账</button>
                                                 <button onClick={() => {
-                                                    const nextStatus = 'Shipped';
-                                                    const updated = { ...selectedShipment, status: nextStatus };
+                                                    const updated = { ...selectedShipment, status: 'Shipped' as const };
                                                     dispatch({ type: 'UPDATE_INBOUND_SHIPMENT', payload: updated });
                                                     setSelectedShipment(updated);
                                                     showToast(`货件已离场`, 'success');
-                                                }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 确认离场</button>
+                                                }} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase flex items-center gap-2 hover:bg-indigo-500 transition-all shadow-lg"><Send className="w-3.5 h-3.5"/> 离场</button>
                                             </>
                                         )}
+                                        <button onClick={handleDeleteShipment} className="p-2 bg-red-950/20 text-red-500 hover:bg-red-500 hover:text-white border border-red-500/30 rounded-xl transition-all shadow-lg shadow-red-900/10" title="销毁此协议"><Trash2 className="w-4 h-4" /></button>
                                         <button onClick={() => setSelectedShipment(null)} className="p-2 bg-white/5 hover:bg-white/10 rounded-xl text-slate-400 transition-all"><X className="w-4 h-4" /></button>
                                     </>
                                 )}
@@ -246,11 +261,16 @@ const InboundShipments: React.FC = () => {
                                 <div className="space-y-8 animate-in fade-in duration-300">
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500">
-                                            <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center gap-2"><Globe className="w-3 h-3"/> 跨境路由规划</div>
+                                            <div className="text-[10px] text-slate-500 font-bold uppercase mb-4 flex items-center justify-between">
+                                                <div className="flex items-center gap-2"><Globe className="w-3 h-3"/> 跨境路由规划</div>
+                                                <div className="flex items-center gap-1.5 px-2 py-0.5 bg-white/5 rounded border border-white/10 text-indigo-400 font-black">
+                                                    {selectedShipment.method === 'Air' ? <><Plane className="w-3 h-3"/> AIR</> : <><Ship className="w-3 h-3"/> SEA</>}
+                                                </div>
+                                            </div>
                                             {isEditing ? (
                                                 <div className="grid grid-cols-2 gap-4">
-                                                    <input type="text" value={editForm?.sourceWarehouseId || ''} onChange={e => setEditForm({...editForm, sourceWarehouseId: e.target.value})} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="起运地" />
-                                                    <input type="text" value={editForm?.destinationWarehouseId || ''} onChange={e => setEditForm({...editForm, destinationWarehouseId: e.target.value})} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="目的地" />
+                                                    <input type="text" value={editForm?.sourceWarehouseId || ''} onChange={e => setEditForm(prev => prev ? {...prev, sourceWarehouseId: e.target.value} : null)} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="起运地" />
+                                                    <input type="text" value={editForm?.destinationWarehouseId || ''} onChange={e => setEditForm(prev => prev ? {...prev, destinationWarehouseId: e.target.value} : null)} className="bg-black/60 border border-white/10 rounded-lg p-2.5 text-xs text-white outline-none" placeholder="目的地" />
                                                 </div>
                                             ) : (
                                                 <div className="flex items-center gap-4 text-white font-bold text-sm">
@@ -423,15 +443,36 @@ const InboundShipments: React.FC = () => {
                     <div className="flex-1 overflow-y-auto p-10 space-y-10 custom-scrollbar">
                         <div className="grid grid-cols-12 gap-10">
                             <div className="col-span-12 lg:col-span-5 space-y-6">
-                                <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">协议名称</label>
-                                <input type="text" value={newShipmentName} onChange={e => setNewShipmentName(e.target.value)} placeholder="例如：FBA 西部节点补货" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:border-blue-500 outline-none font-bold" />
+                                <div className="space-y-4">
+                                    <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">运输模态 (Method)</label>
+                                    <div className="grid grid-cols-2 gap-3 p-1.5 bg-black/60 rounded-2xl border border-white/10">
+                                        <button onClick={() => setShippingMethod('Air')} className={`py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-all ${shippingMethod === 'Air' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                                            <Plane className="w-4 h-4" /> 空运
+                                        </button>
+                                        <button onClick={() => setShippingMethod('Sea')} className={`py-3 rounded-xl text-xs font-black uppercase flex items-center justify-center gap-2 transition-all ${shippingMethod === 'Sea' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+                                            <Ship className="w-4 h-4" /> 海运
+                                        </button>
+                                    </div>
+                                </div>
+                                
+                                <div className="space-y-2">
+                                    <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">协议名称</label>
+                                    <input type="text" value={newShipmentName} onChange={e => setNewShipmentName(e.target.value)} placeholder="例如：FBA 西部节点补货" className="w-full bg-black/60 border border-white/10 rounded-2xl px-6 py-4 text-sm text-white focus:border-blue-500 outline-none font-bold" />
+                                </div>
+
                                 <div className="grid grid-cols-2 gap-4">
-                                    <input type="text" value={sourceNode} onChange={e => setSourceNode(e.target.value)} placeholder="起运地" className="bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white" />
-                                    <input type="text" value={destNode} onChange={e => setDestNode(e.target.value)} placeholder="目的地" className="bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white" />
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-slate-500 font-black uppercase">起运地</label>
+                                        <input type="text" value={sourceNode} onChange={e => setSourceNode(e.target.value)} placeholder="起运地" className="bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-blue-500" />
+                                    </div>
+                                    <div className="space-y-2">
+                                        <label className="text-[10px] text-slate-500 font-black uppercase">目的地</label>
+                                        <input type="text" value={destNode} onChange={e => setDestNode(e.target.value)} placeholder="目的地" className="bg-black/60 border border-white/10 rounded-xl px-4 py-3 text-xs text-white outline-none focus:border-blue-500" />
+                                    </div>
                                 </div>
                             </div>
                             <div className="col-span-12 lg:col-span-7 space-y-6">
-                                <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">初始载荷配置 (Payload)</label>
+                                <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest">载荷清单配置 (Payload)</label>
                                 <div className="relative">
                                     <Search className="w-4 h-4 text-slate-600 absolute left-4 top-4" />
                                     <input type="text" value={skuSearch} onChange={e => setSkuSearch(e.target.value)} placeholder="搜索 SKU 资产库..." className="w-full bg-black/60 border border-white/10 rounded-2xl pl-12 pr-4 py-4 text-sm text-white focus:border-indigo-500 outline-none font-bold" />
@@ -459,6 +500,9 @@ const InboundShipments: React.FC = () => {
                                             </div>
                                         </div>
                                     ))}
+                                    {plannedItems.length === 0 && (
+                                        <div className="py-10 text-center border-2 border-dashed border-white/5 rounded-2xl text-slate-700 text-xs font-bold uppercase tracking-widest">清单空置 (Awaiting payload)</div>
+                                    )}
                                 </div>
                             </div>
                         </div>
