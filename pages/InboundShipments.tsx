@@ -32,7 +32,6 @@ const InboundShipments: React.FC = () => {
   const filteredProducts = useMemo(() => {
       const q = showCreateModal ? skuSearch : (isEditing ? detailSkuSearch : '');
       if (!q || q.length < 1) return [];
-      // 增加安全回退
       const products = state.products || [];
       return products.filter(p => 
           p.sku.toLowerCase().includes(q.toLowerCase()) || 
@@ -236,7 +235,6 @@ const InboundShipments: React.FC = () => {
 
   const inboundShipments = state.inboundShipments || [];
 
-  // --- 5. 渲染 ---
   return (
     <div className="ios-glass-panel rounded-xl border border-white/10 shadow-sm flex flex-col h-[calc(100vh-8rem)] relative bg-black/20 font-sans print:bg-white print:p-0 print:m-0 print:border-none">
         {/* Top Header */}
@@ -417,9 +415,9 @@ const InboundShipments: React.FC = () => {
                                                                 <td className="py-4 px-2 text-blue-400">{isEditing ? <input type="number" step="0.01" value={item.rowTotalWeight === 0 ? '' : item.rowTotalWeight} onChange={e => updateItemProperty(item.productId, 'rowTotalWeight', e.target.value)} className="w-24 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300" /> : `${rowWeight.toFixed(2)}kg`}</td>
                                                                 <td className="py-4 px-2 text-blue-400">{isEditing ? <input type="number" step="0.1" value={item.freightRate === 0 ? '' : item.freightRate} onChange={e => updateItemProperty(item.productId, 'freightRate', e.target.value)} className="w-16 bg-blue-500/5 border border-blue-500/20 rounded p-1 text-xs text-blue-300" /> : `¥${rate}`}</td>
                                                                 <td className="py-4 px-2 text-blue-100 font-bold">¥ {lineFreight.toLocaleString()}</td>
-                                                                <td className="py-4 px-2 bg-emerald-500/5 text-emerald-400 font-black">¥ {unitFreight.toFixed(2)}</td>
-                                                                <td className="py-4 px-2 text-indigo-400 font-bold">{isEditing ? <input type="number" step="0.01" value={item.unitPrice === 0 ? '' : item.unitPrice} onChange={e => updateItemProperty(item.productId, 'unitPrice', e.target.value)} className="w-20 bg-indigo-500/5 border border-indigo-500/20 rounded p-1 text-xs text-indigo-300 font-bold" /> : `$${item.unitPrice.toFixed(2)}`}</td>
-                                                                <td className="py-4 px-2 text-right font-black text-indigo-300">${(item.quantity * item.unitPrice).toLocaleString()}</td>
+                                                                <td className="py-4 px-2 bg-emerald-500/5 text-emerald-400 font-black">¥ {(unitFreight || 0).toFixed(2)}</td>
+                                                                <td className="py-4 px-2 text-indigo-400 font-bold">{isEditing ? <input type="number" step="0.01" value={item.unitPrice === 0 ? '' : item.unitPrice} onChange={e => updateItemProperty(item.productId, 'unitPrice', e.target.value)} className="w-20 bg-indigo-500/5 border border-indigo-500/20 rounded p-1 text-xs text-indigo-300 font-bold" /> : `$${(item.unitPrice || 0).toFixed(2)}`}</td>
+                                                                <td className="py-4 px-2 text-right font-black text-indigo-300">${(item.quantity * (item.unitPrice || 0)).toLocaleString()}</td>
                                                                 {isEditing && <td className="py-4 px-2 text-right"><button onClick={() => handleRemoveItem(item.productId)} className="p-1.5 text-slate-700 hover:text-red-400 rounded-lg transition-colors"><Trash2 className="w-4 h-4"/></button></td>}
                                                             </tr>
                                                         );
@@ -485,8 +483,8 @@ const InboundShipments: React.FC = () => {
                                                             <td className="py-4 px-2 font-bold">{item.name}</td>
                                                             <td className="py-4 px-2 font-mono uppercase">{item.sku}</td>
                                                             <td className="py-4 px-2 text-center font-bold">{item.quantity} PCS</td>
-                                                            <td className="py-4 px-2 text-right font-mono">${item.unitPrice.toFixed(2)}</td>
-                                                            <td className="py-4 px-2 text-right font-black">${(item.quantity * item.unitPrice).toFixed(2)}</td>
+                                                            <td className="py-4 px-2 text-right font-mono">${(item.unitPrice || 0).toFixed(2)}</td>
+                                                            <td className="py-4 px-2 text-right font-black">${(item.quantity * (item.unitPrice || 0)).toFixed(2)}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -495,7 +493,7 @@ const InboundShipments: React.FC = () => {
                                                         <td colSpan={2} className="py-6 px-2 text-slate-500 italic">Total Items: {selectedShipment.items.length}</td>
                                                         <td colSpan={2} className="py-6 px-2 text-right font-black uppercase text-lg">Total Invoice Value:</td>
                                                         <td className="py-6 px-2 text-right text-2xl font-black font-mono underline decoration-double">
-                                                            USD {selectedShipment.items.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                            USD {selectedShipment.items.reduce((acc, it) => acc + (it.quantity * (it.unitPrice || 0)), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -570,10 +568,10 @@ const InboundShipments: React.FC = () => {
                                                         <tr key={idx} className="border-b border-slate-200">
                                                             <td className="py-4 px-2 font-mono uppercase">{item.sku}</td>
                                                             <td className="py-4 px-2 font-bold">{item.name}</td>
-                                                            <td className="py-4 px-2 text-center font-bold">{item.boxes}</td>
-                                                            <td className="py-4 px-2 text-center">{item.quantity}</td>
-                                                            <td className="py-4 px-2 text-right font-mono">{(item.rowTotalWeight * 0.95).toFixed(2)}</td>
-                                                            <td className="py-4 px-2 text-right font-black font-mono">{item.rowTotalWeight.toFixed(2)}</td>
+                                                            <td className="py-4 px-2 text-center font-bold">{item.boxes || 0}</td>
+                                                            <td className="py-4 px-2 text-center">{item.quantity || 0}</td>
+                                                            <td className="py-4 px-2 text-right font-mono">{((item.rowTotalWeight || 0) * 0.95).toFixed(2)}</td>
+                                                            <td className="py-4 px-2 text-right font-black font-mono">{(item.rowTotalWeight || 0).toFixed(2)}</td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
@@ -581,9 +579,9 @@ const InboundShipments: React.FC = () => {
                                                     <tr className="bg-slate-50 font-black uppercase">
                                                         <td colSpan={2} className="py-6 px-2 text-right">Matrix Summary:</td>
                                                         <td className="py-6 px-2 text-center text-lg">{selectedShipment.items.reduce((acc, it) => acc + (it.boxes || 0), 0)} CTNS</td>
-                                                        <td className="py-6 px-2 text-center text-lg">{selectedShipment.items.reduce((acc, it) => acc + it.quantity, 0)} PCS</td>
-                                                        <td className="py-6 px-2 text-right italic text-slate-500">VOL: {selectedShipment.totalVolume.toFixed(3)} CBM</td>
-                                                        <td className="py-6 px-2 text-right text-xl font-mono underline">TW: {selectedShipment.totalWeight.toFixed(2)} KGS</td>
+                                                        <td className="py-6 px-2 text-center text-lg">{selectedShipment.items.reduce((acc, it) => acc + (it.quantity || 0), 0)} PCS</td>
+                                                        <td className="py-6 px-2 text-right italic text-slate-500">VOL: {(selectedShipment.totalVolume || 0).toFixed(3)} CBM</td>
+                                                        <td className="py-6 px-2 text-right text-xl font-mono underline">TW: {(selectedShipment.totalWeight || 0).toFixed(2)} KGS</td>
                                                     </tr>
                                                 </tfoot>
                                             </table>
@@ -672,7 +670,7 @@ const InboundShipments: React.FC = () => {
                                     {filteredProducts.length > 0 && (
                                         <div className="absolute top-full left-0 right-0 mt-3 bg-[#0a0a0c] border border-white/10 rounded-3xl shadow-2xl z-50 overflow-hidden divide-y divide-white/5 ring-1 ring-white/10">
                                             {filteredProducts.map(p => (
-                                                <div key={p.id} onMouseDown={(e) => { e.preventDefault(); handleAddItem(p); }} className="p-5 hover:bg-indigo-600/30 cursor-pointer flex justify-between items-center group transition-all">
+                                                <div key={p.id} onMouseDown={(e) => { e.preventDefault(); handleAddItem(p); }} className="p-5 hover:bg-indigo-600/20 cursor-pointer flex justify-between items-center group transition-all">
                                                     <div>
                                                         <div className="text-sm font-black text-white group-hover:text-indigo-300 transition-colors">{p.sku}</div>
                                                         <div className="text-[10px] text-slate-600 font-mono mt-1">{p.name}</div>

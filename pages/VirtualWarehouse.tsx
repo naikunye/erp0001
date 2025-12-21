@@ -72,16 +72,16 @@ const VirtualWarehouse: React.FC = () => {
     const selectedProduct = selectedBin ? binMap[selectedBin] : null;
 
     return (
-        <div className="h-full flex flex-col gap-6 animate-in fade-in duration-700 overflow-hidden">
+        <div className="h-[calc(100vh-8rem)] flex flex-col gap-6 animate-in fade-in duration-700 min-h-0">
             {/* 顶栏控制层 */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0 px-2">
                 <div>
                     <h1 className="text-3xl font-black text-white tracking-widest uppercase flex items-center gap-4 italic">
                         <Grid3X3 className="w-10 h-10 text-indigo-500" />
                         数字化平视仓储矩阵
                     </h1>
                     <p className="text-[10px] text-slate-500 mt-2 font-mono flex items-center gap-2 uppercase tracking-[0.4em]">
-                        <Activity className="w-3 h-3 text-emerald-400 animate-pulse"/> Digital Twin Matrix Plane V5.0
+                        <Activity className="w-3 h-3 text-emerald-400 animate-pulse"/> Digital Twin Matrix Plane V5.2
                     </p>
                 </div>
                 
@@ -99,7 +99,7 @@ const VirtualWarehouse: React.FC = () => {
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
                 {/* 左侧：网格阵列 */}
-                <div className="col-span-12 lg:col-span-8 ios-glass-panel rounded-[2.5rem] flex flex-col overflow-hidden border-white/10 relative bg-[#050508]">
+                <div className="col-span-12 lg:col-span-8 ios-glass-panel rounded-[2.5rem] flex flex-col overflow-hidden border-white/10 relative bg-[#050508] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)]">
                     
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/2 backdrop-blur-md relative z-20">
                         <div className="relative">
@@ -119,9 +119,9 @@ const VirtualWarehouse: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* 网格容器 */}
-                    <div className="flex-1 overflow-auto p-8 custom-scrollbar">
-                        <div className="grid grid-cols-8 gap-4 min-w-[800px]">
+                    {/* 网格容器 - 修正滚动 */}
+                    <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-[radial-gradient(circle_at_center,#0c0c12_0%,#050508_100%)]">
+                        <div className="grid grid-cols-8 gap-4 min-w-[900px] pb-10">
                             {GRID_COLS.map(col => (
                                 <div key={col} className="space-y-4">
                                     {GRID_ROWS.map(row => {
@@ -141,15 +141,10 @@ const VirtualWarehouse: React.FC = () => {
                                                 className={`
                                                     group relative h-28 rounded-2xl border-2 transition-all duration-300 cursor-pointer overflow-hidden
                                                     ${theme.bg} ${theme.border} ${theme.glow}
-                                                    ${isSelected ? 'ring-4 ring-white border-white scale-105 z-10 shadow-2xl' : 'hover:border-white/40'}
+                                                    ${isSelected ? 'ring-4 ring-white border-white scale-[1.02] z-10 shadow-2xl bg-white/5' : 'hover:border-white/40 hover:bg-white/5'}
                                                     ${isMatch ? 'animate-pulse ring-4 ring-yellow-400 border-yellow-400' : ''}
                                                 `}
                                             >
-                                                {/* 背景装饰 */}
-                                                <div className="absolute top-0 right-0 p-2 opacity-5">
-                                                    <Box className="w-12 h-12" />
-                                                </div>
-
                                                 <div className="p-3 h-full flex flex-col justify-between relative z-10">
                                                     <div className="flex justify-between items-start">
                                                         <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-black/40 border border-white/5 ${isSelected ? 'text-white' : 'text-slate-500'}`}>
@@ -171,7 +166,6 @@ const VirtualWarehouse: React.FC = () => {
                                                         </div>
                                                     </div>
 
-                                                    {/* 库存进度条 */}
                                                     {product && (
                                                         <div className="h-1 w-full bg-black/40 rounded-full mt-2 overflow-hidden border border-white/5">
                                                             <div 
@@ -181,9 +175,6 @@ const VirtualWarehouse: React.FC = () => {
                                                         </div>
                                                     )}
                                                 </div>
-
-                                                {/* 选中时的装饰条 */}
-                                                {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-white animate-pulse"></div>}
                                             </div>
                                         );
                                     })}
@@ -192,23 +183,24 @@ const VirtualWarehouse: React.FC = () => {
                         </div>
                     </div>
                     
-                    <div className="p-6 bg-black/40 border-t border-white/5 flex justify-between items-center italic">
+                    <div className="p-5 bg-black/40 border-t border-white/5 flex justify-between items-center italic shrink-0">
                         <div className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] flex items-center gap-4">
-                            <span className="flex items-center gap-2"><Move className="w-3.5 h-3.5"/> 视图坐标: XY-PLANE</span>
-                            <span className="flex items-center gap-2 text-indigo-400"><Waypoints className="w-3.5 h-3.5"/> 缩放级别: 1:1 RESOLUTION</span>
+                            <span className="flex items-center gap-2"><Move className="w-3.5 h-3.5"/> 视图模式: 2D MATRIX</span>
+                            <span className="flex items-center gap-2 text-indigo-400"><Waypoints className="w-3.5 h-3.5"/> 缩放: 100% SCALE</span>
                         </div>
-                        <div className="text-[9px] text-slate-500 font-bold uppercase tracking-widest">
-                            数字化实体资产实时镜像已就绪
+                        <div className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">
+                            已同步系统内 {(state.products || []).length} 项活跃资产
                         </div>
                     </div>
                 </div>
 
-                {/* 右侧：全息面板 */}
-                <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-                    <div className={`ios-glass-card p-10 flex flex-col flex-1 rounded-[3rem] border-l-8 transition-all duration-700 relative overflow-hidden ${selectedProduct ? 'border-l-indigo-500 bg-indigo-500/5' : 'border-l-slate-900 opacity-60'}`}>
+                {/* 右侧：资产全息看板 - 修正高度与滚动 */}
+                <div className="col-span-12 lg:col-span-4 flex flex-col min-h-0">
+                    <div className={`ios-glass-card flex flex-col h-full rounded-[3rem] border-l-8 transition-all duration-700 relative overflow-hidden ${selectedProduct ? 'border-l-indigo-500 bg-indigo-500/5' : 'border-l-slate-900 opacity-60'}`}>
                         {selectedProduct ? (
                             <div className="animate-in slide-in-from-right-8 duration-500 flex flex-col h-full relative z-10">
-                                <div className="flex justify-between items-start mb-12">
+                                {/* Fixed Header inside side panel */}
+                                <div className="p-10 pb-6 flex justify-between items-start shrink-0">
                                     <div>
                                         <div className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.4em] mb-3 flex items-center gap-2">
                                             <Scan className="w-4 h-4"/> Bin Captured
@@ -220,7 +212,8 @@ const VirtualWarehouse: React.FC = () => {
                                     </div>
                                 </div>
 
-                                <div className="space-y-10 flex-1">
+                                {/* Scrollable Content Section */}
+                                <div className="flex-1 overflow-y-auto px-10 space-y-10 custom-scrollbar pb-6">
                                     <div className="bg-black/80 rounded-[2rem] p-7 border border-white/10 shadow-inner group transition-all hover:border-indigo-500/40">
                                         <div className="text-[11px] text-slate-500 font-bold uppercase mb-3 tracking-widest flex justify-between">
                                             <span>挂载资产详细</span>
@@ -251,7 +244,7 @@ const VirtualWarehouse: React.FC = () => {
                                             <BrainCircuit className="w-5 h-5" /> 空间分布 AI 指令
                                         </h4>
                                         <p className="text-[12px] text-indigo-100/70 leading-relaxed font-bold">
-                                            基于近期 {(selectedProduct.dailyBurnRate || 0).toFixed(1)}/D 的流转数据，建议将该商品维持在 <span className="text-white">A-01</span> 黄金拣货位，以最大化出库能效。
+                                            基于近期 {(selectedProduct.dailyBurnRate || 0).toFixed(1)}/D 的流转数据，建议将该商品维持在 <span className="text-white">{selectedBin}</span> 黄金拣货位，以最大化出库能效。
                                         </p>
                                     </div>
 
@@ -263,11 +256,12 @@ const VirtualWarehouse: React.FC = () => {
                                     )}
                                 </div>
 
-                                <div className="pt-10 border-t border-white/10 flex gap-5">
+                                {/* Fixed Footer Buttons */}
+                                <div className="p-10 pt-6 border-t border-white/10 flex gap-5 shrink-0 bg-white/2">
                                     <button 
                                         onClick={handleVisionScan}
                                         disabled={isScanning}
-                                        className="flex-1 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-4 transition-all active:scale-95"
+                                        className="flex-1 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-4 transition-all active:scale-95 shadow-indigo-900/40"
                                     >
                                         {isScanning ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-6 h-6" />}
                                         视觉对账校准
@@ -278,11 +272,11 @@ const VirtualWarehouse: React.FC = () => {
                                 </div>
                             </div>
                         ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-slate-700 space-y-12 opacity-30 italic">
+                            <div className="h-full flex flex-col items-center justify-center text-slate-700 space-y-12 opacity-30 italic p-10">
                                 <div className="w-40 h-40 bg-white/2 rounded-full flex items-center justify-center border-4 border-dashed border-indigo-500/20">
                                     <MousePointer2 className="w-20 h-20 opacity-10" />
                                 </div>
-                                <div className="text-center space-y-4 px-14">
+                                <div className="text-center space-y-4 px-6">
                                     <h3 className="text-2xl font-black uppercase tracking-[0.6em] text-slate-400">选择网格坐标</h3>
                                     <p className="text-[12px] leading-relaxed uppercase tracking-widest text-slate-500 font-black">
                                         点击左侧仓库网格中的任一货位，以激活全息资产监测与 AI 分析。
