@@ -56,7 +56,7 @@ const InboundShipments: React.FC = () => {
               name: item.product.name,
               quantity: item.quantity,
               boxes,
-              unitPrice: item.product.price
+              unitPrice: item.product.price || 0
           };
       });
 
@@ -130,7 +130,7 @@ const InboundShipments: React.FC = () => {
     }
   };
 
-  // 辅助函数：根据 SKU 获取物流分摊成本
+  // 辅助函数：根据 SKU 获取物流分摊成本 (增加安全检查)
   const calculateLogisticsForSKU = (productId: string, quantity: number) => {
       const product = state.products.find(p => p.id === productId);
       if (!product) return { unit: 0, total: 0 };
@@ -139,8 +139,8 @@ const InboundShipments: React.FC = () => {
       const rate = product.logistics?.unitFreightCost || 0;
       const unitLogistics = unitWeight * rate;
       return {
-          unit: unitLogistics,
-          total: unitLogistics * quantity
+          unit: unitLogistics || 0,
+          total: (unitLogistics * (quantity || 0)) || 0
       };
   };
 
@@ -179,8 +179,8 @@ const InboundShipments: React.FC = () => {
                         </div>
                         <h3 className="text-sm font-bold text-white mb-4 truncate">{shipment.name}</h3>
                         <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold uppercase">
-                            <span className="flex items-center gap-1"><Scale className="w-3 h-3"/> {shipment.totalWeight} KG</span>
-                            <span className="flex items-center gap-1"><Box className="w-3 h-3"/> {shipment.items.length} 种物料</span>
+                            <span className="flex items-center gap-1"><Scale className="w-3 h-3"/> {(shipment.totalWeight || 0).toFixed(1)} KG</span>
+                            <span className="flex items-center gap-1"><Box className="w-3 h-3"/> {(shipment.items?.length || 0)} 种物料</span>
                             <span>{shipment.createdDate}</span>
                         </div>
                     </div>
@@ -213,16 +213,16 @@ const InboundShipments: React.FC = () => {
                                         <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500">
                                             <div className="text-[10px] text-slate-500 font-bold uppercase mb-2">地理路由 (Routing)</div>
                                             <div className="flex items-center gap-4 text-white">
-                                                <div className="font-bold text-sm">{WAREHOUSES.find(w=>w.id===selectedShipment.sourceWarehouseId)?.name}</div>
+                                                <div className="font-bold text-sm">{WAREHOUSES.find(w=>w.id===selectedShipment.sourceWarehouseId)?.name || '未知起运点'}</div>
                                                 <ArrowRight className="w-4 h-4 text-slate-700"/>
-                                                <div className="font-bold text-sm">{WAREHOUSES.find(w=>w.id===selectedShipment.destinationWarehouseId)?.name}</div>
+                                                <div className="font-bold text-sm">{WAREHOUSES.find(w=>w.id===selectedShipment.destinationWarehouseId)?.name || '未知目的地'}</div>
                                             </div>
                                         </div>
                                         <div className="ios-glass-card p-6 border-l-4 border-l-amber-500">
                                             <div className="text-[10px] text-slate-500 font-bold uppercase mb-2">载荷审计 (Payload)</div>
                                             <div className="flex items-center gap-8">
-                                                <div><span className="text-[10px] text-slate-600 block">预估总重</span><span className="text-sm font-bold text-white font-mono">{selectedShipment.totalWeight} KG</span></div>
-                                                <div><span className="text-[10px] text-slate-600 block">总体积</span><span className="text-sm font-bold text-white font-mono">{selectedShipment.totalVolume} CBM</span></div>
+                                                <div><span className="text-[10px] text-slate-600 block">预估总重</span><span className="text-sm font-bold text-white font-mono">{(selectedShipment.totalWeight || 0).toFixed(1)} KG</span></div>
+                                                <div><span className="text-[10px] text-slate-600 block">总体积</span><span className="text-sm font-bold text-white font-mono">{(selectedShipment.totalVolume || 0).toFixed(3)} CBM</span></div>
                                             </div>
                                         </div>
                                     </div>
@@ -243,17 +243,18 @@ const InboundShipments: React.FC = () => {
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-white/5 font-mono">
-                                                    {selectedShipment.items.map((item, i) => {
+                                                    {(selectedShipment.items || []).map((item, i) => {
                                                         const logi = calculateLogisticsForSKU(item.productId, item.quantity);
+                                                        const unitPrice = item.unitPrice || 0;
                                                         return (
                                                             <tr key={i} className="hover:bg-white/2 group transition-colors">
                                                                 <td className="py-4 px-2 font-bold text-slate-200">{item.sku}</td>
                                                                 <td className="py-4 px-2 text-slate-400">{item.quantity}</td>
                                                                 <td className="py-4 px-2 text-slate-400">{item.boxes}</td>
-                                                                <td className="py-4 px-2 text-blue-400 font-bold bg-blue-500/5 group-hover:bg-blue-500/10 transition-colors">¥{logi.unit.toFixed(2)}</td>
-                                                                <td className="py-4 px-2 text-blue-300 font-bold">¥{logi.total.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
-                                                                <td className="py-4 px-2 text-amber-600">${(item.unitPrice).toFixed(2)}</td>
-                                                                <td className="py-4 px-2 text-right font-bold text-amber-500">${(item.quantity * item.unitPrice * 0.35).toFixed(2)}</td>
+                                                                <td className="py-4 px-2 text-blue-400 font-bold bg-blue-500/5 group-hover:bg-blue-500/10 transition-colors">¥{(logi.unit || 0).toFixed(2)}</td>
+                                                                <td className="py-4 px-2 text-blue-300 font-bold">¥{(logi.total || 0).toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                                                                <td className="py-4 px-2 text-amber-600">${unitPrice.toFixed(2)}</td>
+                                                                <td className="py-4 px-2 text-right font-bold text-amber-500">${(item.quantity * unitPrice * 0.35).toFixed(2)}</td>
                                                             </tr>
                                                         );
                                                     })}
@@ -266,7 +267,7 @@ const InboundShipments: React.FC = () => {
                                                         </td>
                                                         <td className="py-4 px-2 text-slate-500 text-right">总申报价值:</td>
                                                         <td className="py-4 px-2 text-amber-500 text-right text-lg">
-                                                            $ {selectedShipment.items.reduce((acc, it) => acc + (it.quantity * it.unitPrice * 0.35), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
+                                                            $ {selectedShipment.items.reduce((acc, it) => acc + (it.quantity * (it.unitPrice || 0) * 0.35), 0).toLocaleString(undefined, {minimumFractionDigits: 2})}
                                                         </td>
                                                     </tr>
                                                 </tfoot>
@@ -397,7 +398,7 @@ const InboundShipments: React.FC = () => {
 
                     <div className="p-8 border-t border-white/5 bg-white/2 flex justify-between items-center">
                         <div className="flex gap-10">
-                            <div><span className="text-[10px] text-slate-500 font-black uppercase block">总计预估重</span><span className="text-xl font-black text-white font-mono">{plannedItems.reduce((acc, it) => acc + (it.quantity * (it.product.unitWeight || 0)), 0).toFixed(1)} KG</span></div>
+                            <div><span className="text-[10px] text-slate-500 font-black uppercase block">总计预估重</span><span className="text-xl font-black text-white font-mono">{(plannedItems.reduce((acc, it) => acc + (it.quantity * (it.product.unitWeight || 0)), 0)).toFixed(1)} KG</span></div>
                             <div><span className="text-[10px] text-slate-500 font-black uppercase block">总计材积</span><span className="text-xl font-black text-white font-mono">{(plannedItems.reduce((acc, it) => {
                                 const boxes = Math.ceil(it.quantity / (it.product.itemsPerBox || 1));
                                 return acc + ((it.product.dimensions?.l || 0) * (it.product.dimensions?.w || 0) * (it.product.dimensions?.h || 0) / 1000000) * boxes;
