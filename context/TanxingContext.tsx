@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import AV from 'leancloud-storage';
 import { 
@@ -63,9 +62,6 @@ type Action =
     | { type: 'DELETE_PRODUCT'; payload: string }
     | { type: 'ADD_TRANSACTION'; payload: Transaction }
     | { type: 'DELETE_TRANSACTION'; payload: string }
-    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
     | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
@@ -76,10 +72,19 @@ type Action =
     | { type: 'UPDATE_CUSTOMER'; payload: Customer }
     | { type: 'ADD_CUSTOMER'; payload: Customer }
     | { type: 'DELETE_CUSTOMER'; payload: string }
-    | { type: 'ADD_INFLUENCER'; payload: any }
     | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
     | { type: 'ADD_SUPPLIER'; payload: Supplier }
-    | { type: 'DELETE_SUPPLIER'; payload: string };
+    | { type: 'DELETE_SUPPLIER'; payload: string }
+    | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
+    | { type: 'ADD_SHIPMENT'; payload: Shipment }
+    | { type: 'DELETE_SHIPMENT'; payload: string }
+    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
+    | { type: 'UPDATE_TASK'; payload: Task }
+    | { type: 'ADD_TASK'; payload: Task }
+    | { type: 'DELETE_TASK'; payload: string }
+    | { type: 'ADD_INFLUENCER'; payload: any };
 
 const INITIAL_RULES: AutomationRule[] = [
     { id: 'rule-1', name: '物流异常自动分派', trigger: 'logistics_exception', action: 'create_task', status: 'active' },
@@ -111,6 +116,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_EXCHANGE_RATE': return markDirty({ exchangeRate: action.payload });
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
+        
         case 'UPDATE_PRODUCT': {
             const oldProduct = (state.products || []).find(p => p.id === action.payload.id);
             const stockJournal = [...(state.stockJournal || [])];
@@ -121,16 +127,37 @@ const appReducer = (state: AppState, action: Action): AppState => {
         }
         case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...(state.products || [])] });
         case 'DELETE_PRODUCT': return markDirty({ products: (state.products || []).filter(p => p.id !== action.payload) });
+        
+        case 'UPDATE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...(state.shipments || [])] });
+        case 'DELETE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
+
+        case 'UPDATE_TASK': return markDirty({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
+        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...(state.tasks || [])] });
+        case 'DELETE_TASK': return markDirty({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
+
         case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...(state.transactions || [])] });
         case 'DELETE_TRANSACTION': return markDirty({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
-        case 'HYDRATE_STATE': 
-            return { 
+        
+        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
+        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).filter(s => s.id !== action.payload) });
+
+        case 'UPDATE_CUSTOMER': return markDirty({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
+        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...(state.customers || [])] });
+        case 'DELETE_CUSTOMER': return markDirty({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
+
+        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...(state.suppliers || [])] });
+        case 'DELETE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
+
+        case 'HYDRATE_STATE': {
+            const updated = { 
                 ...state, 
                 ...action.payload,
-                // 关键：确保 leanConfig 被保留
+                // 核心修复：数据注塑时必须保留当前的 leanConfig，除非 payload 里明确有更好的
                 leanConfig: { ...state.leanConfig, ...(action.payload.leanConfig || {}) },
                 products: Array.isArray(action.payload.products) ? action.payload.products : (state.products || []),
-                stockJournal: Array.isArray(action.payload.stockJournal) ? action.payload.stockJournal : (state.stockJournal || []),
                 transactions: Array.isArray(action.payload.transactions) ? action.payload.transactions : (state.transactions || []),
                 customers: Array.isArray(action.payload.customers) ? action.payload.customers : (state.customers || []),
                 orders: Array.isArray(action.payload.orders) ? action.payload.orders : (state.orders || []),
@@ -139,13 +166,18 @@ const appReducer = (state: AppState, action: Action): AppState => {
                 inboundShipments: Array.isArray(action.payload.inboundShipments) ? action.payload.inboundShipments : (state.inboundShipments || []),
                 suppliers: Array.isArray(action.payload.suppliers) ? action.payload.suppliers : (state.suppliers || []),
                 influencers: Array.isArray(action.payload.influencers) ? action.payload.influencers : (state.influencers || []),
-                exchangeRate: action.payload.exchangeRate ?? state.exchangeRate ?? 7.2
             };
+            // 核心修复：从云端拉取后，立即固化到本地，防止刷新瞬间的空白
+            localStorage.setItem(DB_KEY, JSON.stringify(updated));
+            return updated;
+        }
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, orders: MOCK_ORDERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, suppliers: MOCK_SUPPLIERS, isInitialized: true };
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': localStorage.clear(); return { ...emptyState, isInitialized: true };
+        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
+        case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...(state.influencers || [])] });
         default: return state;
     }
 };
@@ -169,7 +201,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         try { 
             AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-            return Promise.resolve();
         } catch (e) { 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
             throw e; 
@@ -178,7 +209,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
         if (!state.syncAllowed && !isForce) return false;
-        if (AV.applicationId === null || isSyncingRef.current) return false;
+        if (!AV.applicationId || isSyncingRef.current) return false;
         
         isSyncingRef.current = true;
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
@@ -225,6 +256,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     cloudObjectId: saved.id 
                 } 
             });
+            
+            // 同步后也刷新一下本地存储，确保双端对齐
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } });
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
@@ -238,16 +271,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
-        // 关键修复：不再依赖 state.connectionStatus，直接检查 AV 实例是否就绪
         if (!AV.applicationId) return false;
-        
         try {
-            // 策略 A：按唯一 ID 检索
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             let backupObj = await query.first();
             
-            // 策略 B：盲搜回退（如果找不到 ID，抓取 Backup 表最后更新的一条，帮用户找回旧数据）
             if (!backupObj) {
                 const fallbackQuery = new AV.Query('Backup');
                 fallbackQuery.descending('updatedAt');
@@ -266,14 +295,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         isInitialized: true 
                     } 
                 });
-                if (!isSilent) showToast('历史数据回填成功', 'success');
+                if (!isSilent) showToast('已从云端恢复历史镜像', 'success');
                 return true;
-            } else {
-                if (!isSilent) showToast('云端为空，未发现可恢复记录', 'info');
-                return false;
             }
+            return false;
         } catch (e: any) { 
-            if (!isSilent) showToast(`连接异常: ${e.message}`, 'error');
+            if (!isSilent) showToast(`云端连接异常: ${e.message}`, 'error');
             return false; 
         }
     };
@@ -289,19 +316,30 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         const startup = async () => {
-            const savedConfig = localStorage.getItem(CONFIG_KEY);
             const savedDb = localStorage.getItem(DB_KEY);
+            const savedConfig = localStorage.getItem(CONFIG_KEY);
             
+            // 核心修复步骤 1：无论有无云端配置，先加载本地离线数据，确保“瞬时加载”
+            if (savedDb) {
+                try { 
+                    dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) }); 
+                    console.log('Local DB Hydrated');
+                } catch(e) {}
+            }
+
+            // 核心修复步骤 2：在本地数据就绪后，异步尝试云端握手
             if (savedConfig) {
                 try {
-                  const config = JSON.parse(savedConfig);
-                  dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
-                  await bootLean(config.appId, config.appKey, config.serverURL);
-                  await pullFromCloud(true); 
+                    const config = JSON.parse(savedConfig);
+                    dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
+                    await bootLean(config.appId, config.appKey, config.serverURL);
+                    // 异步更新，不阻塞 UI 初始化
+                    pullFromCloud(true); 
                 } catch (e) {}
-            } else if (savedDb) {
-                try { dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) }); } catch(e) {}
-            } else { dispatch({ type: 'LOAD_MOCK_DATA' }); }
+            } else if (!savedDb) {
+                // 如果本地既没缓存，云端又没配置，才加载 Mock 数据
+                dispatch({ type: 'LOAD_MOCK_DATA' });
+            }
             
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
