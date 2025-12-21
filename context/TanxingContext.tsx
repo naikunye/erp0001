@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import AV from 'leancloud-storage';
 import { 
@@ -60,12 +61,6 @@ type Action =
     | { type: 'UPDATE_PRODUCT'; payload: Product; reason?: string }
     | { type: 'ADD_PRODUCT'; payload: Product }
     | { type: 'DELETE_PRODUCT'; payload: string }
-    | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
-    | { type: 'ADD_SHIPMENT'; payload: Shipment }
-    | { type: 'DELETE_SHIPMENT'; payload: string }
-    | { type: 'UPDATE_TASK'; payload: Task }
-    | { type: 'ADD_TASK'; payload: Task }
-    | { type: 'DELETE_TASK'; payload: string }
     | { type: 'ADD_TRANSACTION'; payload: Transaction }
     | { type: 'DELETE_TRANSACTION'; payload: string }
     | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
@@ -76,7 +71,6 @@ type Action =
     | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'CLEAR_NAV_PARAMS' }
-    | { type: 'LOG_AUTOMATION'; payload: AutomationLog }
     | { type: 'RESET_DATA' }
     | { type: 'INITIALIZED_SUCCESS' }
     | { type: 'UPDATE_CUSTOMER'; payload: Customer }
@@ -105,7 +99,6 @@ const emptyState: AppState = {
 const appReducer = (state: AppState, action: Action): AppState => {
     const markDirty = (newState: Partial<AppState>): AppState => {
         const updated = { ...state, ...newState, syncAllowed: true, saveStatus: 'dirty' as SaveStatus };
-        // 实时备份至本地 localStorage 防丢
         localStorage.setItem(DB_KEY, JSON.stringify(updated));
         return updated;
     };
@@ -118,7 +111,6 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'SET_EXCHANGE_RATE': return markDirty({ exchangeRate: action.payload });
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        
         case 'UPDATE_PRODUCT': {
             const oldProduct = (state.products || []).find(p => p.id === action.payload.id);
             const stockJournal = [...(state.stockJournal || [])];
@@ -133,7 +125,10 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'DELETE_TRANSACTION': return markDirty({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
         case 'HYDRATE_STATE': 
             return { 
-                ...state, ...action.payload,
+                ...state, 
+                ...action.payload,
+                // 关键：确保 leanConfig 被保留
+                leanConfig: { ...state.leanConfig, ...(action.payload.leanConfig || {}) },
                 products: Array.isArray(action.payload.products) ? action.payload.products : (state.products || []),
                 stockJournal: Array.isArray(action.payload.stockJournal) ? action.payload.stockJournal : (state.stockJournal || []),
                 transactions: Array.isArray(action.payload.transactions) ? action.payload.transactions : (state.transactions || []),
@@ -171,13 +166,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
-        try { AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); }
-        catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); throw e; }
+        try { 
+            AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); 
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
+            return Promise.resolve();
+        } catch (e) { 
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
+            throw e; 
+        }
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
         if (!state.syncAllowed && !isForce) return false;
-        if (state.connectionStatus !== 'connected' || isSyncingRef.current) return false;
+        if (AV.applicationId === null || isSyncingRef.current) return false;
         
         isSyncingRef.current = true;
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
@@ -200,7 +201,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const jsonPayload = JSON.stringify(payloadData);
             let backupObj;
 
-            // 修复：双向检索逻辑
             if (state.leanConfig.cloudObjectId) {
                 backupObj = AV.Object.createWithoutData('Backup', state.leanConfig.cloudObjectId);
             } else {
@@ -229,7 +229,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
         } catch (e: any) { 
-            console.error('Cloud Sync Failed:', e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
             showToast(`同步失败: ${e.message}`, 'error');
             return false; 
@@ -239,19 +238,42 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
-        if (state.connectionStatus !== 'connected') return false;
+        // 关键修复：不再依赖 state.connectionStatus，直接检查 AV 实例是否就绪
+        if (!AV.applicationId) return false;
+        
         try {
-            const query = new AV.Query('Backup'); query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
-            const backupObj = await query.first();
+            // 策略 A：按唯一 ID 检索
+            const query = new AV.Query('Backup');
+            query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
+            let backupObj = await query.first();
+            
+            // 策略 B：盲搜回退（如果找不到 ID，抓取 Backup 表最后更新的一条，帮用户找回旧数据）
+            if (!backupObj) {
+                const fallbackQuery = new AV.Query('Backup');
+                fallbackQuery.descending('updatedAt');
+                backupObj = await fallbackQuery.first();
+            }
+
             if (backupObj) {
                 const data = JSON.parse(backupObj.get('payload'));
-                dispatch({ type: 'HYDRATE_STATE', payload: { ...data, leanConfig: { ...state.leanConfig, cloudObjectId: backupObj.id }, syncAllowed: false, saveStatus: 'idle', isInitialized: true } });
-                if (!isSilent) showToast('云端镜像同步成功', 'success');
+                dispatch({ 
+                    type: 'HYDRATE_STATE', 
+                    payload: { 
+                        ...data, 
+                        leanConfig: { ...state.leanConfig, cloudObjectId: backupObj.id },
+                        syncAllowed: false, 
+                        saveStatus: 'idle', 
+                        isInitialized: true 
+                    } 
+                });
+                if (!isSilent) showToast('历史数据回填成功', 'success');
                 return true;
+            } else {
+                if (!isSilent) showToast('云端为空，未发现可恢复记录', 'info');
+                return false;
             }
-            return false;
         } catch (e: any) { 
-            if (!isSilent) showToast(`拉取失败: ${e.message}`, 'error');
+            if (!isSilent) showToast(`连接异常: ${e.message}`, 'error');
             return false; 
         }
     };
@@ -259,7 +281,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         if (!state.isInitialized) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
-        if (state.connectionStatus === 'connected' && state.syncAllowed && !isSyncingRef.current) {
+        if (AV.applicationId && state.syncAllowed && !isSyncingRef.current) {
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
@@ -269,6 +291,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const startup = async () => {
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             const savedDb = localStorage.getItem(DB_KEY);
+            
             if (savedConfig) {
                 try {
                   const config = JSON.parse(savedConfig);
@@ -279,6 +302,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             } else if (savedDb) {
                 try { dispatch({ type: 'HYDRATE_STATE', payload: JSON.parse(savedDb) }); } catch(e) {}
             } else { dispatch({ type: 'LOAD_MOCK_DATA' }); }
+            
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
         startup();
