@@ -17,16 +17,16 @@
               mono: ['"JetBrains Mono"', 'monospace'],
             },
             animation: {
-              'blob': 'blob 15s infinite alternate',
+              'blob': 'blob-dance 25s infinite alternate',
               'spin-slow': 'spin 12s linear infinite',
               'scan': 'scan 3s linear infinite',
             },
             keyframes: {
-              blob: {
-                '0%': { transform: 'translate(0px, 0px) scale(1)' },
-                '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-                '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-                '100%': { transform: 'translate(0px, 0px) scale(1)' },
+              'blob-dance': {
+                '0%': { transform: 'translate(0px, 0px) scale(1) rotate(0deg)', borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%' },
+                '33%': { transform: 'translate(30px, -50px) scale(1.1) rotate(45deg)', borderRadius: '50% 50% 20% 80% / 20% 80% 20% 80%' },
+                '66%': { transform: 'translate(-20px, 20px) scale(0.9) rotate(-45deg)', borderRadius: '80% 20% 50% 50% / 50% 20% 80% 50%' },
+                '100%': { transform: 'translate(0px, 0px) scale(1) rotate(0deg)', borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%' },
               },
               scan: {
                 '0%': { transform: 'translateY(-100%)' },
@@ -62,30 +62,29 @@
 
       .blob {
         position: absolute;
-        filter: blur(90px);
-        border-radius: 50%;
-        opacity: 0.45;
-        transition: all 1.2s ease;
+        filter: blur(80px);
+        opacity: 0.4;
+        transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        will-change: transform, border-radius;
       }
 
-      /* 主题色彩配置 */
-      body.theme-ios-glass { --theme-primary: #6366f1; }
-      body.theme-ios-glass .ambient-bg { background: #050814; }
-      body.theme-ios-glass .blob-1 { top: -10%; left: -10%; width: 55vw; height: 55vw; background: #312e81; animation: blob 20s infinite; }
-      body.theme-ios-glass .blob-2 { bottom: -10%; right: -10%; width: 65vw; height: 65vw; background: #1e1b4b; animation: blob 25s infinite reverse; }
-      body.theme-ios-glass .blob-3 { top: 40%; left: 30%; width: 35vw; height: 35vw; background: #4338ca; animation: blob 15s infinite alternate; }
+      /* Blob 初始分布与动画 */
+      .blob-1 { top: -10%; left: -5%; width: 50vw; height: 50vw; background: #312e81; animation: blob-dance 20s infinite ease-in-out; }
+      .blob-2 { bottom: -10%; right: -5%; width: 55vw; height: 55vw; background: #1e1b4b; animation: blob-dance 25s infinite ease-in-out reverse; }
+      .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: #4338ca; animation: blob-dance 18s infinite ease-in-out alternate; }
 
-      body.theme-midnight-dark { --theme-primary: #f43f5e; }
-      body.theme-midnight-dark .ambient-bg { background: #0f0505; }
-      body.theme-midnight-dark .blob-1 { top: -10%; right: -10%; width: 60vw; height: 60vw; background: #881337; animation: blob 18s infinite; }
-      body.theme-midnight-dark .blob-2 { bottom: -5%; left: -5%; width: 50vw; height: 50vw; background: #4c0519; animation: blob 22s infinite reverse; }
-      body.theme-midnight-dark .blob-3 { top: 30%; left: 50%; width: 45vw; height: 45vw; background: #fb7185; opacity: 0.25; animation: blob 20s infinite alternate; }
+      /* 主题色彩配置联动 */
+      body.theme-ios-glass .blob-1 { background: #312e81; }
+      body.theme-ios-glass .blob-2 { background: #1e1b4b; }
+      body.theme-ios-glass .blob-3 { background: #4338ca; }
 
-      body.theme-cyber-neon { --theme-primary: #10b981; }
-      body.theme-cyber-neon .ambient-bg { background: #020606; }
-      body.theme-cyber-neon .blob-1 { top: -15%; left: 20%; width: 55vw; height: 55vw; background: #064e3b; animation: blob 25s infinite; }
-      body.theme-cyber-neon .blob-2 { bottom: -10%; right: 10%; width: 60vw; height: 60vw; background: #065f46; animation: blob 18s infinite reverse; }
-      body.theme-cyber-neon .blob-3 { top: 50%; left: -10%; width: 40vw; height: 40vw; background: #10b981; opacity: 0.2; animation: blob 20s infinite alternate; }
+      body.theme-midnight-dark .blob-1 { background: #881337; }
+      body.theme-midnight-dark .blob-2 { background: #4c0519; }
+      body.theme-midnight-dark .blob-3 { background: #fb7185; }
+
+      body.theme-cyber-neon .blob-1 { background: #064e3b; }
+      body.theme-cyber-neon .blob-2 { background: #065f46; }
+      body.theme-cyber-neon .blob-3 { background: #10b981; }
 
       /* 毛玻璃面板 2.0 */
       .ios-glass-panel {
@@ -103,7 +102,6 @@
         -webkit-backdrop-filter: blur(25px) saturate(180%);
       }
 
-      /* 品牌 Logo 专用字体样式 */
       .brand-logo {
         font-family: 'Inter', sans-serif;
         font-weight: 900;
