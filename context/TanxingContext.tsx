@@ -208,7 +208,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
         }
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, isInitialized: true, syncLocked: false };
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
-        case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
+        case 'SET_LEAN_CONFIG': {
+            const newConfig = { ...state.leanConfig, ...action.payload };
+            // 核心改进：只要设置配置，立即强行写入 localStorage
+            localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig));
+            return { ...state, leanConfig: newConfig };
+        }
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
@@ -234,6 +239,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
+        if (!appId || !appKey || !serverURL) return;
         try { 
             AV.init({ 
                 appId: appId.trim(), 
@@ -271,7 +277,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             const jsonPayload = JSON.stringify(payloadData);
             
-            // 查找现有的备份
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             query.descending('updatedAt');
@@ -283,7 +288,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 backupObj.set('uniqueId', 'GLOBAL_ERP_NODE');
             }
 
-            // 强制设置公共权限，防止多电脑同步权限失败
             const acl = new AV.ACL();
             acl.setPublicReadAccess(true);
             acl.setPublicWriteAccess(true);
@@ -310,14 +314,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
         if (!AV.applicationId) return false;
         try {
-            // 核心修复：影子探测。如果 uniqueId 查不到，尝试扫描该表的第一条记录。
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             query.descending('updatedAt');
             
             let backupObj = await query.first();
             
-            // 如果查不到，进行盲查尝试
             if (!backupObj) {
                 const blindQuery = new AV.Query('Backup');
                 blindQuery.limit(1);
@@ -326,7 +328,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
 
             if (backupObj) {
-                await backupObj.fetch(); // 强制刷新
+                await backupObj.fetch(); 
                 const rawPayload = backupObj.get('payload');
                 if (!rawPayload) return false;
 
@@ -375,7 +377,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         const startup = async () => {
-            // 1. 加载本地数据
             try {
                 const savedDb: any = await idb.get('GLOBAL_STATE');
                 if (savedDb) {
@@ -383,7 +384,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             } catch(e) {}
 
-            // 2. 自动建立云端握手
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             if (savedConfig) {
                 try {

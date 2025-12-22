@@ -4,13 +4,13 @@ import {
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
     FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive,
-    Sun, Waves, Wind, Search
+    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('theme');
+  const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud'); // 默认切到云端
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const [isPullingNow, setIsPullingNow] = useState(false);
@@ -23,6 +23,7 @@ const Settings: React.FC = () => {
   const currentSize = state.leanConfig?.payloadSize || 0;
   const sizePercentage = Math.min(100, (currentSize / LEANCLOUD_LIMIT) * 100);
 
+  // 初始化表单
   useEffect(() => {
     if (state.leanConfig) {
         setLeanForm({
@@ -34,25 +35,36 @@ const Settings: React.FC = () => {
   }, [state.leanConfig]);
 
   const handleSaveConfig = async () => {
+      // 1. 基本校验
       if (!leanForm.appId || !leanForm.appKey || !leanForm.serverURL) {
           showToast('请完整填写配置信息', 'warning');
           return;
       }
+
+      // 2. 防错校验：App ID 不能是 URL
+      if (leanForm.appId.includes('://') || leanForm.appId.includes('supabase')) {
+          showToast('App ID 填错啦！它应该是字符 ID，不是 https 开头的网址。', 'error');
+          return;
+      }
+
       setIsSaving(true);
       setCloudStatus('unknown');
+
       try {
-          // 1. 初始化连接
-          await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
+          // 3. 立即强制写入一次本地存储，防止后续流程中断
           dispatch({ type: 'SET_LEAN_CONFIG', payload: leanForm });
           
-          // 2. 探测云端数据
+          // 4. 初始化连接
+          await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
+          
+          // 5. 探测云端数据
           const found = await pullFromCloud(true);
           if (found) {
               setCloudStatus('found');
-              showToast('神经链路握手成功：已发现并回填云端镜像', 'success');
+              showToast('神经链路握手成功：数据已瞬移回填', 'success');
           } else {
               setCloudStatus('not_found');
-              showToast('物理连接成功：云端暂无此应用的备份记录', 'info');
+              showToast('连接已建立，但云端尚无历史镜像', 'info');
           }
       } catch (e: any) {
           showToast(`链路激活失败: ${e.message}`, 'error');
@@ -69,7 +81,7 @@ const Settings: React.FC = () => {
           const success = await syncToCloud(true);
           if (success) {
               setCloudStatus('found');
-              showToast('全量数据推送成功', 'success');
+              showToast('全量数据已成功推送到云端', 'success');
           }
       } finally {
           setIsSyncingNow(false);
@@ -128,23 +140,32 @@ const Settings: React.FC = () => {
       {activeTab === 'cloud' && (
           <div className="space-y-6 animate-in fade-in duration-500">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className="lg:col-span-2 bg-indigo-500/10 border border-indigo-500/30 rounded-3xl p-8 flex items-start gap-6">
-                      <div className="p-4 bg-indigo-500/20 rounded-2xl shrink-0"><DatabaseZap className="w-8 h-8 text-indigo-400" /></div>
+                  <div className={`lg:col-span-2 border rounded-3xl p-8 flex items-start gap-6 transition-all ${state.connectionStatus === 'connected' ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
+                      <div className={`p-4 rounded-2xl shrink-0 ${state.connectionStatus === 'connected' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                        {state.connectionStatus === 'connected' ? <ShieldCheck className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
+                      </div>
                       <div>
-                          <h4 className="text-indigo-300 font-black text-sm uppercase tracking-wider">存储协议状态</h4>
+                          <h4 className={`font-black text-sm uppercase tracking-wider ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-indigo-300'}`}>
+                              {state.connectionStatus === 'connected' ? '物理链路：已连通' : '存储协议状态'}
+                          </h4>
                           <div className="mt-4 space-y-3">
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white">Rest API 连接: {state.connectionStatus.toUpperCase()}</span>
+                                  <div className={`w-3 h-3 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : 'bg-slate-700 animate-pulse'}`}></div>
+                                  <span className="text-xs font-bold text-white uppercase tracking-tighter">SDK 握手: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${cloudStatus === 'found' ? 'bg-indigo-500 shadow-[0_0_8px_#6366f1]' : cloudStatus === 'not_found' ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white">
-                                      云端镜像探测: {cloudStatus === 'found' ? '已定位数据节点' : cloudStatus === 'not_found' ? '未发现有效节点' : '等待探测...'}
+                                  <div className={`w-3 h-3 rounded-full ${cloudStatus === 'found' ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : cloudStatus === 'not_found' ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
+                                  <span className="text-xs font-bold text-white tracking-tighter">
+                                      云端探测: {cloudStatus === 'found' ? '已定位镜像节点' : cloudStatus === 'not_found' ? '节点为空(待同步)' : '等待探测中...'}
                                   </span>
                               </div>
                           </div>
                       </div>
+                      {state.connectionStatus === 'connected' && (
+                          <div className="ml-auto flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-xl text-emerald-400 font-black text-[10px] uppercase animate-in zoom-in">
+                              <CheckCircle2 className="w-4 h-4" /> Ready for Sync
+                          </div>
+                      )}
                   </div>
                   <div className="ios-glass-panel p-8 rounded-3xl flex flex-col justify-center border-white/10">
                       <div className="flex justify-between items-center mb-4">
@@ -163,46 +184,56 @@ const Settings: React.FC = () => {
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">
                   <div className="bg-black/40 border border-white/5 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
                       <div className="flex items-center gap-6">
-                          <div className={`p-5 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-xl' : 'bg-slate-800 text-slate-500'}`}><Wifi className="w-10 h-10" /></div>
+                          <div className={`p-5 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-xl' : 'bg-slate-800 text-slate-500'}`}>
+                              {state.connectionStatus === 'connected' ? <Wifi className="w-10 h-10" /> : <Unplug className="w-10 h-10" />}
+                          </div>
                           <div>
-                              <h4 className="text-white text-xl font-black uppercase tracking-tighter italic">REST API 实时链路</h4>
-                              <p className="text-[10px] text-slate-500 uppercase font-mono font-bold mt-2">上次同步: <span className="text-indigo-400">{state.leanConfig?.lastSync || '永不'}</span></p>
+                              <h4 className="text-white text-xl font-black uppercase tracking-tighter italic">REST API 密钥配置</h4>
+                              <p className="text-[10px] text-slate-500 uppercase font-mono font-bold mt-2">上次同步: <span className="text-indigo-400">{state.leanConfig?.lastSync || '无'}</span></p>
                           </div>
                       </div>
                       <div className="flex gap-4">
-                          <button onClick={() => pullFromCloud(false)} disabled={isPullingNow || state.connectionStatus !== 'connected'} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20">{isPullingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudDownload className="w-4 h-4" />} 强制找回旧数据</button>
-                          <button onClick={handleManualPush} disabled={isSyncingNow || state.connectionStatus !== 'connected'} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl disabled:opacity-20">{isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudUpload className="w-4 h-4" />} 手动推送当前数据</button>
+                          <button onClick={() => pullFromCloud(false)} disabled={isPullingNow || state.connectionStatus !== 'connected'} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20 flex items-center gap-2">
+                              {isPullingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudDownload className="w-4 h-4" />} 找回数据
+                          </button>
+                          <button onClick={handleManualPush} disabled={isSyncingNow || state.connectionStatus !== 'connected'} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl disabled:opacity-20">
+                              {isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudUpload className="w-4 h-4" />} 推送同步
+                          </button>
                       </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                      <div className="space-y-5">
+                      <div className="space-y-6">
                           <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Application ID</label>
-                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono" placeholder="填入 LeanCloud App ID" />
+                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2 flex justify-between">
+                                  <span>Application ID</span>
+                                  {leanForm.appId.includes('://') && <span className="text-rose-500 lowercase italic flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 这里不填网址，填 ID</span>}
+                              </label>
+                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value.trim()})} className={`w-full bg-black/60 border rounded-2xl p-4 text-sm text-white font-mono outline-none transition-all ${leanForm.appId.includes('://') ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-white/10 focus:border-indigo-500'}`} placeholder="例如: 4dzrxzapw..." />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">App Key</label>
-                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono" placeholder="填入 LeanCloud App Key" />
+                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="填入 LeanCloud App Key" />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Rest API Server URL</label>
-                              <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono" placeholder="https://xxx.lncldglobal.com" />
+                              <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="https://xxx.lncldglobal.com" />
                           </div>
-                          <button onClick={handleSaveConfig} disabled={isSaving} className="w-full py-5 bg-gradient-to-r from-indigo-600 to-violet-600 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95">
-                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <ShieldCheck className="w-5 h-5" />} 激活链路并找回旧数据
+                          <button onClick={handleSaveConfig} disabled={isSaving} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${state.connectionStatus === 'connected' ? 'bg-emerald-600 text-white' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
+                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : state.connectionStatus === 'connected' ? <CheckCircle2 className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                              {state.connectionStatus === 'connected' ? '链路已激活 - 再次点击刷新' : '激活链路并同步数据'}
                           </button>
                       </div>
                       
                       <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col justify-center">
                           <div className="flex items-center gap-4 mb-6">
                               <Info className="w-6 h-6 text-indigo-400" />
-                              <h5 className="text-white font-bold">同步指南</h5>
+                              <h5 className="text-white font-bold">填报说明</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>在<b>第一台电脑</b>配置好密钥并点击“手动推送同步”。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>在<b>第二台电脑</b>填入完全相同的密钥，点击“激活链路”。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">03</span><span>系统会自动识别云端记录并覆盖本地 Mock 数据。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>App ID</b> 不是网址！在 LeanCloud 开发者设置 -> 应用凭证里找，是一串随机乱码。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span><b>Server URL</b> 必须是 <code>https://</code> 开头的完整域名。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">03</span><span>配置成功后，头部状态栏会显示绿色 <b>CONNECTED</b> 呼吸灯。</span></li>
                           </ul>
                       </div>
                   </div>
