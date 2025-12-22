@@ -220,12 +220,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const query = new AV.Query('Backup'); 
             await query.limit(1).find(); 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-            dispatch({ type: 'UNLOCK_SYNC' }); // 物理握手成功后，立即解锁同步引擎
+            dispatch({ type: 'UNLOCK_SYNC' }); 
         } catch (e: any) { 
             console.error("[BootLean] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
+            dispatch({ type: 'UNLOCK_SYNC' }); // 即使报错也解锁，允许用户本地修改并手动重试
             const isCors = e.message.includes('terminated') || e.message.includes('Access-Control') || e.message.includes('CORS');
-            throw new Error(isCors ? `[物理层拦截] 请在 LeanCloud 控制台中将域名 ${window.location.origin} 加入“Web安全域名”。` : `认证失败: ${e.message}`); 
+            throw new Error(isCors ? `[物理层拦截] 请将域名 ${window.location.origin.replace(/\/$/, "")} 加入安全域名。` : `认证失败: ${e.message}`); 
         } 
     };
 
@@ -349,7 +350,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             } catch (e) {}
         };
 
-        const heartbeat = setInterval(checkRemoteUpdate, 10000); // 缩短心跳至 10 秒，增加即时感
+        const heartbeat = setInterval(checkRemoteUpdate, 10000); 
         return () => clearInterval(heartbeat);
     }, [state.isInitialized, state.connectionStatus, state.leanConfig.remoteUpdatedAt, state.saveStatus]);
 

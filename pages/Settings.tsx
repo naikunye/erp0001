@@ -4,7 +4,7 @@ import {
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
     FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive,
-    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy
+    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy, Terminal, Globe
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
@@ -12,7 +12,6 @@ const Settings: React.FC = () => {
   const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean, disconnectLean } = useTanxing();
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud'); 
   const [isSaving, setIsSaving] = useState(false);
-  const [isSyncingNow, setIsSyncingNow] = useState(false);
   const [isPullingNow, setIsPullingNow] = useState(false);
   const [cloudStatus, setCloudStatus] = useState<'unknown' | 'found' | 'not_found'>('unknown');
 
@@ -40,24 +39,22 @@ const Settings: React.FC = () => {
           showToast('请完整填写配置信息', 'warning');
           return;
       }
-      if (leanForm.appId.includes('://')) {
-          showToast('App ID 填错啦！它不应该是网址，而是一串随机乱码 ID', 'error');
-          return;
-      }
-
       setIsSaving(true);
       setCloudStatus('unknown');
 
       try {
-          dispatch({ type: 'SET_LEAN_CONFIG', payload: leanForm });
-          await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
+          const cleanUrl = leanForm.serverURL.trim().replace(/\/$/, "");
+          const cleanConfig = { ...leanForm, serverURL: cleanUrl };
+          
+          dispatch({ type: 'SET_LEAN_CONFIG', payload: cleanConfig });
+          await bootLean(cleanConfig.appId, cleanConfig.appKey, cleanConfig.serverURL);
           const found = await pullFromCloud(true);
           if (found) {
               setCloudStatus('found');
-              showToast('神经链路激活：已同步云端镜像', 'success');
+              showToast('同步成功：已拉取云端数据', 'success');
           } else {
               setCloudStatus('not_found');
-              showToast('物理连接成功：云端尚无历史镜像', 'info');
+              showToast('连接成功：云端尚无数据', 'info');
           }
       } catch (e: any) {
           showToast(e.message, 'error');
@@ -66,19 +63,12 @@ const Settings: React.FC = () => {
       }
   };
 
-  const copyOrigin = () => {
-      const origin = window.location.origin.replace(/\/$/, "");
-      navigator.clipboard.writeText(origin);
-      showToast('核心域名已复制（已自动去除斜杠）', 'success');
-  };
+  const getCleanOrigin = () => window.location.origin.replace(/\/$/, "");
 
-  const handleManualPull = async () => {
-      setIsPullingNow(true);
-      try {
-          await pullFromCloud(false);
-      } finally {
-          setIsPullingNow(false);
-      }
+  const copyOrigin = () => {
+      const origin = getCleanOrigin();
+      navigator.clipboard.writeText(origin);
+      showToast('域名已复制，请前往 LeanCloud 后台粘贴', 'success');
   };
 
   const formatSize = (bytes: number) => {
@@ -132,14 +122,36 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-6 animate-in fade-in duration-500">
+              {/* 第一步：强制展示域名校验 */}
+              <div className="bg-indigo-600/10 border-2 border-indigo-500/20 rounded-[2.5rem] p-8 flex items-center gap-8 relative overflow-hidden">
+                  <div className="absolute top-0 right-0 p-10 opacity-5"><Terminal className="w-40 h-40"/></div>
+                  {/* Added missing Globe import to fix 'Cannot find name Globe' error */}
+                  <div className="p-5 bg-indigo-600 rounded-3xl text-white shadow-2xl shrink-0"><Globe className="w-10 h-10"/></div>
+                  <div className="flex-1">
+                      <h4 className="text-white font-black text-lg uppercase italic tracking-tighter">必看：物理层授权自检</h4>
+                      <p className="text-slate-400 text-sm mt-1">如果你看到“指令被拦截”，是因为你没有把下方网址告诉 LeanCloud。</p>
+                      <div className="mt-5 flex items-center gap-4">
+                          <code className="bg-black/60 border border-white/10 px-6 py-3 rounded-2xl text-indigo-400 font-mono text-sm font-bold shadow-inner">
+                              {getCleanOrigin()}
+                          </code>
+                          <button onClick={copyOrigin} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all active:scale-95">
+                              <Copy className="w-4 h-4"/> 复制域名
+                          </button>
+                      </div>
+                      <p className="text-[10px] text-rose-500 font-black uppercase mt-3 tracking-widest flex items-center gap-2">
+                          <AlertCircle className="w-3 h-3"/> 警告：粘贴到 LeanCloud 后台时，末尾一定不能有斜杠 /
+                      </p>
+                  </div>
+              </div>
+
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className={`lg:col-span-2 border rounded-3xl p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
+                  <div className={`lg:col-span-2 border rounded-[2.5rem] p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
                       <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : isError ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                         {isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
                       </div>
-                      <div>
+                      <div className="flex-1">
                           <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : isError ? 'text-red-400' : 'text-indigo-300'}`}>
-                              {isConnected ? '神经链路：稳固连接中' : isError ? '连接异常中止' : '存储协议状态'}
+                              {isConnected ? '神经链路：稳固连接中' : isError ? '物理连接受限 (CORS)' : '存储协议状态'}
                           </h4>
                           <div className="mt-4 space-y-3">
                               <div className="flex items-center gap-3">
@@ -153,9 +165,9 @@ const Settings: React.FC = () => {
                           </div>
                       </div>
                       {isConnected && (
-                          <div className="ml-auto flex flex-col gap-2">
-                              <div className="flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-xl text-emerald-400 font-black text-[10px] uppercase animate-in zoom-in">
-                                  <CheckCircle2 className="w-4 h-4" /> Connected
+                          <div className="flex flex-col gap-2">
+                              <div className="flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-xl text-emerald-400 font-black text-[10px] uppercase">
+                                  <CheckCircle2 className="w-4 h-4" /> Live
                               </div>
                               <button onClick={disconnectLean} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
                                   <Link2Off className="w-3 h-3" /> Disconnect
@@ -163,7 +175,7 @@ const Settings: React.FC = () => {
                           </div>
                       )}
                   </div>
-                  <div className="ios-glass-panel p-8 rounded-3xl flex flex-col justify-center border-white/10 relative overflow-hidden">
+                  <div className="ios-glass-panel p-8 rounded-[2.5rem] flex flex-col justify-center border-white/10 relative overflow-hidden">
                       {isPullingNow && <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-[1px] z-10 flex items-center justify-center"><Loader2 className="w-6 h-6 text-indigo-400 animate-spin"/></div>}
                       <div className="flex justify-between items-center mb-4">
                           <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2">
@@ -178,54 +190,7 @@ const Settings: React.FC = () => {
                   </div>
               </div>
 
-              {isError && (
-                  <div className="bg-red-500/10 border-2 border-dashed border-red-500/30 rounded-3xl p-8 flex items-center gap-8 animate-in slide-in-from-top-4">
-                      <div className="p-5 bg-red-600 rounded-2xl text-white shadow-lg"><ShieldAlert className="w-10 h-10"/></div>
-                      <div className="flex-1">
-                          <h4 className="text-red-400 font-black text-lg uppercase italic tracking-tighter">拦截警报：CORS 物理层同步阻塞</h4>
-                          <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-                            即便网址完全一样，由于 LeanCloud 开启了白名单验证，<b>必须精确匹配字符串</b>。
-                          </p>
-                          <div className="mt-4 flex flex-wrap gap-4">
-                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[300px]">
-                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase flex justify-between">
-                                      <span>1. 确认当前 Origin (请复制下方内容)</span>
-                                      <button onClick={copyOrigin} className="text-indigo-400 flex items-center gap-1 hover:text-white transition-colors"><Copy className="w-3 h-3"/> 点击复制</button>
-                                  </div>
-                                  <code className="text-xs text-indigo-400 font-mono bg-indigo-500/5 px-2 py-1 rounded block truncate">{window.location.origin.replace(/\/$/, "")}</code>
-                              </div>
-                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[300px]">
-                                  <div className="text-[10px] text-rose-500 font-black mb-2 uppercase">2. 控制台修正检查</div>
-                                  <p className="text-[11px] text-slate-400 font-bold leading-tight">
-                                      请检查 LeanCloud 设置中是否带了<b>末尾斜杠</b>。如果有，请删除斜杠（例如 <code>.app/</code> 改为 <code>.app</code>），保存后等待 60 秒再生效。
-                                  </p>
-                              </div>
-                          </div>
-                      </div>
-                  </div>
-              )}
-
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">
-                  <div className="bg-black/40 border border-white/5 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-                      <div className="flex items-center gap-6">
-                          <div className={`p-5 rounded-2xl ${isConnected ? 'bg-emerald-500/10 text-emerald-400 shadow-xl' : 'bg-slate-800 text-slate-500'}`}>
-                              {isConnected ? <Wifi className="w-10 h-10" /> : <Unplug className="w-10 h-10" />}
-                          </div>
-                          <div>
-                              <h4 className="text-white text-xl font-black uppercase tracking-tighter italic">REST API 密钥配置</h4>
-                              <p className="text-[10px] text-slate-500 uppercase font-mono font-bold mt-2">上次同步: <span className="text-indigo-400">{state.leanConfig?.lastSync || '无记录'}</span></p>
-                          </div>
-                      </div>
-                      <div className="flex gap-4">
-                          <button onClick={handleManualPull} disabled={isPullingNow || !isConnected} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20 flex items-center gap-2">
-                              {isPullingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudDownload className="w-4 h-4" />} 拉取镜像
-                          </button>
-                          <button onClick={() => syncToCloud(true)} disabled={isSyncingNow || !isConnected} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl disabled:opacity-20">
-                              {isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudUpload className="w-4 h-4" />} 推送同步
-                          </button>
-                      </div>
-                  </div>
-
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                       <div className="space-y-6 relative">
                           {isConnected && (
@@ -236,15 +201,12 @@ const Settings: React.FC = () => {
                               </div>
                           )}
                           <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2 flex justify-between">
-                                  <span>Application ID</span>
-                                  {leanForm.appId.includes('://') && <span className="text-rose-500 lowercase italic flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 这里填 ID，不填网址</span>}
-                              </label>
-                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value.trim()})} className={`w-full bg-black/60 border rounded-2xl p-4 text-sm text-white font-mono outline-none transition-all ${leanForm.appId.includes('://') ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-white/10'}`} placeholder="例如: 4dzrxzapw..." disabled={isConnected} />
+                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Application ID</label>
+                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="App ID" disabled={isConnected} />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">App Key</label>
-                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="填入 LeanCloud App Key" disabled={isConnected} />
+                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="App Key" disabled={isConnected} />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Rest API Server URL</label>
@@ -252,19 +214,19 @@ const Settings: React.FC = () => {
                           </div>
                           <button onClick={handleSaveConfig} disabled={isSaving || isConnected} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
                               {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : isConnected ? <CheckCircle2 className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-                              {isConnected ? '神经链路已连接 (Connected)' : '激活链路并同步数据'}
+                              {isConnected ? '神经链路已连接' : '激活链路并尝试同步'}
                           </button>
                       </div>
                       
                       <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col justify-center">
                           <div className="flex items-center gap-4 mb-6">
                               <Info className="w-6 h-6 text-indigo-400" />
-                              <h5 className="text-white font-bold">连接指引</h5>
+                              <h5 className="text-white font-bold uppercase italic tracking-widest">排障矩阵 (Debug Matrix)</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>激活链路</b>后，输入框会自动锁定。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>双机同步的核心是保持 <b>AppID、AppKey、ServerURL</b> 三者完全一致。</span></li>
-                              <li className="flex gap-3"><span className="text-rose-400 font-bold">重要</span><span>LeanCloud 安全域名中，<b>请尝试去掉网址最后的斜杠 (/)</b>。如果添加了还是报错，请刷新 LeanCloud 页面看是否保存成功。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>请确保登录 LeanCloud -> 设置 -> 安全设置 -> <b>Web 安全域名</b> 填入了顶部的网址。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果你有两台电脑，两台电脑的“域名”可能不同，都要填进去。</span></li>
+                              <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>填入时如果网址最后有个 <code>/</code>，请务必删掉它。</span></li>
                           </ul>
                       </div>
                   </div>
