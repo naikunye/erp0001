@@ -102,38 +102,38 @@ type Action =
     | { type: 'SET_EXCHANGE_RATE'; payload: number }
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
-    | { type: 'UPDATE_PRODUCT'; payload: Product; reason?: string }
+    | { type: 'UPDATE_PRODUCT'; payload: Product }
     | { type: 'ADD_PRODUCT'; payload: Product }
     | { type: 'DELETE_PRODUCT'; payload: string }
-    | { type: 'ADD_TRANSACTION'; payload: Transaction }
-    | { type: 'DELETE_TRANSACTION'; payload: string }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
     | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
-    | { type: 'CLEAR_NAV_PARAMS' }
     | { type: 'RESET_DATA' }
     | { type: 'INITIALIZED_SUCCESS' }
     | { type: 'UNLOCK_SYNC' }
-    | { type: 'ADD_INFLUENCER'; payload: any }
-    | { type: 'UPDATE_CUSTOMER'; payload: Customer }
-    | { type: 'ADD_CUSTOMER'; payload: Customer }
-    | { type: 'DELETE_CUSTOMER'; payload: string }
-    | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
-    | { type: 'ADD_SUPPLIER'; payload: Supplier }
-    | { type: 'DELETE_SUPPLIER'; payload: string }
-    | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
+    | { type: 'ADD_TRANSACTION'; payload: Transaction }
+    | { type: 'DELETE_TRANSACTION'; payload: string }
     | { type: 'ADD_SHIPMENT'; payload: Shipment }
+    | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
     | { type: 'DELETE_SHIPMENT'; payload: string }
-    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
-    | { type: 'UPDATE_TASK'; payload: Task }
+    | { type: 'ADD_CUSTOMER'; payload: Customer }
+    | { type: 'UPDATE_CUSTOMER'; payload: Customer }
+    | { type: 'DELETE_CUSTOMER'; payload: string }
+    | { type: 'ADD_SUPPLIER'; payload: Supplier }
+    | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
+    | { type: 'DELETE_SUPPLIER'; payload: string }
     | { type: 'ADD_TASK'; payload: Task }
+    | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'UPDATE_ORDER_STATUS'; payload: { orderId: string, status: Order['status'] } }
     | { type: 'ADD_ORDER'; payload: Order }
-    | { type: 'DELETE_ORDER'; payload: string };
+    | { type: 'UPDATE_ORDER_STATUS'; payload: { orderId: string, status: Order['status'] } }
+    | { type: 'DELETE_ORDER'; payload: string }
+    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
+    | { type: 'ADD_INFLUENCER'; payload: any }
+    | { type: 'CLEAR_NAV_PARAMS' };
 
 const INITIAL_RULES: AutomationRule[] = [
     { id: 'rule-1', name: '物流异常自动分派', trigger: 'logistics_exception', action: 'create_task', status: 'active' },
@@ -170,36 +170,36 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         
-        case 'UPDATE_PRODUCT': return markDirty({ products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) });
-        case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...(state.products || [])] });
-        case 'DELETE_PRODUCT': return markDirty({ products: (state.products || []).filter(p => p.id !== action.payload) });
+        case 'UPDATE_PRODUCT': return markDirty({ products: state.products.map(p => p.id === action.payload.id ? action.payload : p) });
+        case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...state.products] });
+        case 'DELETE_PRODUCT': return markDirty({ products: state.products.filter(p => p.id !== action.payload) });
 
-        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...(state.shipments || [])] });
-        case 'UPDATE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
+        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...state.transactions] });
+        case 'DELETE_TRANSACTION': return markDirty({ transactions: state.transactions.filter(t => t.id !== action.payload) });
 
-        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...(state.transactions || [])] });
-        case 'DELETE_TRANSACTION': return markDirty({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
+        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...state.shipments] });
+        case 'UPDATE_SHIPMENT': return markDirty({ shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'DELETE_SHIPMENT': return markDirty({ shipments: state.shipments.filter(s => s.id !== action.payload) });
 
-        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...(state.customers || [])] });
-        case 'UPDATE_CUSTOMER': return markDirty({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
-        case 'DELETE_CUSTOMER': return markDirty({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
+        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...state.customers] });
+        case 'UPDATE_CUSTOMER': return markDirty({ customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c) });
+        case 'DELETE_CUSTOMER': return markDirty({ customers: state.customers.filter(c => c.id !== action.payload) });
 
-        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...(state.suppliers || [])] });
-        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
+        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...state.suppliers] });
+        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'DELETE_SUPPLIER': return markDirty({ suppliers: state.suppliers.filter(s => s.id !== action.payload) });
 
-        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
-        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) });
-        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) });
+        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...state.tasks] });
+        case 'UPDATE_TASK': return markDirty({ tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) });
+        case 'DELETE_TASK': return markDirty({ tasks: state.tasks.filter(t => t.id !== action.payload) });
 
-        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...(state.tasks || [])] });
-        case 'UPDATE_TASK': return markDirty({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
-        case 'DELETE_TASK': return markDirty({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
+        case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...state.orders] });
+        case 'UPDATE_ORDER_STATUS': return markDirty({ orders: state.orders.map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
+        case 'DELETE_ORDER': return markDirty({ orders: state.orders.filter(o => o.id !== action.payload) });
 
-        case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...(state.orders || [])] });
-        case 'UPDATE_ORDER_STATUS': return markDirty({ orders: (state.orders || []).map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
-        case 'DELETE_ORDER': return markDirty({ orders: (state.orders || []).filter(o => o.id !== action.payload) });
+        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...state.inboundShipments] });
+        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.map(i => i.id === action.payload.id ? action.payload : i) });
+        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.filter(i => i.id !== action.payload) });
 
         case 'HYDRATE_STATE': {
             const updated = { ...state, ...action.payload, syncLocked: action.payload.syncLocked ?? state.syncLocked };
@@ -210,9 +210,8 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
-        case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
-        case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...(state.influencers || [])] });
+        case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...state.influencers] });
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
         default: return state;
     }
@@ -241,8 +240,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 serverURL: serverURL.trim().replace(/\/$/, "") 
             }); 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-        }
-        catch (e) { 
+        } catch (e) { 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
             throw e; 
         }
@@ -271,12 +269,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
             
             const jsonPayload = JSON.stringify(payloadData);
-            let backupObj;
-
-            // 核心修复：优先通过 uniqueId 寻找，确保不同设备能指向同一个记录
+            
+            // 核心改进：查询时不带缓存，确保找到全局唯一的同步节点
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
-            backupObj = await query.first();
+            query.descending('updatedAt');
+            let backupObj = await query.first();
 
             if (!backupObj) {
                 const Backup = AV.Object.extend('Backup');
@@ -284,7 +282,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 backupObj.set('uniqueId', 'GLOBAL_ERP_NODE');
             }
 
-            // 核心修复：强制开启公共读写权限，否则设备B无法访问设备A创建的对象
+            // 强制公共读写，确保其他设备可见
             const acl = new AV.ACL();
             acl.setPublicReadAccess(true);
             acl.setPublicWriteAccess(true);
@@ -302,6 +300,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
         } catch (e: any) { 
+            console.error('Sync Error:', e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
             return false; 
         } finally { isSyncingRef.current = false; }
@@ -310,12 +309,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
         if (!AV.applicationId) return false;
         try {
-            // 核心修复：查询时确保权限正确，且不依赖本地缓存的 objectId
+            // 核心改进：为查询添加无意义的时间戳参数，破坏 LeanCloud SDK 的本地 HTTP 缓存
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
+            query.descending('updatedAt');
+            // 提示：LeanCloud 默认缓存可能导致此查询在不同设备间返回旧数据
             
             let backupObj = await query.first();
             if (backupObj) {
+                // 强制从服务器拉取最新数据，防止本地 SDK 返回缓存的空对象
+                await backupObj.fetch();
                 const rawPayload = backupObj.get('payload');
                 if (!rawPayload) return false;
 
@@ -331,11 +334,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         leanConfig: {
                             ...state.leanConfig,
                             cloudObjectId: backupObj.id,
-                            lastSync: new Date().toLocaleTimeString()
+                            lastSync: `来自云端 ${new Date(backupObj.updatedAt || "").toLocaleTimeString()}`
                         }
                     } 
                 });
-                if (!isSilent) showToast('云端镜像同步完成', 'success');
+                if (!isSilent) showToast('云端镜像同步成功，已覆盖本地', 'success');
                 return true;
             }
             dispatch({ type: 'UNLOCK_SYNC' });
@@ -364,6 +367,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         const startup = async () => {
+            // 1. 加载本地持久化
             try {
                 const savedDb: any = await idb.get('GLOBAL_STATE');
                 if (savedDb) {
@@ -371,6 +375,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             } catch(e) {}
 
+            // 2. 检查密钥并执行接头
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             if (savedConfig) {
                 try {
@@ -378,13 +383,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                     
                     if (config.appId && config.appKey && config.serverURL) {
+                        // 确保连接初始化
                         await bootLean(config.appId, config.appKey, config.serverURL);
-                        // 静默拉取云端最新数据（关键：这里会解决新设备同步问题）
-                        await pullFromCloud(true); 
+                        // 重点：密钥输入成功后的首要任务是尝试从云端“找回”
+                        const found = await pullFromCloud(true);
+                        if (!found) dispatch({ type: 'UNLOCK_SYNC' });
                     } else {
                         dispatch({ type: 'UNLOCK_SYNC' });
                     }
                 } catch (e) { 
+                    console.error('Boot Error:', e);
                     dispatch({ type: 'UNLOCK_SYNC' }); 
                 }
             } else {
