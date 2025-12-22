@@ -216,13 +216,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!appId || !appKey || !serverURL) return; 
         try { 
             const cleanUrl = serverURL.trim().replace(/\/$/, "");
-            console.log(`[CloudSync] 尝试初始化链路... Origin: ${window.location.origin}`);
             AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: cleanUrl }); 
             const query = new AV.Query('Backup'); 
             await query.limit(1).find(); 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
+            dispatch({ type: 'UNLOCK_SYNC' }); // 物理握手成功后，立即解锁同步引擎
         } catch (e: any) { 
-            console.error("[BootLean] Error Detected:", e);
+            console.error("[BootLean] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
             const isCors = e.message.includes('terminated') || e.message.includes('Access-Control') || e.message.includes('CORS');
             throw new Error(isCors ? `[物理层拦截] 请在 LeanCloud 控制台中将域名 ${window.location.origin} 加入“Web安全域名”。` : `认证失败: ${e.message}`); 
@@ -276,6 +276,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
             return true; 
         } catch (e: any) { 
+            console.error("[SyncToCloud] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
             return false; 
         } finally { 
@@ -292,7 +293,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (backupObj) { 
                 await backupObj.fetch(); 
                 const rawPayload = backupObj.get('payload'); 
-                if (!rawPayload) return false; 
+                if (!rawPayload) {
+                    dispatch({ type: 'UNLOCK_SYNC' });
+                    return false;
+                }
                 const size = new Blob([rawPayload]).size; 
                 const data = JSON.parse(rawPayload); 
                 dispatch({ type: 'HYDRATE_STATE', payload: { 
@@ -324,7 +328,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !AV.applicationId) return; 
         const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
-    }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
+    }, [state.lastMutationTime, state.syncAllowed, state.syncLocked, state.connectionStatus]);
 
     useEffect(() => {
         if (!state.isInitialized || state.connectionStatus !== 'connected' || !AV.applicationId) return;
@@ -345,7 +349,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             } catch (e) {}
         };
 
-        const heartbeat = setInterval(checkRemoteUpdate, 20000); 
+        const heartbeat = setInterval(checkRemoteUpdate, 10000); // 缩短心跳至 10 秒，增加即时感
         return () => clearInterval(heartbeat);
     }, [state.isInitialized, state.connectionStatus, state.leanConfig.remoteUpdatedAt, state.saveStatus]);
 
@@ -363,11 +367,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config }); 
                     if (config.appId && config.appKey && config.serverURL) { 
                         await bootLean(config.appId, config.appKey, config.serverURL); 
-                        if (savedStatus === 'connected') await pullFromCloud(true); 
-                        else dispatch({ type: 'UNLOCK_SYNC' }); 
-                    } else dispatch({ type: 'UNLOCK_SYNC' }); 
+                        if (savedStatus === 'connected') {
+                            await pullFromCloud(true); 
+                        } else {
+                            dispatch({ type: 'UNLOCK_SYNC' }); 
+                        }
+                    } else {
+                        dispatch({ type: 'UNLOCK_SYNC' }); 
+                    }
                 } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); } 
-            } else dispatch({ type: 'LOAD_MOCK_DATA' }); 
+            } else {
+                dispatch({ type: 'LOAD_MOCK_DATA' }); 
+            }
             dispatch({ type: 'INITIALIZED_SUCCESS' }); 
         }; 
         startup(); 
