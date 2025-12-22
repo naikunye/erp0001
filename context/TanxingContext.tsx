@@ -210,6 +210,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
+        case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
         case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...state.influencers] });
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
@@ -270,7 +271,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             const jsonPayload = JSON.stringify(payloadData);
             
-            // 核心改进：查询时不带缓存，确保找到全局唯一的同步节点
+            // 查找现有的备份
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             query.descending('updatedAt');
@@ -282,7 +283,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 backupObj.set('uniqueId', 'GLOBAL_ERP_NODE');
             }
 
-            // 强制公共读写，确保其他设备可见
+            // 强制设置公共权限，防止多电脑同步权限失败
             const acl = new AV.ACL();
             acl.setPublicReadAccess(true);
             acl.setPublicWriteAccess(true);
@@ -309,16 +310,23 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
         if (!AV.applicationId) return false;
         try {
-            // 核心改进：为查询添加无意义的时间戳参数，破坏 LeanCloud SDK 的本地 HTTP 缓存
+            // 核心修复：影子探测。如果 uniqueId 查不到，尝试扫描该表的第一条记录。
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             query.descending('updatedAt');
-            // 提示：LeanCloud 默认缓存可能导致此查询在不同设备间返回旧数据
             
             let backupObj = await query.first();
+            
+            // 如果查不到，进行盲查尝试
+            if (!backupObj) {
+                const blindQuery = new AV.Query('Backup');
+                blindQuery.limit(1);
+                blindQuery.descending('updatedAt');
+                backupObj = await blindQuery.first();
+            }
+
             if (backupObj) {
-                // 强制从服务器拉取最新数据，防止本地 SDK 返回缓存的空对象
-                await backupObj.fetch();
+                await backupObj.fetch(); // 强制刷新
                 const rawPayload = backupObj.get('payload');
                 if (!rawPayload) return false;
 
@@ -334,7 +342,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         leanConfig: {
                             ...state.leanConfig,
                             cloudObjectId: backupObj.id,
-                            lastSync: `来自云端 ${new Date(backupObj.updatedAt || "").toLocaleTimeString()}`
+                            lastSync: `来自云端同步器 (TS: ${new Date(backupObj.updatedAt || "").toLocaleTimeString()})`
                         }
                     } 
                 });
@@ -367,7 +375,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     useEffect(() => {
         const startup = async () => {
-            // 1. 加载本地持久化
+            // 1. 加载本地数据
             try {
                 const savedDb: any = await idb.get('GLOBAL_STATE');
                 if (savedDb) {
@@ -375,7 +383,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             } catch(e) {}
 
-            // 2. 检查密钥并执行接头
+            // 2. 自动建立云端握手
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             if (savedConfig) {
                 try {
@@ -383,16 +391,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
                     
                     if (config.appId && config.appKey && config.serverURL) {
-                        // 确保连接初始化
                         await bootLean(config.appId, config.appKey, config.serverURL);
-                        // 重点：密钥输入成功后的首要任务是尝试从云端“找回”
                         const found = await pullFromCloud(true);
                         if (!found) dispatch({ type: 'UNLOCK_SYNC' });
                     } else {
                         dispatch({ type: 'UNLOCK_SYNC' });
                     }
                 } catch (e) { 
-                    console.error('Boot Error:', e);
                     dispatch({ type: 'UNLOCK_SYNC' }); 
                 }
             } else {
