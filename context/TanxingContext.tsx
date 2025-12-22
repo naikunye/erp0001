@@ -15,9 +15,6 @@ const STORE_NAME = 'STATE_STORE';
 const CONFIG_KEY = 'TANXING_CONFIG_V14'; 
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
-/**
- * IndexedDB 极简驱动：支持大数据量存储（突破 5MB 限制）
- */
 const idb = {
     db: null as IDBDatabase | null,
     async init() {
@@ -133,7 +130,10 @@ type Action =
     | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
     | { type: 'UPDATE_TASK'; payload: Task }
     | { type: 'ADD_TASK'; payload: Task }
-    | { type: 'DELETE_TASK'; payload: string };
+    | { type: 'DELETE_TASK'; payload: string }
+    | { type: 'UPDATE_ORDER_STATUS'; payload: { orderId: string, status: Order['status'] } }
+    | { type: 'ADD_ORDER'; payload: Order }
+    | { type: 'DELETE_ORDER'; payload: string };
 
 const INITIAL_RULES: AutomationRule[] = [
     { id: 'rule-1', name: '物流异常自动分派', trigger: 'logistics_exception', action: 'create_task', status: 'active' },
@@ -150,9 +150,6 @@ const emptyState: AppState = {
     isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: []
 };
 
-/**
- * 核心优化：使用 IndexedDB 异步保存
- */
 const safeLocalSave = (state: AppState) => {
     idb.set('GLOBAL_STATE', state).catch(e => console.error('IDB Save Error:', e));
 };
@@ -173,41 +170,58 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         
-        case 'UPDATE_PRODUCT': {
-            const products = (state.products || []).map(p => p.id === action.payload.id ? action.payload : p);
-            return markDirty({ products });
-        }
+        // Products
+        case 'UPDATE_PRODUCT': return markDirty({ products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) });
         case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...(state.products || [])] });
         case 'DELETE_PRODUCT': return markDirty({ products: (state.products || []).filter(p => p.id !== action.payload) });
 
-        case 'HYDRATE_STATE': {
-            const incomingProducts = Array.isArray(action.payload.products) ? action.payload.products : [];
-            
-            // 智能合并：如果 Payload 中没有图片（可能是坏缓存），但内存中有图片，则保留内存中的图片
-            const mergedProducts = incomingProducts.map(newP => {
-                const existingP = state.products.find(p => p.id === newP.id);
-                if (existingP && (existingP.image || (existingP.images && existingP.images.length > 0)) && !newP.image) {
-                    return { ...newP, image: existingP.image, images: existingP.images };
-                }
-                return newP;
-            });
+        // Shipments
+        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...(state.shipments || [])] });
+        case 'UPDATE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'DELETE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
 
-            const updated = { 
-                ...state, 
-                ...action.payload,
-                products: mergedProducts.length > 0 ? mergedProducts : (state.products || []),
-                syncLocked: action.payload.syncLocked ?? state.syncLocked
-            };
+        // Transactions
+        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...(state.transactions || [])] });
+        case 'DELETE_TRANSACTION': return markDirty({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
+
+        // Customers
+        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...(state.customers || [])] });
+        case 'UPDATE_CUSTOMER': return markDirty({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
+        case 'DELETE_CUSTOMER': return markDirty({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
+
+        // Suppliers
+        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...(state.suppliers || [])] });
+        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'DELETE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
+
+        // Inbound Shipments
+        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
+        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) });
+        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) });
+
+        // Tasks
+        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...(state.tasks || [])] });
+        case 'UPDATE_TASK': return markDirty({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
+        case 'DELETE_TASK': return markDirty({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
+
+        // Orders
+        case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...(state.orders || [])] });
+        case 'UPDATE_ORDER_STATUS': return markDirty({ orders: (state.orders || []).map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
+        case 'DELETE_ORDER': return markDirty({ orders: (state.orders || []).filter(o => o.id !== action.payload) });
+
+        case 'HYDRATE_STATE': {
+            const updated = { ...state, ...action.payload, syncLocked: action.payload.syncLocked ?? state.syncLocked };
             safeLocalSave(updated);
             return updated;
         }
-        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, isInitialized: true, syncLocked: false };
+        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, isInitialized: true, syncLocked: false };
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
         case 'SET_LEAN_CONFIG': return { ...state, leanConfig: { ...state.leanConfig, ...action.payload } };
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
         case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...(state.influencers || [])] });
+        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
         default: return state;
     }
 };
@@ -250,6 +264,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 influencers: state.influencers || [],
                 suppliers: state.suppliers || [],
                 tasks: state.tasks || [],
+                inboundShipments: state.inboundShipments || [],
                 timestamp: new Date().toISOString() 
             };
             
@@ -310,18 +325,25 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    // 核心修复：补全同步依赖项，确保 shipments, orders 等变动也能触发云端同步
     useEffect(() => {
         if (!state.isInitialized) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
+        
+        // 只有当有未同步的改动时才触发
         if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) {
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
-    }, [state.products, state.transactions, state.syncAllowed, state.syncLocked]);
+    }, [
+        state.products, state.transactions, state.shipments, 
+        state.orders, state.customers, state.suppliers, 
+        state.tasks, state.inboundShipments,
+        state.syncAllowed, state.syncLocked
+    ]);
 
     useEffect(() => {
         const startup = async () => {
-            // 首先尝试从 IndexedDB 加载（大数据量安全加载）
             try {
                 const savedDb: any = await idb.get('GLOBAL_STATE');
                 if (savedDb) {
