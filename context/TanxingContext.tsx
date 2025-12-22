@@ -170,41 +170,33 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         
-        // Products
         case 'UPDATE_PRODUCT': return markDirty({ products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) });
         case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...(state.products || [])] });
         case 'DELETE_PRODUCT': return markDirty({ products: (state.products || []).filter(p => p.id !== action.payload) });
 
-        // Shipments
         case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...(state.shipments || [])] });
         case 'UPDATE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
         case 'DELETE_SHIPMENT': return markDirty({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
 
-        // Transactions
         case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...(state.transactions || [])] });
         case 'DELETE_TRANSACTION': return markDirty({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
 
-        // Customers
         case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...(state.customers || [])] });
         case 'UPDATE_CUSTOMER': return markDirty({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
         case 'DELETE_CUSTOMER': return markDirty({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
 
-        // Suppliers
         case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...(state.suppliers || [])] });
         case 'UPDATE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
         case 'DELETE_SUPPLIER': return markDirty({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
 
-        // Inbound Shipments
         case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
         case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) });
         case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) });
 
-        // Tasks
         case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...(state.tasks || [])] });
         case 'UPDATE_TASK': return markDirty({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
         case 'DELETE_TASK': return markDirty({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
 
-        // Orders
         case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...(state.orders || [])] });
         case 'UPDATE_ORDER_STATUS': return markDirty({ orders: (state.orders || []).map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
         case 'DELETE_ORDER': return markDirty({ orders: (state.orders || []).filter(o => o.id !== action.payload) });
@@ -242,8 +234,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
 
     const bootLean = async (appId: string, appKey: string, serverURL: string) => {
-        try { AV.init({ appId, appKey, serverURL: serverURL.trim().replace(/\/$/, "") }); dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); }
-        catch (e) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); throw e; }
+        try { 
+            AV.init({ 
+                appId: appId.trim(), 
+                appKey: appKey.trim(), 
+                serverURL: serverURL.trim().replace(/\/$/, "") 
+            }); 
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
+        }
+        catch (e) { 
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
+            throw e; 
+        }
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
@@ -325,12 +327,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
-    // 核心修复：补全同步依赖项，确保 shipments, orders 等变动也能触发云端同步
+    // 核心修复点 1：将 leanConfig 加入监听依赖，确保密钥改动即保存
+    // 核心修复点 2：补全所有业务实体的依赖，确保增删改能触发同步
     useEffect(() => {
         if (!state.isInitialized) return;
+        
+        // 立即持久化配置信息到 localStorage
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
         
-        // 只有当有未同步的改动时才触发
         if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) {
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
@@ -338,12 +342,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     }, [
         state.products, state.transactions, state.shipments, 
         state.orders, state.customers, state.suppliers, 
-        state.tasks, state.inboundShipments,
-        state.syncAllowed, state.syncLocked
+        state.tasks, state.inboundShipments, state.influencers,
+        state.syncAllowed, state.syncLocked, state.leanConfig // <-- 关键修复：加入 leanConfig 监听
     ]);
 
     useEffect(() => {
         const startup = async () => {
+            // 1. 加载本地数据快照
             try {
                 const savedDb: any = await idb.get('GLOBAL_STATE');
                 if (savedDb) {
@@ -351,17 +356,28 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             } catch(e) {}
 
+            // 2. 加载云端配置并自动重连
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             if (savedConfig) {
                 try {
                     const config = JSON.parse(savedConfig);
                     dispatch({ type: 'SET_LEAN_CONFIG', payload: config });
-                    await bootLean(config.appId, config.appKey, config.serverURL);
-                    await pullFromCloud(true); 
-                } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); }
+                    
+                    if (config.appId && config.appKey && config.serverURL) {
+                        await bootLean(config.appId, config.appKey, config.serverURL);
+                        // 静默拉取云端最新数据
+                        await pullFromCloud(true); 
+                    } else {
+                        dispatch({ type: 'UNLOCK_SYNC' });
+                    }
+                } catch (e) { 
+                    dispatch({ type: 'UNLOCK_SYNC' }); 
+                }
             } else {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
+            
+            // 3. 标记初始化完成
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
         startup();
