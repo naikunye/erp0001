@@ -105,7 +105,6 @@ type Action =
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'UPDATE_PRODUCT'; payload: Product }
     | { type: 'ADD_PRODUCT'; payload: Product }
-    | { type: 'DELETE_PRODUCT'; payload: string }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
     | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
@@ -134,11 +133,12 @@ type Action =
     | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
     | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
     | { type: 'ADD_INFLUENCER'; payload: any }
-    | { type: 'CLEAR_NAV_PARAMS' };
+    | { type: 'CLEAR_NAV_PARAMS' }
+    | { type: 'DELETE_PRODUCT'; payload: string };
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
-    leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null },
+    leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0 },
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
@@ -169,7 +169,9 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         case 'HYDRATE_STATE': {
-            const updated = { ...state, ...action.payload, syncLocked: action.payload.syncLocked ?? state.syncLocked };
+            const updated = { ...state, ...action.payload };
+            // 确保同步锁和元数据合并正确
+            if (action.payload.syncLocked !== undefined) updated.syncLocked = action.payload.syncLocked;
             safeLocalSave(updated);
             return updated;
         }
@@ -185,7 +187,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'RESET_DATA': {
             idb.clear(); 
             localStorage.clear(); 
-            AV._config.appId = null; // 清除 SDK 内部状态
+            AV._config.appId = null;
             return { ...emptyState, isInitialized: true, syncLocked: false };
         }
         case 'UPDATE_PRODUCT': return markDirty({ products: state.products.map(p => p.id === action.payload.id ? action.payload : p) });
@@ -205,6 +207,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.map(i => i.id === action.payload.id ? action.payload : i) });
         case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...state.influencers] });
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
+        case 'DELETE_PRODUCT': return markDirty({ products: state.products.filter(p => p.id !== action.payload) });
         default: return state;
     }
 };
@@ -233,10 +236,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 appKey: appKey.trim(), 
                 serverURL: serverURL.trim().replace(/\/$/, "") 
             }); 
-            // 简单验证连接
             const query = new AV.Query('Backup');
             await query.limit(1).find();
-            
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
         } catch (e: any) { 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
@@ -245,10 +246,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const disconnectLean = () => {
-        // 重置 SDK 配置
         AV._config.appId = null;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
-        dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null } });
+        dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0 } });
         showToast('已断开云端神经连接', 'info');
     };
 
@@ -270,6 +270,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             };
             
             const jsonPayload = JSON.stringify(payloadData);
+            const size = new Blob([jsonPayload]).size;
+            
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             let backupObj = await query.first();
@@ -290,7 +292,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             dispatch({ type: 'SET_LEAN_CONFIG', payload: { 
                 lastSync: new Date().toLocaleTimeString(), 
-                payloadSize: new Blob([jsonPayload]).size, 
+                payloadSize: size, 
                 cloudObjectId: saved.id 
             } });
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } });
@@ -315,19 +317,27 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const rawPayload = backupObj.get('payload');
                 if (!rawPayload) return false;
 
+                // 核心修复：计算拉取到的数据大小
+                const size = new Blob([rawPayload]).size;
                 const data = JSON.parse(rawPayload);
+
                 dispatch({ 
                     type: 'HYDRATE_STATE', 
                     payload: { 
-                        ...data, syncLocked: false, syncAllowed: false, saveStatus: 'idle', isInitialized: true,
+                        ...data, 
+                        syncLocked: false, 
+                        syncAllowed: false, 
+                        saveStatus: 'idle', 
+                        isInitialized: true,
                         leanConfig: {
                             ...state.leanConfig,
+                            payloadSize: size,
                             cloudObjectId: backupObj.id,
                             lastSync: `来自云端 (TS: ${new Date(backupObj.updatedAt || "").toLocaleTimeString()})`
                         }
                     } 
                 });
-                if (!isSilent) showToast('云端镜像同步成功', 'success');
+                if (!isSilent) showToast('云端镜像同步成功，已覆盖本地', 'success');
                 return true;
             }
             dispatch({ type: 'UNLOCK_SYNC' });

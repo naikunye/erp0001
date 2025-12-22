@@ -48,11 +48,8 @@ const Settings: React.FC = () => {
       setCloudStatus('unknown');
 
       try {
-          // 立即更新状态，防止刷新丢失
           dispatch({ type: 'SET_LEAN_CONFIG', payload: leanForm });
-          
           await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
-          
           const found = await pullFromCloud(true);
           if (found) {
               setCloudStatus('found');
@@ -65,6 +62,15 @@ const Settings: React.FC = () => {
           showToast(`激活失败: ${e.message}`, 'error');
       } finally {
           setIsSaving(false);
+      }
+  };
+
+  const handleManualPull = async () => {
+      setIsPullingNow(true);
+      try {
+          await pullFromCloud(false);
+      } finally {
+          setIsPullingNow(false);
       }
   };
 
@@ -134,8 +140,8 @@ const Settings: React.FC = () => {
                                   <span className="text-xs font-bold text-white uppercase">物理节点: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${cloudStatus === 'found' ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : cloudStatus === 'not_found' ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white uppercase">云端探测: {cloudStatus === 'found' ? '已定位镜像' : cloudStatus === 'not_found' ? '镜像空置' : '就绪'}</span>
+                                  <div className={`w-3 h-3 rounded-full ${cloudStatus === 'found' || currentSize > 0 ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : cloudStatus === 'not_found' ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
+                                  <span className="text-xs font-bold text-white uppercase">云端探测: {cloudStatus === 'found' || currentSize > 0 ? '已定位镜像' : cloudStatus === 'not_found' ? '镜像空置' : '就绪'}</span>
                               </div>
                           </div>
                       </div>
@@ -150,7 +156,8 @@ const Settings: React.FC = () => {
                           </div>
                       )}
                   </div>
-                  <div className="ios-glass-panel p-8 rounded-3xl flex flex-col justify-center border-white/10">
+                  <div className="ios-glass-panel p-8 rounded-3xl flex flex-col justify-center border-white/10 relative overflow-hidden">
+                      {isPullingNow && <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-[1px] z-10 flex items-center justify-center"><Loader2 className="w-6 h-6 text-indigo-400 animate-spin"/></div>}
                       <div className="flex justify-between items-center mb-4">
                           <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2">
                               <HardDrive className="w-4 h-4 text-indigo-400" /> 镜像占用
@@ -159,7 +166,7 @@ const Settings: React.FC = () => {
                               {sizePercentage.toFixed(2)}%
                           </span>
                       </div>
-                      <div className="h-2.5 w-full bg-black/60 rounded-full overflow-hidden mb-4 p-0.5"><div className={`h-full rounded-full ${sizePercentage > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${sizePercentage}%` }}></div></div>
+                      <div className="h-2.5 w-full bg-black/60 rounded-full overflow-hidden mb-4 p-0.5"><div className={`h-full rounded-full transition-all duration-1000 ${sizePercentage > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${sizePercentage}%` }}></div></div>
                       <div className="flex justify-between items-baseline"><span className="text-2xl font-black text-white font-mono">{formatSize(currentSize)}</span><span className="text-[9px] text-slate-600 font-bold">MAX: 16 MB</span></div>
                   </div>
               </div>
@@ -176,7 +183,7 @@ const Settings: React.FC = () => {
                           </div>
                       </div>
                       <div className="flex gap-4">
-                          <button onClick={() => pullFromCloud(false)} disabled={isPullingNow || !isConnected} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20 flex items-center gap-2">
+                          <button onClick={handleManualPull} disabled={isPullingNow || !isConnected} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20 flex items-center gap-2">
                               {isPullingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudDownload className="w-4 h-4" />} 拉取镜像
                           </button>
                           <button onClick={() => syncToCloud(true)} disabled={isSyncingNow || !isConnected} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl disabled:opacity-20">
