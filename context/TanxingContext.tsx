@@ -272,12 +272,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             const jsonPayload = JSON.stringify(payloadData);
             let backupObj;
-            if (state.leanConfig.cloudObjectId) {
-                backupObj = AV.Object.createWithoutData('Backup', state.leanConfig.cloudObjectId);
-            } else {
-                const query = new AV.Query('Backup'); query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
-                backupObj = await query.first();
-            }
+
+            // 核心修复：优先通过 uniqueId 寻找，确保不同设备能指向同一个记录
+            const query = new AV.Query('Backup');
+            query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
+            backupObj = await query.first();
 
             if (!backupObj) {
                 const Backup = AV.Object.extend('Backup');
@@ -285,10 +284,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 backupObj.set('uniqueId', 'GLOBAL_ERP_NODE');
             }
 
+            // 核心修复：强制开启公共读写权限，否则设备B无法访问设备A创建的对象
+            const acl = new AV.ACL();
+            acl.setPublicReadAccess(true);
+            acl.setPublicWriteAccess(true);
+            backupObj.setACL(acl);
+
             backupObj.set('payload', jsonPayload);
             const saved = await backupObj.save();
             
-            dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString(), payloadSize: new Blob([jsonPayload]).size, cloudObjectId: saved.id } });
+            dispatch({ type: 'SET_LEAN_CONFIG', payload: { 
+                lastSync: new Date().toLocaleTimeString(), 
+                payloadSize: new Blob([jsonPayload]).size, 
+                cloudObjectId: saved.id 
+            } });
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } });
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
@@ -301,11 +310,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => {
         if (!AV.applicationId) return false;
         try {
+            // 核心修复：查询时确保权限正确，且不依赖本地缓存的 objectId
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
+            
             let backupObj = await query.first();
             if (backupObj) {
-                const data = JSON.parse(backupObj.get('payload'));
+                const rawPayload = backupObj.get('payload');
+                if (!rawPayload) return false;
+
+                const data = JSON.parse(rawPayload);
                 dispatch({ 
                     type: 'HYDRATE_STATE', 
                     payload: { 
@@ -313,7 +327,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         syncLocked: false, 
                         syncAllowed: false, 
                         saveStatus: 'idle', 
-                        isInitialized: true 
+                        isInitialized: true,
+                        leanConfig: {
+                            ...state.leanConfig,
+                            cloudObjectId: backupObj.id,
+                            lastSync: new Date().toLocaleTimeString()
+                        }
                     } 
                 });
                 if (!isSilent) showToast('云端镜像同步完成', 'success');
@@ -322,17 +341,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             dispatch({ type: 'UNLOCK_SYNC' });
             return false;
         } catch (e: any) { 
+            console.error('Pull Error:', e);
             dispatch({ type: 'UNLOCK_SYNC' });
             return false; 
         }
     };
 
-    // 核心修复点 1：将 leanConfig 加入监听依赖，确保密钥改动即保存
-    // 核心修复点 2：补全所有业务实体的依赖，确保增删改能触发同步
     useEffect(() => {
         if (!state.isInitialized) return;
-        
-        // 立即持久化配置信息到 localStorage
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
         
         if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) {
@@ -343,12 +359,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         state.products, state.transactions, state.shipments, 
         state.orders, state.customers, state.suppliers, 
         state.tasks, state.inboundShipments, state.influencers,
-        state.syncAllowed, state.syncLocked, state.leanConfig // <-- 关键修复：加入 leanConfig 监听
+        state.syncAllowed, state.syncLocked, state.leanConfig 
     ]);
 
     useEffect(() => {
         const startup = async () => {
-            // 1. 加载本地数据快照
             try {
                 const savedDb: any = await idb.get('GLOBAL_STATE');
                 if (savedDb) {
@@ -356,7 +371,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             } catch(e) {}
 
-            // 2. 加载云端配置并自动重连
             const savedConfig = localStorage.getItem(CONFIG_KEY);
             if (savedConfig) {
                 try {
@@ -365,7 +379,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     
                     if (config.appId && config.appKey && config.serverURL) {
                         await bootLean(config.appId, config.appKey, config.serverURL);
-                        // 静默拉取云端最新数据
+                        // 静默拉取云端最新数据（关键：这里会解决新设备同步问题）
                         await pullFromCloud(true); 
                     } else {
                         dispatch({ type: 'UNLOCK_SYNC' });
@@ -377,7 +391,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
             
-            // 3. 标记初始化完成
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
         startup();
