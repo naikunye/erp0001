@@ -274,7 +274,10 @@ const Dashboard: React.FC = () => {
                                   <Pie data={assetComposition} cx="50%" cy="50%" innerRadius={40} outerRadius={60} paddingAngle={8} dataKey="value" stroke="none">
                                       {assetComposition.map((entry, index) => <Cell key={index} fill={entry.color} />)}
                                   </Pie>
-                                  <Tooltip contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px', fontSize:'12px'}} />
+                                  <Tooltip 
+                                    contentStyle={{backgroundColor:'rgba(0,0,0,0.95)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'12px', fontSize:'12px', color: '#fff'}} 
+                                    itemStyle={{color: '#fff'}}
+                                  />
                               </RePieChart>
                           </ResponsiveContainer>
                       </div>

@@ -202,7 +202,15 @@ const Finance: React.FC = () => {
                     <h3 className="text-xs font-bold text-slate-400 uppercase mb-6 flex items-center gap-2"><PieChart className="w-4 h-4 text-indigo-500"/> 资产分布 (Asset Mix)</h3>
                     <div className="h-[250px]">
                         <ResponsiveContainer width="100%" height="100%">
-                            <RePieChart><Pie data={assetDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">{assetDistribution.map((e, i) => <Cell key={i} fill={e.color} />)}</Pie><Tooltip contentStyle={{backgroundColor:'#000', border:'none', borderRadius:'12px'}}/></RePieChart>
+                            <RePieChart>
+                                <Pie data={assetDistribution} cx="50%" cy="50%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="value">
+                                    {assetDistribution.map((e, i) => <Cell key={i} fill={e.color} />)}
+                                </Pie>
+                                <Tooltip 
+                                    contentStyle={{backgroundColor:'rgba(0,0,0,0.95)', border:'1px solid rgba(255,255,255,0.2)', borderRadius:'12px', fontSize:'12px', color: '#fff'}} 
+                                    itemStyle={{color: '#fff'}}
+                                />
+                            </RePieChart>
                         </ResponsiveContainer>
                     </div>
                 </div>
@@ -228,6 +236,7 @@ const Finance: React.FC = () => {
                       </div>
                       <div className="space-y-2">
                           <div className="flex justify-between text-[10px] font-bold text-emerald-400 uppercase"><span>预测汇率 (USD/CNY)</span><span>{stressExchangeRate}</span></div>
+                          {/* Fix line 239: replace setExchangeRate with setStressExchangeRate to match state definition */}
                           <input type="range" min="6.5" max="8.0" step="0.05" value={stressExchangeRate} onChange={e=>setStressExchangeRate(parseFloat(e.target.value))} className="w-48 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
                       </div>
                   </div>
