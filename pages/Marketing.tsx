@@ -1,10 +1,10 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
 import { Influencer, Product } from '../types';
 import { 
   Calculator, Search, Plus, Users, 
-  TrendingUp, Activity, Zap, Box, 
+  Activity, Zap, Box, 
   ChevronRight, ChevronLeft, ExternalLink, Target, 
   BarChart3, Wallet, Info, Mail, MessageSquare, 
   Truck, CheckCircle2, X, Trash2, Save, 
@@ -14,12 +14,8 @@ import {
   BadgeDollarSign, TrendingDown, ClipboardList, ShieldCheck,
   Megaphone, Smartphone, Video, Link as LinkIcon, Phone,
   Radar, UserSearch, Type, UserPlus2, UserCheck, CreditCard, Tag,
-  ExternalLink as LinkOut, LayoutPanelLeft, Compass
+  ExternalLink as LinkOut, LayoutPanelLeft, Compass, Scan, Image as ImageIcon, Camera, Upload, Clipboard
 } from 'lucide-react';
-import { 
-  XAxis, YAxis, CartesianGrid, Tooltip, 
-  ResponsiveContainer, BarChart as ReBarChart, Bar, Cell
-} from 'recharts';
 import { GoogleGenAI } from "@google/genai";
 
 const STAGES: { id: Influencer['status']; label: string; color: string }[] = [
@@ -62,7 +58,30 @@ const Marketing: React.FC = () => {
     const [editingInf, setEditingInf] = useState<Influencer | null>(null);
     
     const [isAiGenerating, setIsAiGenerating] = useState(false);
+    const [isScanning, setIsScanning] = useState(false);
     const [aiResult, setAiResult] = useState<{title: string, content: string} | null>(null);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    // --- 全局粘贴监听 ---
+    useEffect(() => {
+        const handlePaste = (event: ClipboardEvent) => {
+            const items = event.clipboardData?.items;
+            if (!items) return;
+
+            for (let i = 0; i < items.length; i++) {
+                if (items[i].type.indexOf('image') !== -1) {
+                    const file = items[i].getAsFile();
+                    if (file) {
+                        showToast('检测到剪贴板图像：正在注入视觉解析链路...', 'info');
+                        processVisualAsset(file);
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('paste', handlePaste);
+        return () => window.removeEventListener('paste', handlePaste);
+    }, [isScanning]); // 依赖 isScanning 防止重叠
 
     const handleUpdateDraft = (updates: Partial<Influencer>) => {
         if (!editingInf) return;
@@ -91,6 +110,84 @@ const Marketing: React.FC = () => {
             sampleDate: new Date().toISOString().split('T')[0]
         };
         setEditingInf(newInf);
+    };
+
+    // --- 核心：视觉资产处理引擎 (支持上传和粘贴) ---
+    const processVisualAsset = async (file: File) => {
+        if (isScanning) return;
+        if (!process.env.API_KEY) {
+            showToast('AI 密钥未配置', 'error');
+            return;
+        }
+
+        setIsScanning(true);
+        try {
+            const reader = new FileReader();
+            const base64Promise = new Promise<string>((resolve) => {
+                reader.onloadend = () => resolve((reader.result as string).split(',')[1]);
+                reader.readAsDataURL(file);
+            });
+            const base64Data = await base64Promise;
+
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `你是一个专业的社交媒体数据抓取专家。请分析这张 TikTok/YouTube/Instagram 主页截图。
+            提取以下信息并以 JSON 格式返回：
+            {
+              "handle": "@用户名",
+              "followers": 粉丝数量整数,
+              "country": "US/UK等国家代码",
+              "platform": "TikTok/YouTube/Instagram",
+              "notes": "从简介中提取的达人风格描述",
+              "tags": ["标签1", "标签2"]
+            }
+            要求：如果无法确定某项，请填入合理推测或留空。 handle 必须以 @ 开头。`;
+
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                    parts: [
+                        { inlineData: { data: base64Data, mimeType: file.type } },
+                        { text: prompt }
+                    ]
+                }
+            });
+
+            const rawText = response.text.replace(/```json/g, '').replace(/```/g, '').trim();
+            const parsed = JSON.parse(rawText);
+
+            const newInf: Influencer = {
+                id: `INF-AI-${Date.now()}`,
+                name: '',
+                handle: parsed.handle || '@',
+                platform: parsed.platform || 'TikTok',
+                followers: parsed.followers || 0,
+                country: parsed.country || 'US',
+                status: 'Prospecting',
+                tags: parsed.tags || [],
+                sampleCost: 0,
+                generatedSales: 0,
+                email: '',
+                whatsapp: '',
+                shippingAddress: '',
+                notes: parsed.notes || '由 AI 视觉识别（粘贴/上传）自动录入。',
+                sampleCarrier: 'UPS',
+                sampleDate: new Date().toISOString().split('T')[0]
+            };
+            
+            setEditingInf(newInf);
+            showToast('视觉特征提取成功：档案已自动生成', 'success');
+        } catch (error) {
+            console.error(error);
+            showToast('图像识别受干扰，请尝试手动录入或重新截图', 'error');
+        } finally {
+            setIsScanning(false);
+            if (fileInputRef.current) fileInputRef.current.value = '';
+        }
+    };
+
+    const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (file) processVisualAsset(file);
     };
 
     const commitChanges = () => {
@@ -166,18 +263,18 @@ const Marketing: React.FC = () => {
     return (
         <div className="h-[calc(100vh-6rem)] flex flex-col gap-6 animate-in fade-in duration-700 overflow-hidden">
             {/* 顶层控制中枢 */}
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0 bg-black/40 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-xl">
-                <div>
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0 bg-black/40 p-6 rounded-[2.5rem] border border-white/5 backdrop-blur-xl relative overflow-hidden">
+                <div className="relative z-10">
                     <h1 className="text-3xl font-black text-white tracking-widest uppercase flex items-center gap-4 italic">
                         <Megaphone className="w-10 h-10 text-indigo-500" />
                         达人营销·指挥中心
                     </h1>
                     <p className="text-[10px] text-slate-500 mt-2 font-mono flex items-center gap-2 tracking-[0.4em]">
-                        <Activity className="w-3 h-3 text-emerald-400 animate-pulse" /> NETWORK NODES: {influencers.length} | SYNC: ONLINE
+                        <Activity className="w-3 h-3 text-emerald-400 animate-pulse" /> NETWORK NODES: {influencers.length} | VISION: PASTE READY
                     </p>
                 </div>
                 
-                <div className="flex items-center gap-4">
+                <div className="flex items-center gap-4 relative z-10">
                     <div className="relative">
                         <Search className="absolute left-3 top-3 w-4 h-4 text-slate-600" />
                         <input 
@@ -188,6 +285,19 @@ const Marketing: React.FC = () => {
                             className="pl-10 pr-4 py-3 bg-black/40 border border-white/10 rounded-2xl text-xs text-white focus:border-indigo-500 outline-none w-72 transition-all font-bold"
                         />
                     </div>
+                    
+                    <div className="flex flex-col items-center gap-1.5">
+                        <input type="file" ref={fileInputRef} onChange={handleFileInputChange} accept="image/*" className="hidden" />
+                        <button 
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={isScanning}
+                            className="px-6 py-3 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 hover:bg-indigo-500 hover:text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-3 transition-all active:scale-95 disabled:opacity-50 shadow-2xl"
+                        >
+                            {isScanning ? <Loader2 className="w-5 h-5 animate-spin" /> : <Scan className="w-5 h-5" />} 视觉扫描录入
+                        </button>
+                        <span className="text-[8px] text-slate-600 font-black uppercase tracking-[0.2em] animate-pulse">支持 Ctrl+V 直接粘贴截图</span>
+                    </div>
+
                     <button 
                         onClick={handleAddNew}
                         className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white rounded-2xl text-xs font-black uppercase tracking-widest flex items-center gap-3 shadow-2xl transition-all active:scale-95 italic"
@@ -195,6 +305,11 @@ const Marketing: React.FC = () => {
                         <UserPlus2 className="w-5 h-5" /> 注册新达人
                     </button>
                 </div>
+
+                {/* 扫描时的背景光效 */}
+                {isScanning && (
+                    <div className="absolute inset-0 bg-indigo-600/5 animate-pulse pointer-events-none"></div>
+                )}
             </div>
 
             <div className="flex-1 min-h-0">
@@ -230,7 +345,6 @@ const Marketing: React.FC = () => {
                                                                 <span className="text-[9px] px-2 py-0.5 bg-indigo-500/10 text-indigo-400 rounded-lg border border-indigo-500/20 font-black">{(inf.followers / 1000).toFixed(0)}k Fans</span>
                                                             </div>
                                                         </div>
-                                                        {/* 操作矩阵：包含阶段移动、TK直连、详细编辑 */}
                                                         <div className="flex flex-col gap-1.5 opacity-0 group-hover:opacity-100 transition-all translate-x-2 group-hover:translate-x-0">
                                                             <div className="flex gap-1.5">
                                                                 <button onClick={(e) => { e.stopPropagation(); moveStage(inf, 'backward'); }} className="p-2 bg-white/10 text-slate-400 rounded-xl hover:text-white" title="移回上阶段"><ChevronLeft className="w-4 h-4"/></button>
