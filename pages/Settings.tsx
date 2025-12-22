@@ -125,7 +125,6 @@ const Settings: React.FC = () => {
               {/* 第一步：强制展示域名校验 */}
               <div className="bg-indigo-600/10 border-2 border-indigo-500/20 rounded-[2.5rem] p-8 flex items-center gap-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-10 opacity-5"><Terminal className="w-40 h-40"/></div>
-                  {/* Added missing Globe import to fix 'Cannot find name Globe' error */}
                   <div className="p-5 bg-indigo-600 rounded-3xl text-white shadow-2xl shrink-0"><Globe className="w-10 h-10"/></div>
                   <div className="flex-1">
                       <h4 className="text-white font-black text-lg uppercase italic tracking-tighter">必看：物理层授权自检</h4>
@@ -224,7 +223,7 @@ const Settings: React.FC = () => {
                               <h5 className="text-white font-bold uppercase italic tracking-widest">排障矩阵 (Debug Matrix)</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>请确保登录 LeanCloud -> 设置 -> 安全设置 -> <b>Web 安全域名</b> 填入了顶部的网址。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>请确保登录 LeanCloud → 设置 → 安全设置 → <b>Web 安全域名</b> 填入了顶部的网址。</span></li>
                               <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果你有两台电脑，两台电脑的“域名”可能不同，都要填进去。</span></li>
                               <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>填入时如果网址最后有个 <code>/</code>，请务必删掉它。</span></li>
                           </ul>
