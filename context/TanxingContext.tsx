@@ -56,7 +56,7 @@ const idb = {
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
-interface LeanConfig { appId: string; appKey: string; serverURL: string; lastSync: string | null; payloadSize?: number; cloudObjectId?: string; }
+interface LeanConfig { appId: string; appKey: string; serverURL: string; lastSync: string | null; payloadSize?: number; cloudObjectId?: string; remoteUpdatedAt?: string; }
 
 interface AppState {
     theme: 'ios-glass' | 'cyber-neon' | 'midnight-dark';
@@ -84,7 +84,7 @@ interface AppState {
     syncAllowed: boolean; 
     syncLocked: boolean; 
     influencers: Influencer[];
-    lastMutationTime: number; // 用于触发同步引擎的唯一时间戳
+    lastMutationTime: number; 
 }
 
 type Action =
@@ -134,7 +134,7 @@ type Action =
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
-    leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0 },
+    leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0, remoteUpdatedAt: '' },
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
@@ -152,7 +152,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
             ...newState, 
             syncAllowed: true, 
             saveStatus: 'dirty' as SaveStatus,
-            lastMutationTime: Date.now() // 关键：更新突变时间戳
+            lastMutationTime: Date.now()
         };
         safeLocalSave(updated); 
         return updated;
@@ -233,28 +233,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { 
         if (!AV.applicationId) return false;
-        
-        // 如果不是强制同步且没有变动，跳过
         if (!isForce && !state.syncAllowed) return false;
         if (isSyncingRef.current) return false; 
         
         isSyncingRef.current = true; 
-        console.log(`[CloudSync] 启动物理推送... 模式: ${isForce ? '强制' : '自动'}`);
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' }); 
 
         try { 
             const payloadData = { 
-                products: state.products || [], 
-                orders: state.orders || [], 
-                shipments: state.shipments || [], 
-                transactions: state.transactions || [], 
-                customers: state.customers || [], 
-                influencers: state.influencers || [], 
-                suppliers: state.suppliers || [], 
-                tasks: state.tasks || [], 
-                inboundShipments: state.inboundShipments || [], 
-                automationRules: state.automationRules || [], 
-                timestamp: new Date().toISOString() 
+                products: state.products || [], orders: state.orders || [], shipments: state.shipments || [], 
+                transactions: state.transactions || [], customers: state.customers || [], 
+                influencers: state.influencers || [], suppliers: state.suppliers || [], 
+                tasks: state.tasks || [], inboundShipments: state.inboundShipments || [], 
+                automationRules: state.automationRules || []
             }; 
             const jsonPayload = JSON.stringify(payloadData); 
             const size = new Blob([jsonPayload]).size; 
@@ -262,29 +253,25 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const query = new AV.Query('Backup'); 
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); 
             let backupObj = await query.first(); 
-
             if (!backupObj) { 
                 const Backup = AV.Object.extend('Backup'); 
                 backupObj = new Backup(); 
                 backupObj.set('uniqueId', 'GLOBAL_ERP_NODE'); 
             } 
-
-            const acl = new AV.ACL(); 
-            acl.setPublicReadAccess(true); 
-            acl.setPublicWriteAccess(true); 
-            backupObj.setACL(acl); 
+            const acl = new AV.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); backupObj.setACL(acl); 
             backupObj.set('payload', jsonPayload); 
             
             const saved = await backupObj.save(); 
-            console.log(`[CloudSync] 推送成功. 大小: ${size} bytes`);
-            
-            dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString(), payloadSize: size, cloudObjectId: saved.id } }); 
+            dispatch({ type: 'SET_LEAN_CONFIG', payload: { 
+                lastSync: new Date().toLocaleTimeString(), 
+                payloadSize: size, 
+                cloudObjectId: saved.id,
+                remoteUpdatedAt: saved.updatedAt?.toISOString()
+            } }); 
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
-            
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
             return true; 
         } catch (e: any) { 
-            console.error("[CloudSync] 推送失败:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
             return false; 
         } finally { 
@@ -304,8 +291,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (!rawPayload) return false; 
                 const size = new Blob([rawPayload]).size; 
                 const data = JSON.parse(rawPayload); 
-                dispatch({ type: 'HYDRATE_STATE', payload: { ...data, syncLocked: false, syncAllowed: false, saveStatus: 'idle', isInitialized: true, leanConfig: { ...state.leanConfig, payloadSize: size, cloudObjectId: backupObj.id, lastSync: `来自云端 ${new Date(backupObj.updatedAt || "").toLocaleTimeString()}` } } }); 
-                if (!isSilent) showToast('云端镜像同步成功', 'success'); 
+                dispatch({ type: 'HYDRATE_STATE', payload: { 
+                    ...data, 
+                    syncLocked: false, 
+                    syncAllowed: false, 
+                    saveStatus: 'idle', 
+                    isInitialized: true, 
+                    leanConfig: { 
+                        ...state.leanConfig, 
+                        payloadSize: size, 
+                        cloudObjectId: backupObj.id, 
+                        remoteUpdatedAt: backupObj.updatedAt?.toISOString(),
+                        lastSync: `已同步云端 (${new Date(backupObj.updatedAt || "").toLocaleTimeString()})` 
+                    } 
+                } }); 
+                if (!isSilent) showToast('检测到远端变动，数据已热更新', 'success'); 
                 return true; 
             } 
             dispatch({ type: 'UNLOCK_SYNC' }); 
@@ -316,17 +316,45 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } 
     };
 
-    // 核心自动同步引擎：仅监听 mutationTime
+    // --- 同步策略核心：防抖上传 + 自动拉取 ---
+
+    // 1. 本地变动自动上传
     useEffect(() => { 
         if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !AV.applicationId) return; 
-        
-        console.log("[CloudSync] 检测到数据震荡，计划在 3 秒后执行自动备份...");
-        const timer = setTimeout(() => {
-            syncToCloud();
-        }, 3000); // 缩短至 3 秒
-        
+        const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
     }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
+
+    // 2. 云端变动自动监测 (Heartbeat Loop)
+    useEffect(() => {
+        if (!state.isInitialized || state.connectionStatus !== 'connected' || !AV.applicationId) return;
+
+        const checkRemoteUpdate = async () => {
+            // 如果本地有脏数据正在准备上传，或者正在同步中，则跳过拉取，防止写覆盖
+            if (state.saveStatus === 'dirty' || state.saveStatus === 'saving' || isSyncingRef.current) return;
+
+            try {
+                const query = new AV.Query('Backup');
+                query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
+                query.select(['updatedAt']); // 仅查询时间戳，节省流量
+                const remote = await query.first();
+                
+                if (remote && remote.updatedAt) {
+                    const remoteTime = remote.updatedAt.toISOString();
+                    // 如果云端更新时间晚于本地记录的更新时间
+                    if (remoteTime !== state.leanConfig.remoteUpdatedAt) {
+                        console.log(`[CloudSync] 检测到云端新版本: ${remoteTime}, 准备静默拉取...`);
+                        await pullFromCloud(false);
+                    }
+                }
+            } catch (e) {
+                console.warn("[CloudSync] 心跳检查异常");
+            }
+        };
+
+        const heartbeat = setInterval(checkRemoteUpdate, 15000); // 15秒检查一次
+        return () => clearInterval(heartbeat);
+    }, [state.isInitialized, state.connectionStatus, state.leanConfig.remoteUpdatedAt, state.saveStatus]);
 
     useEffect(() => { 
         const startup = async () => { 

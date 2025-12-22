@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2 } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -44,13 +44,12 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     }).format(now);
   };
 
-  // 渲染保存状态
   const renderSaveStatus = () => {
       switch(state.saveStatus) {
           case 'saving':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] font-black text-indigo-400 animate-pulse">
-                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> SYNCING...
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> UPLOADING...
                   </div>
               );
           case 'saved':
@@ -62,7 +61,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           case 'dirty':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                      <Zap className="w-2.5 h-2.5 animate-bounce" /> AUTO-SYNC PENDING
+                      <Zap className="w-2.5 h-2.5 animate-bounce" /> AUTO-SAVE PENDING
                   </div>
               );
           case 'error':
@@ -72,7 +71,11 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                   </div>
               );
           default:
-              return null;
+              return (
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-white/5 border border-white/10 rounded text-[8px] font-bold text-slate-500">
+                      <Radio className="w-2 h-2 animate-pulse text-indigo-500" /> SYNC ACTIVE
+                  </div>
+              );
       }
   };
 
@@ -102,10 +105,10 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         <button className="lg:hidden p-2 text-white/60 hover:text-white" onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: true })}>
             <Menu className="w-6 h-6" />
         </button>
-        <h1 className="text-xl font-bold text-white tracking-wide flex items-center gap-4">
-            {title}
-            {renderSaveStatus()}
-        </h1>
+        <div className="flex flex-col">
+            <h1 className="text-xl font-bold text-white tracking-wide">{title}</h1>
+            <div className="mt-1">{renderSaveStatus()}</div>
+        </div>
       </div>
 
       <div className="flex items-center space-x-6">
