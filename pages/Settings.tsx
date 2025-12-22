@@ -4,13 +4,13 @@ import {
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
     FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive,
-    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert
+    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud'); // 默认切到云端
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean, disconnectLean } = useTanxing();
+  const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud'); 
   const [isSaving, setIsSaving] = useState(false);
   const [isSyncingNow, setIsSyncingNow] = useState(false);
   const [isPullingNow, setIsPullingNow] = useState(false);
@@ -19,11 +19,11 @@ const Settings: React.FC = () => {
   const [leanForm, setLeanForm] = useState({ appId: '', appKey: '', serverURL: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const isConnected = state.connectionStatus === 'connected';
   const LEANCLOUD_LIMIT = 16 * 1024 * 1024; 
   const currentSize = state.leanConfig?.payloadSize || 0;
   const sizePercentage = Math.min(100, (currentSize / LEANCLOUD_LIMIT) * 100);
 
-  // 初始化表单
   useEffect(() => {
     if (state.leanConfig) {
         setLeanForm({
@@ -35,15 +35,12 @@ const Settings: React.FC = () => {
   }, [state.leanConfig]);
 
   const handleSaveConfig = async () => {
-      // 1. 基本校验
       if (!leanForm.appId || !leanForm.appKey || !leanForm.serverURL) {
           showToast('请完整填写配置信息', 'warning');
           return;
       }
-
-      // 2. 防错校验：App ID 不能是 URL
-      if (leanForm.appId.includes('://') || leanForm.appId.includes('supabase')) {
-          showToast('App ID 填错啦！它应该是字符 ID，不是 https 开头的网址。', 'error');
+      if (leanForm.appId.includes('://')) {
+          showToast('App ID 填错啦！它不应该是网址，而是一串随机乱码 ID', 'error');
           return;
       }
 
@@ -51,40 +48,23 @@ const Settings: React.FC = () => {
       setCloudStatus('unknown');
 
       try {
-          // 3. 立即强制写入一次本地存储，防止后续流程中断
+          // 立即更新状态，防止刷新丢失
           dispatch({ type: 'SET_LEAN_CONFIG', payload: leanForm });
           
-          // 4. 初始化连接
           await bootLean(leanForm.appId, leanForm.appKey, leanForm.serverURL);
           
-          // 5. 探测云端数据
           const found = await pullFromCloud(true);
           if (found) {
               setCloudStatus('found');
-              showToast('神经链路握手成功：数据已瞬移回填', 'success');
+              showToast('神经链路激活：已同步云端镜像', 'success');
           } else {
               setCloudStatus('not_found');
-              showToast('连接已建立，但云端尚无历史镜像', 'info');
+              showToast('物理连接成功：云端尚无历史镜像', 'info');
           }
       } catch (e: any) {
-          showToast(`链路激活失败: ${e.message}`, 'error');
-          setCloudStatus('unknown');
+          showToast(`激活失败: ${e.message}`, 'error');
       } finally {
           setIsSaving(false);
-      }
-  };
-
-  const handleManualPush = async () => {
-      if (!confirm('此操作将本地数据推送到云端？')) return;
-      setIsSyncingNow(true);
-      try {
-          const success = await syncToCloud(true);
-          if (success) {
-              setCloudStatus('found');
-              showToast('全量数据已成功推送到云端', 'success');
-          }
-      } finally {
-          setIsSyncingNow(false);
       }
   };
 
@@ -140,37 +120,40 @@ const Settings: React.FC = () => {
       {activeTab === 'cloud' && (
           <div className="space-y-6 animate-in fade-in duration-500">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className={`lg:col-span-2 border rounded-3xl p-8 flex items-start gap-6 transition-all ${state.connectionStatus === 'connected' ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
-                      <div className={`p-4 rounded-2xl shrink-0 ${state.connectionStatus === 'connected' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                        {state.connectionStatus === 'connected' ? <ShieldCheck className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
+                  <div className={`lg:col-span-2 border rounded-3xl p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
+                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                        {isConnected ? <ShieldCheck className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
                       </div>
                       <div>
-                          <h4 className={`font-black text-sm uppercase tracking-wider ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-indigo-300'}`}>
-                              {state.connectionStatus === 'connected' ? '物理链路：已连通' : '存储协议状态'}
+                          <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : 'text-indigo-300'}`}>
+                              {isConnected ? '神经链路：稳固连接中' : '存储协议状态'}
                           </h4>
                           <div className="mt-4 space-y-3">
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : 'bg-slate-700 animate-pulse'}`}></div>
-                                  <span className="text-xs font-bold text-white uppercase tracking-tighter">SDK 握手: {state.connectionStatus.toUpperCase()}</span>
+                                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : 'bg-slate-700'}`}></div>
+                                  <span className="text-xs font-bold text-white uppercase">物理节点: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
                                   <div className={`w-3 h-3 rounded-full ${cloudStatus === 'found' ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : cloudStatus === 'not_found' ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white tracking-tighter">
-                                      云端探测: {cloudStatus === 'found' ? '已定位镜像节点' : cloudStatus === 'not_found' ? '节点为空(待同步)' : '等待探测中...'}
-                                  </span>
+                                  <span className="text-xs font-bold text-white uppercase">云端探测: {cloudStatus === 'found' ? '已定位镜像' : cloudStatus === 'not_found' ? '镜像空置' : '就绪'}</span>
                               </div>
                           </div>
                       </div>
-                      {state.connectionStatus === 'connected' && (
-                          <div className="ml-auto flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-xl text-emerald-400 font-black text-[10px] uppercase animate-in zoom-in">
-                              <CheckCircle2 className="w-4 h-4" /> Ready for Sync
+                      {isConnected && (
+                          <div className="ml-auto flex flex-col gap-2">
+                              <div className="flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-xl text-emerald-400 font-black text-[10px] uppercase animate-in zoom-in">
+                                  <CheckCircle2 className="w-4 h-4" /> Connected
+                              </div>
+                              <button onClick={disconnectLean} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
+                                  <Link2Off className="w-3 h-3" /> Disconnect
+                              </button>
                           </div>
                       )}
                   </div>
                   <div className="ios-glass-panel p-8 rounded-3xl flex flex-col justify-center border-white/10">
                       <div className="flex justify-between items-center mb-4">
                           <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2">
-                              <HardDrive className="w-4 h-4 text-indigo-400" /> 镜像包大小
+                              <HardDrive className="w-4 h-4 text-indigo-400" /> 镜像占用
                           </span>
                           <span className={`text-[10px] font-mono font-black ${sizePercentage > 80 ? 'text-rose-400' : 'text-emerald-400'}`}>
                               {sizePercentage.toFixed(2)}%
@@ -184,56 +167,63 @@ const Settings: React.FC = () => {
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">
                   <div className="bg-black/40 border border-white/5 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
                       <div className="flex items-center gap-6">
-                          <div className={`p-5 rounded-2xl ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 shadow-xl' : 'bg-slate-800 text-slate-500'}`}>
-                              {state.connectionStatus === 'connected' ? <Wifi className="w-10 h-10" /> : <Unplug className="w-10 h-10" />}
+                          <div className={`p-5 rounded-2xl ${isConnected ? 'bg-emerald-500/10 text-emerald-400 shadow-xl' : 'bg-slate-800 text-slate-500'}`}>
+                              {isConnected ? <Wifi className="w-10 h-10" /> : <Unplug className="w-10 h-10" />}
                           </div>
                           <div>
                               <h4 className="text-white text-xl font-black uppercase tracking-tighter italic">REST API 密钥配置</h4>
-                              <p className="text-[10px] text-slate-500 uppercase font-mono font-bold mt-2">上次同步: <span className="text-indigo-400">{state.leanConfig?.lastSync || '无'}</span></p>
+                              <p className="text-[10px] text-slate-500 uppercase font-mono font-bold mt-2">上次同步: <span className="text-indigo-400">{state.leanConfig?.lastSync || '无记录'}</span></p>
                           </div>
                       </div>
                       <div className="flex gap-4">
-                          <button onClick={() => pullFromCloud(false)} disabled={isPullingNow || state.connectionStatus !== 'connected'} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20 flex items-center gap-2">
-                              {isPullingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudDownload className="w-4 h-4" />} 找回数据
+                          <button onClick={() => pullFromCloud(false)} disabled={isPullingNow || !isConnected} className="px-6 py-3 bg-white/5 border border-white/10 text-slate-300 rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-white/10 transition-all disabled:opacity-20 flex items-center gap-2">
+                              {isPullingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudDownload className="w-4 h-4" />} 拉取镜像
                           </button>
-                          <button onClick={handleManualPush} disabled={isSyncingNow || state.connectionStatus !== 'connected'} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl disabled:opacity-20">
+                          <button onClick={() => syncToCloud(true)} disabled={isSyncingNow || !isConnected} className="px-8 py-3 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all shadow-xl disabled:opacity-20">
                               {isSyncingNow ? <Loader2 className="w-4 h-4 animate-spin"/> : <CloudUpload className="w-4 h-4" />} 推送同步
                           </button>
                       </div>
                   </div>
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-                      <div className="space-y-6">
+                      <div className="space-y-6 relative">
+                          {isConnected && (
+                              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center rounded-3xl border border-white/5">
+                                  <Lock className="w-10 h-10 text-indigo-400 mb-4" />
+                                  <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">配置已激活锁定</p>
+                                  <button onClick={disconnectLean} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">断开连接以修改</button>
+                              </div>
+                          )}
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2 flex justify-between">
                                   <span>Application ID</span>
-                                  {leanForm.appId.includes('://') && <span className="text-rose-500 lowercase italic flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 这里不填网址，填 ID</span>}
+                                  {leanForm.appId.includes('://') && <span className="text-rose-500 lowercase italic flex items-center gap-1"><ShieldAlert className="w-3 h-3"/> 这里填 ID，不填网址</span>}
                               </label>
-                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value.trim()})} className={`w-full bg-black/60 border rounded-2xl p-4 text-sm text-white font-mono outline-none transition-all ${leanForm.appId.includes('://') ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-white/10 focus:border-indigo-500'}`} placeholder="例如: 4dzrxzapw..." />
+                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value.trim()})} className={`w-full bg-black/60 border rounded-2xl p-4 text-sm text-white font-mono outline-none transition-all ${leanForm.appId.includes('://') ? 'border-rose-500 ring-2 ring-rose-500/20' : 'border-white/10'}`} placeholder="例如: 4dzrxzapw..." disabled={isConnected} />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">App Key</label>
-                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="填入 LeanCloud App Key" />
+                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="填入 LeanCloud App Key" disabled={isConnected} />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Rest API Server URL</label>
-                              <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono focus:border-indigo-500 outline-none" placeholder="https://xxx.lncldglobal.com" />
+                              <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="https://xxx.lncldglobal.com" disabled={isConnected} />
                           </div>
-                          <button onClick={handleSaveConfig} disabled={isSaving} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${state.connectionStatus === 'connected' ? 'bg-emerald-600 text-white' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
-                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : state.connectionStatus === 'connected' ? <CheckCircle2 className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-                              {state.connectionStatus === 'connected' ? '链路已激活 - 再次点击刷新' : '激活链路并同步数据'}
+                          <button onClick={handleSaveConfig} disabled={isSaving || isConnected} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
+                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : isConnected ? <BadgeCheck className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                              {isConnected ? '神经链路已连接 (Connected)' : '激活链路并同步数据'}
                           </button>
                       </div>
                       
                       <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col justify-center">
                           <div className="flex items-center gap-4 mb-6">
                               <Info className="w-6 h-6 text-indigo-400" />
-                              <h5 className="text-white font-bold">填报说明</h5>
+                              <h5 className="text-white font-bold">连接指引</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>App ID</b> 不是网址！在 LeanCloud 开发者设置 -> 应用凭证里找，是一串随机乱码。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span><b>Server URL</b> 必须是 <code>https://</code> 开头的完整域名。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">03</span><span>配置成功后，头部状态栏会显示绿色 <b>CONNECTED</b> 呼吸灯。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>激活链路</b>后，输入框会自动锁定以防止配置意外漂移。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果需要更换 AppID，请点击 <b>Disconnect</b> 重置状态。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">03</span><span>连接成功后，上方会有绿色 <b>Connected</b> 呼吸灯常亮。</span></li>
                           </ul>
                       </div>
                   </div>
@@ -286,5 +276,8 @@ const Settings: React.FC = () => {
     </div>
   );
 };
+
+// 内部缺失图标补充
+const BadgeCheck = ({ className }: any) => <CheckCircle2 className={className} />;
 
 export default Settings;

@@ -13,6 +13,7 @@ import {
 const DB_NAME = 'TANXING_IDB_V1';
 const STORE_NAME = 'STATE_STORE';
 const CONFIG_KEY = 'TANXING_CONFIG_V14'; 
+const CONN_STATUS_KEY = 'TANXING_CONN_STATUS_V1';
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 const idb = {
@@ -135,18 +136,13 @@ type Action =
     | { type: 'ADD_INFLUENCER'; payload: any }
     | { type: 'CLEAR_NAV_PARAMS' };
 
-const INITIAL_RULES: AutomationRule[] = [
-    { id: 'rule-1', name: '物流异常自动分派', trigger: 'logistics_exception', action: 'create_task', status: 'active' },
-    { id: 'rule-2', name: '库存破位预警', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }
-];
-
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
     leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null },
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
-    automationRules: INITIAL_RULES, automationLogs: [],
+    automationRules: [], automationLogs: [],
     isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: []
 };
 
@@ -164,43 +160,14 @@ const appReducer = (state: AppState, action: Action): AppState => {
     switch (action.type) {
         case 'SET_THEME': return { ...state, theme: action.payload };
         case 'NAVIGATE': return { ...state, activePage: action.payload.page, navParams: action.payload.params || {} };
-        case 'SET_CONNECTION_STATUS': return { ...state, connectionStatus: action.payload };
+        case 'SET_CONNECTION_STATUS': {
+            localStorage.setItem(CONN_STATUS_KEY, action.payload);
+            return { ...state, connectionStatus: action.payload };
+        }
         case 'SET_SAVE_STATUS': return { ...state, saveStatus: action.payload };
         case 'SET_EXCHANGE_RATE': return markDirty({ exchangeRate: action.payload });
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        
-        case 'UPDATE_PRODUCT': return markDirty({ products: state.products.map(p => p.id === action.payload.id ? action.payload : p) });
-        case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...state.products] });
-        case 'DELETE_PRODUCT': return markDirty({ products: state.products.filter(p => p.id !== action.payload) });
-
-        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...state.transactions] });
-        case 'DELETE_TRANSACTION': return markDirty({ transactions: state.transactions.filter(t => t.id !== action.payload) });
-
-        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...state.shipments] });
-        case 'UPDATE_SHIPMENT': return markDirty({ shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SHIPMENT': return markDirty({ shipments: state.shipments.filter(s => s.id !== action.payload) });
-
-        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...state.customers] });
-        case 'UPDATE_CUSTOMER': return markDirty({ customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c) });
-        case 'DELETE_CUSTOMER': return markDirty({ customers: state.customers.filter(c => c.id !== action.payload) });
-
-        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...state.suppliers] });
-        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SUPPLIER': return markDirty({ suppliers: state.suppliers.filter(s => s.id !== action.payload) });
-
-        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...state.tasks] });
-        case 'UPDATE_TASK': return markDirty({ tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) });
-        case 'DELETE_TASK': return markDirty({ tasks: state.tasks.filter(t => t.id !== action.payload) });
-
-        case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...state.orders] });
-        case 'UPDATE_ORDER_STATUS': return markDirty({ orders: state.orders.map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
-        case 'DELETE_ORDER': return markDirty({ orders: state.orders.filter(o => o.id !== action.payload) });
-
-        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...state.inboundShipments] });
-        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.map(i => i.id === action.payload.id ? action.payload : i) });
-        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.filter(i => i.id !== action.payload) });
-
         case 'HYDRATE_STATE': {
             const updated = { ...state, ...action.payload, syncLocked: action.payload.syncLocked ?? state.syncLocked };
             safeLocalSave(updated);
@@ -210,13 +177,32 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
         case 'SET_LEAN_CONFIG': {
             const newConfig = { ...state.leanConfig, ...action.payload };
-            // 核心改进：只要设置配置，立即强行写入 localStorage
             localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig));
             return { ...state, leanConfig: newConfig };
         }
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'RESET_DATA': idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false };
+        case 'RESET_DATA': {
+            idb.clear(); 
+            localStorage.clear(); 
+            AV._config.appId = null; // 清除 SDK 内部状态
+            return { ...emptyState, isInitialized: true, syncLocked: false };
+        }
+        case 'UPDATE_PRODUCT': return markDirty({ products: state.products.map(p => p.id === action.payload.id ? action.payload : p) });
+        case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...state.products] });
+        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...state.transactions] });
+        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...state.shipments] });
+        case 'UPDATE_SHIPMENT': return markDirty({ shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...state.customers] });
+        case 'UPDATE_CUSTOMER': return markDirty({ customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c) });
+        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...state.suppliers] });
+        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...state.tasks] });
+        case 'UPDATE_TASK': return markDirty({ tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) });
+        case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...state.orders] });
+        case 'UPDATE_ORDER_STATUS': return markDirty({ orders: state.orders.map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
+        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...state.inboundShipments] });
+        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.map(i => i.id === action.payload.id ? action.payload : i) });
         case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...state.influencers] });
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
         default: return state;
@@ -230,6 +216,7 @@ interface TanxingContextType {
     syncToCloud: (isForce?: boolean) => Promise<boolean>;
     pullFromCloud: (isSilent?: boolean) => Promise<boolean>;
     bootLean: (appId: string, appKey: string, serverURL: string) => Promise<void>;
+    disconnectLean: () => void;
 }
 
 const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
@@ -246,40 +233,45 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 appKey: appKey.trim(), 
                 serverURL: serverURL.trim().replace(/\/$/, "") 
             }); 
+            // 简单验证连接
+            const query = new AV.Query('Backup');
+            await query.limit(1).find();
+            
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-        } catch (e) { 
+        } catch (e: any) { 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            throw e; 
+            throw new Error(`连接验证失败: ${e.message}`); 
         }
     };
 
+    const disconnectLean = () => {
+        // 重置 SDK 配置
+        AV._config.appId = null;
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' });
+        dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null } });
+        showToast('已断开云端神经连接', 'info');
+    };
+
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => {
+        if (!AV.applicationId) return false;
         if (state.syncLocked && !isForce) return false;
         if (!state.syncAllowed && !isForce) return false;
-        if (!AV.applicationId || isSyncingRef.current) return false;
+        if (isSyncingRef.current) return false;
         
         isSyncingRef.current = true;
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' });
         
         try {
             const payloadData = { 
-                products: state.products || [], 
-                orders: state.orders || [], 
-                shipments: state.shipments || [], 
-                transactions: state.transactions || [], 
-                customers: state.customers || [],
-                influencers: state.influencers || [],
-                suppliers: state.suppliers || [],
-                tasks: state.tasks || [],
-                inboundShipments: state.inboundShipments || [],
+                products: state.products || [], orders: state.orders || [], shipments: state.shipments || [], 
+                transactions: state.transactions || [], customers: state.customers || [], influencers: state.influencers || [],
+                suppliers: state.suppliers || [], tasks: state.tasks || [], inboundShipments: state.inboundShipments || [],
                 timestamp: new Date().toISOString() 
             };
             
             const jsonPayload = JSON.stringify(payloadData);
-            
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
-            query.descending('updatedAt');
             let backupObj = await query.first();
 
             if (!backupObj) {
@@ -305,7 +297,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000);
             return true;
         } catch (e: any) { 
-            console.error('Sync Error:', e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' });
             return false; 
         } finally { isSyncingRef.current = false; }
@@ -317,16 +308,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const query = new AV.Query('Backup');
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
             query.descending('updatedAt');
-            
             let backupObj = await query.first();
             
-            if (!backupObj) {
-                const blindQuery = new AV.Query('Backup');
-                blindQuery.limit(1);
-                blindQuery.descending('updatedAt');
-                backupObj = await blindQuery.first();
-            }
-
             if (backupObj) {
                 await backupObj.fetch(); 
                 const rawPayload = backupObj.get('payload');
@@ -336,25 +319,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 dispatch({ 
                     type: 'HYDRATE_STATE', 
                     payload: { 
-                        ...data, 
-                        syncLocked: false, 
-                        syncAllowed: false, 
-                        saveStatus: 'idle', 
-                        isInitialized: true,
+                        ...data, syncLocked: false, syncAllowed: false, saveStatus: 'idle', isInitialized: true,
                         leanConfig: {
                             ...state.leanConfig,
                             cloudObjectId: backupObj.id,
-                            lastSync: `来自云端同步器 (TS: ${new Date(backupObj.updatedAt || "").toLocaleTimeString()})`
+                            lastSync: `来自云端 (TS: ${new Date(backupObj.updatedAt || "").toLocaleTimeString()})`
                         }
                     } 
                 });
-                if (!isSilent) showToast('云端镜像同步成功，已覆盖本地', 'success');
+                if (!isSilent) showToast('云端镜像同步成功', 'success');
                 return true;
             }
             dispatch({ type: 'UNLOCK_SYNC' });
             return false;
         } catch (e: any) { 
-            console.error('Pull Error:', e);
             dispatch({ type: 'UNLOCK_SYNC' });
             return false; 
         }
@@ -363,16 +341,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         if (!state.isInitialized) return;
         localStorage.setItem(CONFIG_KEY, JSON.stringify(state.leanConfig));
-        
         if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) {
             const timer = setTimeout(() => syncToCloud(), 3000);
             return () => clearTimeout(timer);
         }
     }, [
-        state.products, state.transactions, state.shipments, 
-        state.orders, state.customers, state.suppliers, 
-        state.tasks, state.inboundShipments, state.influencers,
-        state.syncAllowed, state.syncLocked, state.leanConfig 
+        state.products, state.transactions, state.shipments, state.orders, state.customers, state.suppliers, 
+        state.tasks, state.inboundShipments, state.influencers, state.syncAllowed, state.syncLocked, state.leanConfig 
     ]);
 
     useEffect(() => {
@@ -385,6 +360,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             } catch(e) {}
 
             const savedConfig = localStorage.getItem(CONFIG_KEY);
+            const savedStatus = localStorage.getItem(CONN_STATUS_KEY) as ConnectionStatus;
+
             if (savedConfig) {
                 try {
                     const config = JSON.parse(savedConfig);
@@ -392,18 +369,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     
                     if (config.appId && config.appKey && config.serverURL) {
                         await bootLean(config.appId, config.appKey, config.serverURL);
-                        const found = await pullFromCloud(true);
-                        if (!found) dispatch({ type: 'UNLOCK_SYNC' });
+                        if (savedStatus === 'connected') {
+                            await pullFromCloud(true);
+                        } else {
+                            dispatch({ type: 'UNLOCK_SYNC' });
+                        }
                     } else {
                         dispatch({ type: 'UNLOCK_SYNC' });
                     }
-                } catch (e) { 
-                    dispatch({ type: 'UNLOCK_SYNC' }); 
-                }
+                } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); }
             } else {
                 dispatch({ type: 'LOAD_MOCK_DATA' });
             }
-            
             dispatch({ type: 'INITIALIZED_SUCCESS' });
         };
         startup();
@@ -412,7 +389,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
 
     return (
-        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean }}>
+        <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean, disconnectLean }}>
             {children}
         </TanxingContext.Provider>
     );
