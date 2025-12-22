@@ -84,6 +84,7 @@ interface AppState {
     syncAllowed: boolean; 
     syncLocked: boolean; 
     influencers: Influencer[];
+    lastMutationTime: number; // 用于触发同步引擎的唯一时间戳
 }
 
 type Action =
@@ -138,15 +139,23 @@ const emptyState: AppState = {
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
     automationRules: [], automationLogs: [],
-    isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: []
+    isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: [],
+    lastMutationTime: 0
 };
 
 const safeLocalSave = (state: AppState) => { idb.set('GLOBAL_STATE', state).catch(e => console.error('IDB Save Error:', e)); };
 
 const appReducer = (state: AppState, action: Action): AppState => {
     const markDirty = (newState: Partial<AppState>): AppState => {
-        const updated = { ...state, ...newState, syncAllowed: true, saveStatus: 'dirty' as SaveStatus };
-        safeLocalSave(updated); return updated;
+        const updated = { 
+            ...state, 
+            ...newState, 
+            syncAllowed: true, 
+            saveStatus: 'dirty' as SaveStatus,
+            lastMutationTime: Date.now() // 关键：更新突变时间戳
+        };
+        safeLocalSave(updated); 
+        return updated;
     };
     switch (action.type) {
         case 'SET_THEME': return { ...state, theme: action.payload };
@@ -156,7 +165,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         case 'HYDRATE_STATE': { const updated = { ...state, ...action.payload }; if (action.payload.syncLocked !== undefined) updated.syncLocked = action.payload.syncLocked; safeLocalSave(updated); return updated; }
-        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, influencers: MOCK_INFLUENCERS, automationRules: [{ id: 'R-001', name: '库存水位红色警戒', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }], isInitialized: true, syncLocked: false };
+        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, influencers: MOCK_INFLUENCERS, automationRules: [{ id: 'R-001', name: '库存水位红色警戒', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }], isInitialized: true, syncLocked: false, lastMutationTime: Date.now() };
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
         case 'SET_LEAN_CONFIG': { const newConfig = { ...state.leanConfig, ...action.payload }; localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig)); return { ...state, leanConfig: newConfig }; }
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
@@ -223,17 +232,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { 
-        if (!AV.applicationId) {
-            console.warn("[CloudSync] LeanCloud not initialized");
-            return false;
-        }
-        // 如果不是强制同步，且当前处于锁定状态或没有变动，则跳过
-        if (!isForce && (state.syncLocked || !state.syncAllowed)) {
-            return false;
-        }
+        if (!AV.applicationId) return false;
+        
+        // 如果不是强制同步且没有变动，跳过
+        if (!isForce && !state.syncAllowed) return false;
         if (isSyncingRef.current) return false; 
         
         isSyncingRef.current = true; 
+        console.log(`[CloudSync] 启动物理推送... 模式: ${isForce ? '强制' : '自动'}`);
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' }); 
 
         try { 
@@ -270,13 +276,15 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             backupObj.set('payload', jsonPayload); 
             
             const saved = await backupObj.save(); 
+            console.log(`[CloudSync] 推送成功. 大小: ${size} bytes`);
+            
             dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString(), payloadSize: size, cloudObjectId: saved.id } }); 
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
             
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
             return true; 
         } catch (e: any) { 
-            console.error("[CloudSync] Push Failed:", e);
+            console.error("[CloudSync] 推送失败:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
             return false; 
         } finally { 
@@ -308,13 +316,17 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } 
     };
 
+    // 核心自动同步引擎：仅监听 mutationTime
     useEffect(() => { 
-        if (!state.isInitialized) return; 
-        if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) { 
-            const timer = setTimeout(() => syncToCloud(), 5000); 
-            return () => clearTimeout(timer); 
-        } 
-    }, [state.products, state.transactions, state.shipments, state.orders, state.customers, state.suppliers, state.tasks, state.inboundShipments, state.influencers, state.automationRules, state.syncAllowed, state.syncLocked]);
+        if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !AV.applicationId) return; 
+        
+        console.log("[CloudSync] 检测到数据震荡，计划在 3 秒后执行自动备份...");
+        const timer = setTimeout(() => {
+            syncToCloud();
+        }, 3000); // 缩短至 3 秒
+        
+        return () => clearTimeout(timer); 
+    }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
 
     useEffect(() => { 
         const startup = async () => { 

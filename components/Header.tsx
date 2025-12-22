@@ -49,25 +49,25 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       switch(state.saveStatus) {
           case 'saving':
               return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded text-[9px] font-bold text-amber-400 animate-pulse">
-                      <Loader2 className="w-2.5 h-2.5 animate-spin" /> SAVING...
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] font-black text-indigo-400 animate-pulse">
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> SYNCING...
                   </div>
               );
           case 'saved':
               return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-bold text-emerald-400 animate-in fade-in zoom-in">
-                      <CheckCircle2 className="w-2.5 h-2.5" /> CLOUD SAVED
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 animate-in fade-in zoom-in">
+                      <CheckCircle2 className="w-2.5 h-2.5" /> CLOUD SECURED
                   </div>
               );
           case 'dirty':
               return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded text-[9px] font-bold text-indigo-400">
-                      <Zap className="w-2.5 h-2.5" /> CHANGES PENDING
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
+                      <Zap className="w-2.5 h-2.5 animate-bounce" /> AUTO-SYNC PENDING
                   </div>
               );
           case 'error':
               return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-[9px] font-bold text-red-400">
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-[9px] font-black text-red-400">
                       <AlertCircle className="w-2.5 h-2.5" /> SYNC ERROR
                   </div>
               );
@@ -144,8 +144,8 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             <button 
                 onClick={handleCloudSync}
                 disabled={isManualSyncing || state.connectionStatus !== 'connected'}
-                className="p-2.5 bg-white/5 border border-white/10 rounded-xl hover:bg-white/10 transition-all text-slate-400 hover:text-white disabled:opacity-20"
-                title="手动全量同步"
+                className={`p-2.5 border rounded-xl transition-all ${state.saveStatus === 'dirty' ? 'bg-amber-500/10 border-amber-500/50 text-amber-500 animate-pulse' : 'bg-white/5 border-white/10 text-slate-400 hover:text-white'} disabled:opacity-20`}
+                title="强制同步全量数据"
             >
                 {isManualSyncing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
