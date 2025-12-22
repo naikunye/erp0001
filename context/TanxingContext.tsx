@@ -215,13 +215,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const bootLean = async (appId: string, appKey: string, serverURL: string) => { 
         if (!appId || !appKey || !serverURL) return; 
         try { 
-            AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: serverURL.trim().replace(/\/$/, "") }); 
+            const cleanUrl = serverURL.trim().replace(/\/$/, "");
+            AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: cleanUrl }); 
             const query = new AV.Query('Backup'); 
             await query.limit(1).find(); 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
         } catch (e: any) { 
+            console.error("[BootLean] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            throw new Error(`认证失败: ${e.message}`); 
+            const isCors = e.message.includes('terminated') || e.message.includes('Access-Control');
+            throw new Error(isCors ? `[跨域拦截] 请在 LeanCloud 控制台的安全设置中，将当前域名加入“Web安全域名”白名单。` : `认证失败: ${e.message}`); 
         } 
     };
 
@@ -316,43 +319,32 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } 
     };
 
-    // --- 同步策略核心：防抖上传 + 自动拉取 ---
-
-    // 1. 本地变动自动上传
     useEffect(() => { 
         if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !AV.applicationId) return; 
         const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
     }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
 
-    // 2. 云端变动自动监测 (Heartbeat Loop)
     useEffect(() => {
         if (!state.isInitialized || state.connectionStatus !== 'connected' || !AV.applicationId) return;
 
         const checkRemoteUpdate = async () => {
-            // 如果本地有脏数据正在准备上传，或者正在同步中，则跳过拉取，防止写覆盖
             if (state.saveStatus === 'dirty' || state.saveStatus === 'saving' || isSyncingRef.current) return;
-
             try {
                 const query = new AV.Query('Backup');
                 query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
-                query.select(['updatedAt']); // 仅查询时间戳，节省流量
+                query.select(['updatedAt']);
                 const remote = await query.first();
-                
                 if (remote && remote.updatedAt) {
                     const remoteTime = remote.updatedAt.toISOString();
-                    // 如果云端更新时间晚于本地记录的更新时间
                     if (remoteTime !== state.leanConfig.remoteUpdatedAt) {
-                        console.log(`[CloudSync] 检测到云端新版本: ${remoteTime}, 准备静默拉取...`);
                         await pullFromCloud(false);
                     }
                 }
-            } catch (e) {
-                console.warn("[CloudSync] 心跳检查异常");
-            }
+            } catch (e) {}
         };
 
-        const heartbeat = setInterval(checkRemoteUpdate, 15000); // 15秒检查一次
+        const heartbeat = setInterval(checkRemoteUpdate, 20000); 
         return () => clearInterval(heartbeat);
     }, [state.isInitialized, state.connectionStatus, state.leanConfig.remoteUpdatedAt, state.saveStatus]);
 

@@ -20,6 +20,7 @@ const Settings: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isConnected = state.connectionStatus === 'connected';
+  const isError = state.connectionStatus === 'error';
   const LEANCLOUD_LIMIT = 16 * 1024 * 1024; 
   const currentSize = state.leanConfig?.payloadSize || 0;
   const sizePercentage = Math.min(100, (currentSize / LEANCLOUD_LIMIT) * 100);
@@ -59,7 +60,7 @@ const Settings: React.FC = () => {
               showToast('物理连接成功：云端尚无历史镜像', 'info');
           }
       } catch (e: any) {
-          showToast(`激活失败: ${e.message}`, 'error');
+          showToast(e.message, 'error');
       } finally {
           setIsSaving(false);
       }
@@ -126,17 +127,17 @@ const Settings: React.FC = () => {
       {activeTab === 'cloud' && (
           <div className="space-y-6 animate-in fade-in duration-500">
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className={`lg:col-span-2 border rounded-3xl p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
-                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                        {isConnected ? <ShieldCheck className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
+                  <div className={`lg:col-span-2 border rounded-3xl p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
+                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : isError ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                        {isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
                       </div>
                       <div>
-                          <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : 'text-indigo-300'}`}>
-                              {isConnected ? '神经链路：稳固连接中' : '存储协议状态'}
+                          <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : isError ? 'text-red-400' : 'text-indigo-300'}`}>
+                              {isConnected ? '神经链路：稳固连接中' : isError ? '连接异常中止' : '存储协议状态'}
                           </h4>
                           <div className="mt-4 space-y-3">
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : 'bg-slate-700'}`}></div>
+                                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : isError ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}></div>
                                   <span className="text-xs font-bold text-white uppercase">物理节点: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
@@ -170,6 +171,29 @@ const Settings: React.FC = () => {
                       <div className="flex justify-between items-baseline"><span className="text-2xl font-black text-white font-mono">{formatSize(currentSize)}</span><span className="text-[9px] text-slate-600 font-bold">MAX: 16 MB</span></div>
                   </div>
               </div>
+
+              {/* 针对跨域拦截的专门提示框 */}
+              {isError && (
+                  <div className="bg-red-500/10 border-2 border-dashed border-red-500/30 rounded-3xl p-8 flex items-center gap-8 animate-in slide-in-from-top-4">
+                      <div className="p-5 bg-red-600 rounded-2xl text-white shadow-lg"><ShieldAlert className="w-10 h-10"/></div>
+                      <div className="flex-1">
+                          <h4 className="text-red-400 font-black text-lg uppercase italic tracking-tighter">拦截警报：多端同步受阻 (CORS Fault)</h4>
+                          <p className="text-slate-300 text-sm mt-2 leading-relaxed">
+                            系统检测到物理请求被 LeanCloud 终端拦截。这通常是因为该电脑的<b>访问地址（域名或IP）</b>未授权。
+                          </p>
+                          <div className="mt-4 flex flex-wrap gap-4">
+                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[240px]">
+                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase">1. 获取当前域名</div>
+                                  <code className="text-xs text-indigo-400 font-mono bg-indigo-500/5 px-2 py-1 rounded">{window.location.origin}</code>
+                              </div>
+                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[240px]">
+                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase">2. 控制台配置</div>
+                                  <p className="text-[11px] text-slate-400 font-bold">进入 LeanCloud 官网 -> 设置 -> 安全中心 -> <b>Web安全域名</b> -> 添加上方域名。</p>
+                              </div>
+                          </div>
+                      </div>
+                  </div>
+              )}
 
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">
                   <div className="bg-black/40 border border-white/5 rounded-3xl p-8 flex flex-col md:flex-row items-center justify-between gap-6">
@@ -217,7 +241,7 @@ const Settings: React.FC = () => {
                               <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="https://xxx.lncldglobal.com" disabled={isConnected} />
                           </div>
                           <button onClick={handleSaveConfig} disabled={isSaving || isConnected} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
-                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : isConnected ? <BadgeCheck className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
+                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : isConnected ? <CheckCircle2 className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
                               {isConnected ? '神经链路已连接 (Connected)' : '激活链路并同步数据'}
                           </button>
                       </div>
@@ -227,10 +251,10 @@ const Settings: React.FC = () => {
                               <Info className="w-6 h-6 text-indigo-400" />
                               <h5 className="text-white font-bold">连接指引</h5>
                           </div>
-                          <ul className="text-xs text-slate-500 space-y-4 leading-relaxed">
+                          <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
                               <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>激活链路</b>后，输入框会自动锁定以防止配置意外漂移。</span></li>
                               <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果需要更换 AppID，请点击 <b>Disconnect</b> 重置状态。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">03</span><span>连接成功后，上方会有绿色 <b>Connected</b> 呼吸灯常亮。</span></li>
+                              <li className="flex gap-3"><span className="text-rose-400 font-bold">重要</span><span>如果在其他电脑上报错，请将当前域名添加至 LeanCloud 的“Web安全域名”。</span></li>
                           </ul>
                       </div>
                   </div>
@@ -283,8 +307,5 @@ const Settings: React.FC = () => {
     </div>
   );
 };
-
-// 内部缺失图标补充
-const BadgeCheck = ({ className }: any) => <CheckCircle2 className={className} />;
 
 export default Settings;
