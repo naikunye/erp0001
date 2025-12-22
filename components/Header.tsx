@@ -17,7 +17,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handleCloudSync = async () => {
-      // 如果处于连接错误状态，点击时先尝试重连一次
       if (state.connectionStatus !== 'connected') {
           if (state.leanConfig.appId) {
               showToast('正在尝试重新激活物理链路...', 'info');
@@ -37,10 +36,9 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
 
       setIsManualSyncing(true);
       try {
-          // 强制同步会忽略 syncLocked 标记，直接向云端推送当前快照
           const success = await syncToCloud(true);
           if (success) {
-              showToast('云端数据已成功固化', 'success');
+              showToast('云端镜像已强制更新', 'success');
           } else {
               showToast('同步指令被拦截，请检查 LeanCloud 控制台安全域名', 'error');
           }
@@ -83,8 +81,15 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
               );
           case 'saved':
               return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 animate-in fade-in zoom-in">
-                      <CheckCircle2 className="w-2.5 h-2.5" /> CLOUD SECURED
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 animate-in fade-in zoom-in">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> CLOUD SECURED
+                    </div>
+                    {state.leanConfig.lastSync && (
+                        <span className="text-[8px] text-slate-600 font-mono font-bold uppercase tracking-tighter">
+                            Last Ack: {state.leanConfig.lastSync}
+                        </span>
+                    )}
                   </div>
               );
           case 'dirty':
@@ -187,7 +192,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     state.connectionStatus === 'error' ? 'bg-red-600 border-red-500 text-white' : 
                     'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
                 }`}
-                title="手动激活神经链路并执行同步"
+                title="手动同步当前快照到云端"
             >
                 {isManualSyncing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
             </button>
