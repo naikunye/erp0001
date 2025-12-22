@@ -4,7 +4,7 @@ import {
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
     FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive,
-    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock
+    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
@@ -64,6 +64,11 @@ const Settings: React.FC = () => {
       } finally {
           setIsSaving(false);
       }
+  };
+
+  const copyOrigin = () => {
+      navigator.clipboard.writeText(window.location.origin);
+      showToast('域名已复制，请填入 LeanCloud 安全设置', 'success');
   };
 
   const handleManualPull = async () => {
@@ -172,23 +177,27 @@ const Settings: React.FC = () => {
                   </div>
               </div>
 
-              {/* 针对跨域拦截的专门提示框 */}
               {isError && (
                   <div className="bg-red-500/10 border-2 border-dashed border-red-500/30 rounded-3xl p-8 flex items-center gap-8 animate-in slide-in-from-top-4">
                       <div className="p-5 bg-red-600 rounded-2xl text-white shadow-lg"><ShieldAlert className="w-10 h-10"/></div>
                       <div className="flex-1">
                           <h4 className="text-red-400 font-black text-lg uppercase italic tracking-tighter">拦截警报：多端同步受阻 (CORS Fault)</h4>
                           <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-                            系统检测到物理请求被 LeanCloud 终端拦截。这通常是因为该电脑的<b>访问地址（域名或IP）</b>未授权。
+                            您的配置步骤很正确！但检测到该电脑的请求仍被 LeanCloud 云端拦截。请按照以下步骤检查：
                           </p>
                           <div className="mt-4 flex flex-wrap gap-4">
-                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[240px]">
-                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase">1. 获取当前域名</div>
-                                  <code className="text-xs text-indigo-400 font-mono bg-indigo-500/5 px-2 py-1 rounded">{window.location.origin}</code>
+                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[280px]">
+                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase flex justify-between">
+                                      <span>1. 确认当前 Origin (必须完全一致)</span>
+                                      <button onClick={copyOrigin} className="text-indigo-400 flex items-center gap-1 hover:text-white"><Copy className="w-3 h-3"/> 复制</button>
+                                  </div>
+                                  <code className="text-xs text-indigo-400 font-mono bg-indigo-500/5 px-2 py-1 rounded block truncate">{window.location.origin}</code>
                               </div>
-                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[240px]">
-                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase">2. 控制台配置</div>
-                                  <p className="text-[11px] text-slate-400 font-bold">进入 LeanCloud 官网 -> 设置 -> 安全中心 -> <b>Web安全域名</b> -> 添加上方域名。</p>
+                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[280px]">
+                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase">2. 控制台修正建议</div>
+                                  <p className="text-[11px] text-slate-400 font-bold leading-tight">
+                                      请在 LeanCloud 安全域名中尝试<b>去掉末尾斜杠</b>，例如改为：<span className="text-white">https://erp0001.vercel.app</span>。修改后需等待约 1 分钟生效。
+                                  </p>
                               </div>
                           </div>
                       </div>
@@ -254,7 +263,7 @@ const Settings: React.FC = () => {
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
                               <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>激活链路</b>后，输入框会自动锁定以防止配置意外漂移。</span></li>
                               <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果需要更换 AppID，请点击 <b>Disconnect</b> 重置状态。</span></li>
-                              <li className="flex gap-3"><span className="text-rose-400 font-bold">重要</span><span>如果在其他电脑上报错，请将当前域名添加至 LeanCloud 的“Web安全域名”。</span></li>
+                              <li className="flex gap-3"><span className="text-rose-400 font-bold">重要</span><span>LeanCloud 安全域名配置中，请务必<b>去掉网址最后的斜杠</b> (/)。</span></li>
                           </ul>
                       </div>
                   </div>

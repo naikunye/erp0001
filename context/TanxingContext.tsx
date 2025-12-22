@@ -216,15 +216,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!appId || !appKey || !serverURL) return; 
         try { 
             const cleanUrl = serverURL.trim().replace(/\/$/, "");
+            console.log(`[CloudSync] 尝试初始化链路... Origin: ${window.location.origin}`);
             AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: cleanUrl }); 
             const query = new AV.Query('Backup'); 
             await query.limit(1).find(); 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
         } catch (e: any) { 
-            console.error("[BootLean] Error:", e);
+            console.error("[BootLean] Error Detected:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            const isCors = e.message.includes('terminated') || e.message.includes('Access-Control');
-            throw new Error(isCors ? `[跨域拦截] 请在 LeanCloud 控制台的安全设置中，将当前域名加入“Web安全域名”白名单。` : `认证失败: ${e.message}`); 
+            const isCors = e.message.includes('terminated') || e.message.includes('Access-Control') || e.message.includes('CORS');
+            throw new Error(isCors ? `[物理层拦截] 请在 LeanCloud 控制台中将域名 ${window.location.origin} 加入“Web安全域名”。` : `认证失败: ${e.message}`); 
         } 
     };
 
