@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { 
     LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, 
@@ -30,7 +29,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'finance', label: '财务穿透', subLabel: 'Audit', icon: Wallet },
     { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
     { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },
-    { id: 'marketing', label: '营销投放', subLabel: 'Marketing', icon: Megaphone },
+    { id: 'marketing', label: '达人建联', subLabel: 'Influencers', icon: Megaphone },
     { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
     { id: 'suppliers', label: '供应商管理', subLabel: 'Suppliers', icon: Factory },
     { id: 'settings', label: '系统设置', subLabel: 'Settings', icon: Settings },
@@ -63,7 +62,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                         const isHighlight = item.highlight;
                         return (
                             <button key={item.id} onClick={() => handleNav(item.id as Page)} className={`w-full flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
-                                {isActive && <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-transparent border-l-2 border-indigo-500 opacity-100"></div>}
+                                {isActive && <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-transparent border-l-2 border-violet-500 opacity-100"></div>}
                                 <Icon className={`w-5 h-5 relative z-10 transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
                                 <div className="flex flex-col items-start relative z-10">
                                     <span className={`text-sm font-medium leading-none ${isActive ? 'font-bold' : ''}`}>{item.label}</span>

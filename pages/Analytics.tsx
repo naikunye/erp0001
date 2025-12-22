@@ -1,198 +1,197 @@
 import React, { useState, useMemo } from 'react';
 import { 
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  ScatterChart, Scatter, ZAxis, Cell, Legend, ReferenceLine
+  ScatterChart, Scatter, ZAxis, Cell, Legend, ReferenceLine,
+  BarChart, Bar
 } from 'recharts';
 import { 
   DollarSign, Activity, Wallet, BrainCircuit, Target, BarChart4,
-  Sparkles, AlertTriangle, ArrowRight, RefreshCw, TrendingUp, TrendingDown
+  Sparkles, AlertTriangle, ArrowRight, RefreshCw, TrendingUp, TrendingDown,
+  ShieldAlert, Globe, Zap, Ship, Scale, Flame, Info, RotateCcw, Loader2
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI } from "@google/genai";
 
-const COLORS = {
-  high: '#10b981',
-  medium: '#f59e0b',
-  low: '#ef4444',
-  text: '#94a3b8',
-  grid: 'rgba(255,255,255,0.05)',
-};
+const COLORS = { high: '#10b981', medium: '#f59e0b', low: '#ef4444', text: '#94a3b8', grid: 'rgba(255,255,255,0.05)' };
 
 const Analytics: React.FC = () => {
-  const { state, dispatch } = useTanxing();
+  const { state } = useTanxing();
+  const [activeTab, setActiveTab] = useState<'matrix' | 'lab'>('matrix');
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
-  const EXCHANGE_RATE = 7.2;
+  // 压力实验室参数
+  const [logisticsShock, setLogisticsShock] = useState(100); // 100% = 正常
+  const [exchangeShock, setExchangeShock] = useState(7.2);
+  const [refundShock, setRefundShock] = useState(1); // 倍率
 
-  // --- 核心修复：全成本分摊矩阵计算 (对齐 Inventory.tsx) ---
+  const EXCHANGE_RATE = exchangeShock;
+
   const analysisData = useMemo(() => {
-    const products = state.products || [];
-    const activeProducts = products.filter(p => !p.deletedAt);
-    
+    const products = (state.products || []).filter(p => !p.deletedAt);
     let totalPotentialProfitUSD = 0;
-    let totalStockValueCNY = 0;
     let totalInvestmentCNY = 0;
     
-    const matrixData = activeProducts.map(p => {
+    const matrixData = products.map(p => {
         const stock = Math.max(p.stock || 0, 0);
         const velocity = p.dailyBurnRate || 0;
         const dos = velocity > 0 ? (stock / velocity) : 150;
-        
         const costPriceCNY = p.costPrice || 0;
-        const stockValueCNY = stock * costPriceCNY;
         
-        // 1. 物流分摊逻辑对齐
+        // 模拟运费上涨
         const dims = p.dimensions || {l:0, w:0, h:0};
         const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
         const autoUnitWeight = Math.max(p.unitWeight || 0, unitVolWeight);
-        
-        let activeTotalWeight = 0;
-        if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
-            activeTotalWeight = p.logistics.billingWeight;
-        } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
-            activeTotalWeight = p.logistics.unitBillingWeight * stock;
-        } else {
-            activeTotalWeight = autoUnitWeight * stock;
-        }
+        const rate = (p.logistics?.unitFreightCost || 0) * (logisticsShock / 100);
+        const unitLogisticsCNY = (autoUnitWeight * rate) + (p.logistics?.consumablesFee || 0);
 
-        const rate = p.logistics?.unitFreightCost || 0;
-        const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
-        const autoTotalFreightCNY = (activeTotalWeight * rate) + batchFeesCNY;
-        const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
-        
-        const unitFreightCNY = stock > 0 ? effectiveTotalFreightCNY / stock : 0;
-        const unitLogisticsCNY = unitFreightCNY + (p.logistics?.consumablesFee || 0);
-        const unitLogisticsUSD = unitLogisticsCNY / EXCHANGE_RATE;
-
-        // 2. 经营成本
         const priceUSD = p.price || 0;
         const eco = p.economics;
         const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
         const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
-        const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
-        const unitAdCostUSD = eco?.adCost || 0; 
-        const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100);
+        const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100) * refundShock;
         
-        const costPriceUSD = costPriceCNY / EXCHANGE_RATE;
-        const totalUnitCostUSD = costPriceUSD + unitLogisticsUSD + platformFeeUSD + creatorFeeUSD + fixedFeesUSD + unitAdCostUSD + refundLossUSD;
-        
+        const totalUnitCostUSD = (costPriceCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + refundLossUSD + (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
         const unitProfitUSD = priceUSD - totalUnitCostUSD;
-        const skuTotalProfitUSD = unitProfitUSD * stock;
         
-        const unitInvestmentCNY = costPriceCNY + unitLogisticsCNY;
-        const roi = unitInvestmentCNY > 0 ? (unitProfitUSD * EXCHANGE_RATE / unitInvestmentCNY * 100) : 0;
+        totalPotentialProfitUSD += unitProfitUSD * stock;
+        totalInvestmentCNY += (costPriceCNY + unitLogisticsCNY) * stock;
 
-        totalPotentialProfitUSD += skuTotalProfitUSD;
-        totalStockValueCNY += stockValueCNY;
-        totalInvestmentCNY += unitInvestmentCNY * stock;
-
-        return {
-            x: Math.min(dos, 150),
-            y: velocity,
-            z: Math.max(stockValueCNY, 10),
-            sku: p.sku,
-            profit: Math.round(skuTotalProfitUSD),
-            roi: roi,
-            fill: roi < 5 ? COLORS.low : (roi > 35 ? COLORS.high : COLORS.medium)
-        };
+        return { x: Math.min(dos, 150), y: velocity, z: Math.max(stock * costPriceCNY, 10), sku: p.sku, profit: Math.round(unitProfitUSD * stock), roi: (unitProfitUSD * EXCHANGE_RATE / (costPriceCNY + unitLogisticsCNY)) * 100, fill: unitProfitUSD < 0 ? COLORS.low : (unitProfitUSD > 10 ? COLORS.high : COLORS.medium) };
     });
 
-    return {
-        matrixData,
-        totalPotentialProfitUSD,
-        totalStockValueCNY,
-        projectedROI: totalInvestmentCNY > 0 ? (totalPotentialProfitUSD * EXCHANGE_RATE / totalInvestmentCNY * 100) : 0
-    };
-  }, [state.products]);
+    return { matrixData, totalPotentialProfitUSD, currentROI: totalInvestmentCNY > 0 ? (totalPotentialProfitUSD * EXCHANGE_RATE / totalInvestmentCNY * 100) : 0 };
+  }, [state.products, logisticsShock, exchangeShock, refundShock]);
 
   const handleAiDeepDive = async () => {
       setIsAiThinking(true);
-      setAiInsight(null);
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `分析财务数据：库存货值 ¥${analysisData.totalStockValueCNY.toLocaleString()}，穿透净利 $${analysisData.totalPotentialProfitUSD.toLocaleString()}，ROI ${analysisData.projectedROI.toFixed(1)}%。给出3条经营建议（中文 HTML）。`;
+          const prompt = `压力测试：运费波动${logisticsShock}%，汇率${exchangeShock}。模拟后总利 $${analysisData.totalPotentialProfitUSD.toLocaleString()}，ROI ${analysisData.currentROI.toFixed(1)}%。请指出获利能力最脆弱的环节（中文 HTML）。`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setAiInsight(response.text);
-      } catch (e) {
-          setAiInsight("AI 诊断服务暂不可用。");
-      } finally {
-          setIsAiThinking(false);
-      }
+      } catch (e) { setAiInsight("AI 神经链路受干扰。"); } finally { setIsAiThinking(false); }
   };
 
   return (
-    <div className="flex flex-col h-full space-y-6 pb-10">
+    <div className="flex flex-col h-full space-y-6 pb-10 animate-in fade-in duration-700 slide-in-from-right-4">
         <div className="flex justify-between items-end">
             <div>
-                <h1 className="text-3xl font-black text-white tracking-widest uppercase">数据分析中心 (V3.1)</h1>
-                <p className="text-xs text-slate-500 mt-2 font-mono">核算逻辑已对齐：支持手动运费覆盖与真实单品分摊</p>
+                <h1 className="text-3xl font-black text-white tracking-widest uppercase italic">深层穿透分析 (Deep Audit)</h1>
+                <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.4em] flex items-center gap-2">
+                    <Activity className="w-3 h-3 text-emerald-400 animate-pulse"/> Multi-Scenario Cognitive Engine Online
+                </p>
             </div>
-            <button onClick={handleAiDeepDive} disabled={isAiThinking} className="px-6 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg">
-                {isAiThinking ? <RefreshCw className="w-4 h-4 animate-spin" /> : <BrainCircuit className="w-4 h-4" />} AI 深度诊断
-            </button>
+            <div className="flex bg-black/60 p-1 rounded-xl border border-white/10 shadow-2xl">
+                <button onClick={() => setActiveTab('matrix')} className={`px-6 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === 'matrix' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>全息矩阵</button>
+                <button onClick={() => setActiveTab('lab')} className={`px-6 py-2 rounded-lg text-xs font-black uppercase transition-all ${activeTab === 'lab' ? 'bg-rose-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>压力实验室</button>
+            </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="ios-glass-card p-6 border-l-4 border-l-emerald-500">
-                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">综合 ROI (穿透后)</div>
-                <div className={`text-4xl font-mono font-bold ${analysisData.projectedROI >= 0 ? 'text-white' : 'text-red-500'}`}>
-                    {analysisData.projectedROI.toFixed(1)}%
-                </div>
+            <div className="ios-glass-card p-8 border-l-4 border-l-emerald-500 bg-emerald-500/5 group relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:rotate-12 transition-transform"><TrendingUp className="w-20 h-20 text-emerald-400"/></div>
+                <div className="text-[10px] text-emerald-500 uppercase font-black mb-1 tracking-widest">模拟全盘 ROI</div>
+                <div className={`text-5xl font-mono font-black ${analysisData.currentROI >= 0 ? 'text-white' : 'text-rose-500'}`}>{analysisData.currentROI.toFixed(1)}%</div>
             </div>
-            <div className="ios-glass-card p-6 border-l-4 border-l-blue-500">
-                <div className="text-[10px] text-slate-500 uppercase font-bold mb-1">当前库存预期总净利</div>
-                <div className="text-4xl font-mono font-bold text-white">
-                    ${analysisData.totalPotentialProfitUSD.toLocaleString(undefined, {maximumFractionDigits:0})}
-                </div>
+            <div className="ios-glass-card p-8 border-l-4 border-l-blue-500 bg-blue-500/5 group relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:rotate-12 transition-transform"><DollarSign className="w-20 h-20 text-blue-400"/></div>
+                <div className="text-[10px] text-blue-500 uppercase font-black mb-1 tracking-widest">模拟周期总利 (USD)</div>
+                <div className="text-5xl font-mono font-black text-white italic">${analysisData.totalPotentialProfitUSD.toLocaleString(undefined, {maximumFractionDigits:0})}</div>
+            </div>
+            <div className="ios-glass-card p-8 border-l-4 border-l-indigo-600 bg-indigo-600/5 group relative overflow-hidden">
+                <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:rotate-12 transition-transform"><Zap className="w-20 h-20 text-indigo-400"/></div>
+                <div className="text-[10px] text-indigo-400 uppercase font-black mb-1 tracking-widest">边际安全性指数</div>
+                <div className="text-5xl font-mono font-black text-white italic">{analysisData.currentROI > 10 ? 'SAFE' : 'CRITICAL'}</div>
             </div>
         </div>
 
-        {aiInsight && (
-            <div className="bg-indigo-900/20 border border-indigo-500/30 p-5 rounded-2xl animate-in slide-in-from-top-4" dangerouslySetInnerHTML={{ __html: aiInsight }}></div>
+        {activeTab === 'lab' && (
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 animate-in slide-in-from-bottom-6">
+                <div className="lg:col-span-1 space-y-6">
+                    <div className="ios-glass-card p-8 border-t-4 border-t-rose-600 bg-rose-950/10">
+                        <h3 className="text-xs font-black text-white mb-8 flex items-center gap-3 uppercase italic"><Flame className="w-5 h-5 text-rose-500" /> 注入风险变量 (Injection)</h3>
+                        <div className="space-y-10">
+                            <div>
+                                <label className="text-[10px] text-slate-500 font-black flex justify-between uppercase mb-4 tracking-widest"><span>海运费率波动</span><span className="text-rose-400">{logisticsShock}%</span></label>
+                                <input type="range" min="50" max="400" step="10" value={logisticsShock} onChange={e=>setLogisticsShock(parseInt(e.target.value))} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-rose-600" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-slate-500 font-black flex justify-between uppercase mb-4 tracking-widest"><span>压力测试汇率 (USD/CNY)</span><span className="text-emerald-400">{exchangeShock}</span></label>
+                                <input type="range" min="6.5" max="8.5" step="0.05" value={exchangeShock} onChange={e=>setExchangeShock(parseFloat(e.target.value))} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
+                            </div>
+                            <div>
+                                <label className="text-[10px] text-slate-500 font-black flex justify-between uppercase mb-4 tracking-widest"><span>退货率恶化系数</span><span className="text-rose-400">x{refundShock}</span></label>
+                                <input type="range" min="1" max="5" step="0.5" value={refundShock} onChange={e=>setRefundShock(parseFloat(e.target.value))} className="w-full h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-amber-500" />
+                            </div>
+                            <button onClick={() => { setLogisticsShock(100); setExchangeShock(7.2); setRefundShock(1); }} className="w-full py-3 bg-white/5 hover:bg-white/10 text-slate-400 rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all"><RotateCcw className="w-3 h-3"/> 重置变量</button>
+                        </div>
+                    </div>
+                </div>
+                <div className="lg:col-span-3 flex flex-col gap-6">
+                    <div className="ios-glass-panel p-8 rounded-[3rem] border-white/10 bg-black/40 flex-1 relative overflow-hidden">
+                        <div className="flex justify-between items-center mb-8 relative z-10">
+                            <h3 className="text-sm font-black text-white flex items-center gap-3 uppercase italic"><BrainCircuit className="w-6 h-6 text-indigo-400" /> 风险受损预测云图</h3>
+                            {/* Added Loader2 to fix 'Cannot find name Loader2' error */}
+                            <button onClick={handleAiDeepDive} disabled={isAiThinking} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-xl flex items-center gap-2 active:scale-95 transition-all">
+                                {isAiThinking ? <Loader2 className="w-4 h-4 animate-spin"/> : <Sparkles className="w-4 h-4"/>} 神经元推演报告
+                            </button>
+                        </div>
+                        
+                        {aiInsight ? (
+                            <div className="bg-indigo-900/10 border border-indigo-500/20 p-8 rounded-[2rem] animate-in slide-in-from-top-4 relative group">
+                                <div className="absolute -top-4 -left-4 p-6 opacity-5 group-hover:scale-110 transition-transform"><Info className="w-20 h-20 text-indigo-400"/></div>
+                                <div className="text-xs text-indigo-100 leading-relaxed font-bold font-mono" dangerouslySetInnerHTML={{ __html: aiInsight }}></div>
+                            </div>
+                        ) : (
+                            <div className="h-full flex flex-col items-center justify-center text-slate-700 opacity-20 space-y-4">
+                                <Scale className="w-20 h-20" />
+                                <p className="text-[10px] font-black uppercase tracking-[0.5em]">调整左侧变量触发量子模拟</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
         )}
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0">
-            <div className="ios-glass-card p-6 flex flex-col min-h-[450px]">
-                <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><Target className="w-5 h-5 text-cyan-400"/> 资产健康矩阵 (散点视图)</h3>
-                <div className="flex-1 bg-black/20 rounded-xl overflow-hidden">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: -20 }}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                            <XAxis type="number" dataKey="x" name="DOS" stroke="#64748b" fontSize={10} domain={[0, 150]} unit="D" />
-                            <YAxis type="number" dataKey="y" name="Velocity" stroke="#64748b" fontSize={10} unit="pcs" />
-                            <ZAxis type="number" dataKey="z" range={[50, 400]} />
-                            <Tooltip 
-                                contentStyle={{backgroundColor:'rgba(0,0,0,0.85)', border:'1px solid rgba(255,255,255,0.1)', borderRadius:'12px'}}
-                                itemStyle={{color: '#fff'}}
-                                labelStyle={{color: '#fff'}}
-                            />
-                            <Scatter name="Inventory" data={analysisData.matrixData}>
-                                {analysisData.matrixData.map((entry, index) => <Cell key={index} fill={entry.fill} />)}
-                            </Scatter>
-                        </ScatterChart>
-                    </ResponsiveContainer>
+        {activeTab === 'matrix' && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 animate-in slide-in-from-bottom-6">
+                <div className="ios-glass-card p-6 flex flex-col min-h-[450px]">
+                    <h3 className="text-xs font-black text-slate-400 uppercase mb-8 flex items-center gap-2 italic tracking-widest"><Target className="w-5 h-5 text-cyan-400"/> 资产健康全景 (2D Matrix)</h3>
+                    <div className="flex-1 bg-black/20 rounded-[2rem] overflow-hidden border border-white/5">
+                        <ResponsiveContainer width="100%" height="100%">
+                            <ScatterChart margin={{ top: 20, right: 30, bottom: 20, left: -20 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
+                                <XAxis type="number" dataKey="x" name="DOS" stroke="#475569" fontSize={10} domain={[0, 150]} unit="D" />
+                                <YAxis type="number" dataKey="y" name="Velocity" stroke="#475569" fontSize={10} unit="pcs" />
+                                <ZAxis type="number" dataKey="z" range={[100, 800]} />
+                                <Tooltip contentStyle={{backgroundColor:'rgba(0,0,0,0.9)', border:'1px solid #333', borderRadius:'16px', fontSize:'12px'}} />
+                                <Scatter name="Inventory" data={analysisData.matrixData}>
+                                    {analysisData.matrixData.map((entry, index) => <Cell key={index} fill={entry.fill} className={entry.roi > 30 ? 'roi-high-glow' : ''} />)}
+                                </Scatter>
+                            </ScatterChart>
+                        </ResponsiveContainer>
+                    </div>
                 </div>
-            </div>
-
-            <div className="ios-glass-card p-6 flex flex-col overflow-hidden">
-                <h3 className="text-sm font-bold text-white mb-6 flex items-center gap-2"><BarChart4 className="w-5 h-5 text-purple-400"/> SKU 盈利效率排行榜</h3>
-                <div className="flex-1 overflow-y-auto space-y-2 pr-2 custom-scrollbar">
-                    {[...analysisData.matrixData].sort((a,b) => b.roi - a.roi).map((sku, i) => (
-                        <div key={sku.sku} className="bg-white/5 border border-white/5 rounded-xl p-4 flex items-center justify-between group hover:border-indigo-500/30 transition-all">
-                            <div className="flex items-center gap-4">
-                                <div className={`w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs ${sku.roi < 5 ? 'bg-red-500/20 text-red-500' : 'bg-indigo-600 text-white'}`}>{i + 1}</div>
-                                <div>
-                                    <div className="text-sm font-bold text-white font-mono">{sku.sku}</div>
-                                    <div className="text-[10px] text-slate-500 uppercase">贡献净利: ${sku.profit.toLocaleString()}</div>
+                <div className="ios-glass-card p-6 flex flex-col overflow-hidden">
+                    <h3 className="text-xs font-black text-slate-400 uppercase mb-8 flex items-center gap-2 italic tracking-widest"><BarChart4 className="w-5 h-5 text-purple-400"/> 贡献度排行榜 (Contribution)</h3>
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
+                        {[...analysisData.matrixData].sort((a,b) => b.profit - a.profit).map((sku, i) => (
+                            <div key={sku.sku} className={`bg-white/2 border border-white/5 rounded-2xl p-5 flex items-center justify-between group hover:border-indigo-500/40 transition-all ${sku.roi > 40 ? 'roi-high-glow' : ''}`}>
+                                <div className="flex items-center gap-5">
+                                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center font-black text-xs ${sku.roi < 5 ? 'bg-rose-500/20 text-rose-500' : 'bg-indigo-600 text-white'}`}>{i + 1}</div>
+                                    <div>
+                                        <div className="text-sm font-black text-white font-mono uppercase italic tracking-tighter">{sku.sku}</div>
+                                        <div className="text-[10px] text-slate-600 font-bold uppercase mt-1">模拟净利贡献: <span className="text-emerald-400">${sku.profit.toLocaleString()}</span></div>
+                                    </div>
                                 </div>
+                                <div className={`text-lg font-black font-mono tracking-tighter ${sku.roi < 5 ? 'text-rose-500' : 'text-emerald-400'}`}>{sku.roi.toFixed(1)}% <span className="text-[10px] text-slate-700 italic">ROI</span></div>
                             </div>
-                            <div className={`text-sm font-bold font-mono ${sku.roi < 5 ? 'text-red-500' : 'text-emerald-400'}`}>{sku.roi.toFixed(1)}% ROI</div>
-                        </div>
-                    ))}
+                        ))}
+                    </div>
                 </div>
             </div>
-        </div>
+        )}
     </div>
   );
 };

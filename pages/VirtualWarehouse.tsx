@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { 
   Layers, Search, Zap, Scan, 
   Activity, Box, Maximize2, 
@@ -6,10 +6,11 @@ import {
   Camera, CheckCircle2, MousePointer2, 
   Rotate3d, Move, X, Info, Waypoints,
   Package, LayoutGrid, Compass,
-  Grid3X3, ArrowRight
+  Grid3X3, ArrowRight, Video, CameraOff
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { Product } from '../types';
+import { GoogleGenAI } from "@google/genai";
 
 const GRID_ROWS = ['A', 'B', 'C', 'D']; 
 const GRID_COLS = Array.from({ length: 8 }, (_, i) => i + 1);
@@ -19,8 +20,13 @@ const VirtualWarehouse: React.FC = () => {
     const [selectedBin, setSelectedBin] = useState<string | null>(null);
     const [viewMode, setViewMode] = useState<'status' | 'heatmap'>('status');
     const [searchTerm, setSearchTerm] = useState('');
+    
+    // 视觉扫描状态
     const [isScanning, setIsScanning] = useState(false);
+    const [showCamera, setShowCamera] = useState(false);
     const [scanResult, setScanResult] = useState<string | null>(null);
+    const videoRef = useRef<HTMLVideoElement>(null);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
 
     // 将产品映射到网格坐标
     const binMap = useMemo(() => {
@@ -36,37 +42,78 @@ const VirtualWarehouse: React.FC = () => {
         return map;
     }, [state.products]);
 
+    // 开启摄像头
+    const startCamera = async () => {
+        setShowCamera(true);
+        setScanResult(null);
+        try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+            if (videoRef.current) {
+                videoRef.current.srcObject = stream;
+            }
+        } catch (err) {
+            showToast('无法访问摄像头设备', 'error');
+            setShowCamera(false);
+        }
+    };
+
+    const stopCamera = () => {
+        if (videoRef.current?.srcObject) {
+            (videoRef.current.srcObject as MediaStream).getTracks().forEach(t => t.stop());
+        }
+        setShowCamera(false);
+    };
+
+    const handleVisionScan = async () => {
+        if (!selectedProduct || !videoRef.current || !canvasRef.current) return;
+        
+        setIsScanning(true);
+        try {
+            // 截图
+            const context = canvasRef.current.getContext('2d');
+            canvasRef.current.width = videoRef.current.videoWidth;
+            canvasRef.current.height = videoRef.current.videoHeight;
+            context?.drawImage(videoRef.current, 0, 0);
+            const base64Image = canvasRef.current.toDataURL('image/jpeg').split(',')[1];
+
+            // 调用 Gemini Pro Vision 进行实物核对
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const prompt = `你是一个仓库核验 AI。这张照片是库位 ${selectedBin} 的实物。系统中该库位应存放 SKU: ${selectedProduct.sku} (${selectedProduct.name})，当前账面库存为 ${selectedProduct.stock}。请判断实物是否相符，如果不符或照片模糊，请指出原因。简短回答（中文）。`;
+            
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash-image',
+                contents: {
+                    parts: [
+                        { inlineData: { data: base64Image, mimeType: 'image/jpeg' } },
+                        { text: prompt }
+                    ]
+                }
+            });
+
+            setScanResult(response.text);
+            showToast('视觉特征提取与账面对比完成', 'success');
+        } catch (err) {
+            setScanResult('视觉引擎计算偏差，请重试。');
+        } finally {
+            setIsScanning(false);
+            stopCamera();
+        }
+    };
+
     const getBinTheme = (product: Product | null) => {
         if (!product) return { border: 'border-white/5', bg: 'bg-black/20', text: 'text-slate-700', glow: '' };
-
         if (viewMode === 'status') {
             if (product.stock < 10) return { border: 'border-rose-500/50', bg: 'bg-rose-500/10', text: 'text-rose-400', glow: 'shadow-[0_0_15px_rgba(244,63,94,0.15)]' };
             if (product.lifecycle === 'Growing') return { border: 'border-indigo-500/50', bg: 'bg-indigo-500/10', text: 'text-indigo-400', glow: 'shadow-[0_0_15px_rgba(99,102,241,0.15)]' };
             return { border: 'border-emerald-500/50', bg: 'bg-emerald-500/10', text: 'text-emerald-400', glow: 'shadow-[0_0_15px_rgba(16,185,129,0.15)]' };
         }
-
         if (viewMode === 'heatmap') {
             const velocity = product.dailyBurnRate || 0;
             if (velocity > 10) return { border: 'border-amber-500/50', bg: 'bg-amber-500/20', text: 'text-amber-400', glow: 'shadow-[0_0_20px_rgba(245,158,11,0.2)]' };
             if (velocity > 5) return { border: 'border-purple-500/50', bg: 'bg-purple-500/10', text: 'text-purple-400', glow: '' };
             return { border: 'border-blue-500/50', bg: 'bg-blue-500/5', text: 'text-blue-400', glow: '' };
         }
-
         return { border: 'border-white/10', bg: 'bg-white/5', text: 'text-white', glow: '' };
-    };
-
-    const handleVisionScan = async () => {
-        setIsScanning(true);
-        setScanResult(null);
-        await new Promise(r => setTimeout(r, 2000));
-        
-        if (selectedProduct) {
-            setScanResult(`✨ 视觉核销成功：SKU ${selectedProduct.sku} 在库位 ${selectedBin} 物理存量确认一致。`);
-            showToast('物理快照对账完成', 'success');
-        } else {
-            setScanResult('未在该坐标识别到有效资产。');
-        }
-        setIsScanning(false);
     };
 
     const selectedProduct = selectedBin ? binMap[selectedBin] : null;
@@ -100,7 +147,6 @@ const VirtualWarehouse: React.FC = () => {
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
                 {/* 左侧：网格阵列 */}
                 <div className="col-span-12 lg:col-span-8 ios-glass-panel rounded-[2.5rem] flex flex-col overflow-hidden border-white/10 relative bg-[#050508] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)]">
-                    
                     <div className="p-6 border-b border-white/5 flex justify-between items-center bg-white/2 backdrop-blur-md relative z-20">
                         <div className="relative">
                             <Search className="w-4 h-4 text-slate-600 absolute left-3 top-3" />
@@ -119,7 +165,6 @@ const VirtualWarehouse: React.FC = () => {
                         </div>
                     </div>
 
-                    {/* 网格容器 - 修正滚动 */}
                     <div className="flex-1 overflow-auto p-8 custom-scrollbar bg-[radial-gradient(circle_at_center,#0c0c12_0%,#050508_100%)]">
                         <div className="grid grid-cols-8 gap-4 min-w-[900px] pb-10">
                             {GRID_COLS.map(col => (
@@ -133,47 +178,18 @@ const VirtualWarehouse: React.FC = () => {
                                             binId.includes(searchTerm.toUpperCase())
                                         );
                                         const theme = getBinTheme(product);
-                                        
                                         return (
-                                            <div 
-                                                key={binId}
-                                                onClick={() => setSelectedBin(binId)}
-                                                className={`
-                                                    group relative h-28 rounded-2xl border-2 transition-all duration-300 cursor-pointer overflow-hidden
-                                                    ${theme.bg} ${theme.border} ${theme.glow}
-                                                    ${isSelected ? 'ring-4 ring-white border-white scale-[1.02] z-10 shadow-2xl bg-white/5' : 'hover:border-white/40 hover:bg-white/5'}
-                                                    ${isMatch ? 'animate-pulse ring-4 ring-yellow-400 border-yellow-400' : ''}
-                                                `}
-                                            >
+                                            <div key={binId} onClick={() => setSelectedBin(binId)} className={`group relative h-28 rounded-2xl border-2 transition-all duration-300 cursor-pointer overflow-hidden ${theme.bg} ${theme.border} ${theme.glow} ${isSelected ? 'ring-4 ring-white border-white scale-[1.02] z-10 shadow-2xl bg-white/5' : 'hover:border-white/40 hover:bg-white/5'} ${isMatch ? 'animate-pulse ring-4 ring-yellow-400 border-yellow-400' : ''}`}>
                                                 <div className="p-3 h-full flex flex-col justify-between relative z-10">
                                                     <div className="flex justify-between items-start">
-                                                        <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-black/40 border border-white/5 ${isSelected ? 'text-white' : 'text-slate-500'}`}>
-                                                            {binId}
-                                                        </span>
-                                                        {product && (
-                                                            <span className={`text-[10px] font-black font-mono ${theme.text}`}>
-                                                                {product.stock}
-                                                            </span>
-                                                        )}
+                                                        <span className={`text-[10px] font-black font-mono px-1.5 py-0.5 rounded bg-black/40 border border-white/5 ${isSelected ? 'text-white' : 'text-slate-500'}`}>{binId}</span>
+                                                        {product && <span className={`text-[10px] font-black font-mono ${theme.text}`}>{product.stock}</span>}
                                                     </div>
-
                                                     <div className="mt-1">
-                                                        <div className={`text-[11px] font-black truncate uppercase tracking-tighter ${isSelected ? 'text-white' : 'text-slate-200'}`}>
-                                                            {product ? product.sku : '---'}
-                                                        </div>
-                                                        <div className="text-[8px] text-slate-500 font-bold truncate mt-0.5 uppercase">
-                                                            {product ? product.name : 'EMPTY BIN'}
-                                                        </div>
+                                                        <div className={`text-[11px] font-black truncate uppercase tracking-tighter ${isSelected ? 'text-white' : 'text-slate-200'}`}>{product ? product.sku : '---'}</div>
+                                                        <div className="text-[8px] text-slate-500 font-bold truncate mt-0.5 uppercase">{product ? product.name : 'EMPTY BIN'}</div>
                                                     </div>
-
-                                                    {product && (
-                                                        <div className="h-1 w-full bg-black/40 rounded-full mt-2 overflow-hidden border border-white/5">
-                                                            <div 
-                                                                className={`h-full transition-all duration-1000 ${product.stock < 10 ? 'bg-rose-500' : 'bg-emerald-500'}`}
-                                                                style={{ width: `${Math.min(100, (product.stock / 200) * 100)}%` }}
-                                                            />
-                                                        </div>
-                                                    )}
+                                                    {product && <div className="h-1 w-full bg-black/40 rounded-full mt-2 overflow-hidden border border-white/5"><div className={`h-full transition-all duration-1000 ${product.stock < 10 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(100, (product.stock / 200) * 100)}%` }}/></div>}
                                                 </div>
                                             </div>
                                         );
@@ -182,70 +198,55 @@ const VirtualWarehouse: React.FC = () => {
                             ))}
                         </div>
                     </div>
-                    
-                    <div className="p-5 bg-black/40 border-t border-white/5 flex justify-between items-center italic shrink-0">
-                        <div className="text-[10px] font-black text-slate-600 uppercase tracking-[0.2em] flex items-center gap-4">
-                            <span className="flex items-center gap-2"><Move className="w-3.5 h-3.5"/> 视图模式: 2D MATRIX</span>
-                            <span className="flex items-center gap-2 text-indigo-400"><Waypoints className="w-3.5 h-3.5"/> 缩放: 100% SCALE</span>
-                        </div>
-                        <div className="text-[9px] text-slate-700 font-bold uppercase tracking-widest">
-                            已同步系统内 {(state.products || []).length} 项活跃资产
-                        </div>
-                    </div>
                 </div>
 
-                {/* 右侧：资产全息看板 - 修正高度与滚动 */}
+                {/* 右侧：资产全息看板 */}
                 <div className="col-span-12 lg:col-span-4 flex flex-col min-h-0">
                     <div className={`ios-glass-card flex flex-col h-full rounded-[3rem] border-l-8 transition-all duration-700 relative overflow-hidden ${selectedProduct ? 'border-l-indigo-500 bg-indigo-500/5' : 'border-l-slate-900 opacity-60'}`}>
                         {selectedProduct ? (
                             <div className="animate-in slide-in-from-right-8 duration-500 flex flex-col h-full relative z-10">
-                                {/* Fixed Header inside side panel */}
                                 <div className="p-10 pb-6 flex justify-between items-start shrink-0">
                                     <div>
-                                        <div className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.4em] mb-3 flex items-center gap-2">
-                                            <Scan className="w-4 h-4"/> Bin Captured
-                                        </div>
+                                        <div className="text-[11px] text-indigo-400 font-black uppercase tracking-[0.4em] mb-3 flex items-center gap-2"><Scan className="w-4 h-4"/> Bin Captured</div>
                                         <h3 className="text-6xl font-black text-white italic tracking-tighter leading-none">{selectedBin}</h3>
                                     </div>
-                                    <div className="p-6 bg-indigo-600 rounded-[2rem] shadow-2xl shadow-indigo-900/50 text-white">
-                                        <Package className="w-10 h-10"/>
-                                    </div>
+                                    <div className="p-6 bg-indigo-600 rounded-[2rem] shadow-2xl shadow-indigo-900/50 text-white"><Package className="w-10 h-10"/></div>
                                 </div>
 
-                                {/* Scrollable Content Section */}
                                 <div className="flex-1 overflow-y-auto px-10 space-y-10 custom-scrollbar pb-6">
-                                    <div className="bg-black/80 rounded-[2rem] p-7 border border-white/10 shadow-inner group transition-all hover:border-indigo-500/40">
-                                        <div className="text-[11px] text-slate-500 font-bold uppercase mb-3 tracking-widest flex justify-between">
-                                            <span>挂载资产详细</span>
-                                            <span className="text-emerald-400 font-mono">Synced</span>
+                                    {showCamera ? (
+                                        <div className="relative rounded-[2rem] overflow-hidden border border-white/20 aspect-video bg-black shadow-2xl">
+                                            <video ref={videoRef} autoPlay playsInline className="w-full h-full object-cover" />
+                                            <div className="absolute inset-0 border-[20px] border-indigo-500/20 pointer-events-none"></div>
+                                            <div className="absolute inset-x-0 top-1/2 h-px bg-indigo-500/50 animate-[scan_2s_linear_infinite]"></div>
+                                            <canvas ref={canvasRef} className="hidden" />
+                                            <div className="absolute bottom-4 inset-x-0 flex justify-center">
+                                                <button onClick={handleVisionScan} disabled={isScanning} className="bg-indigo-600 text-white px-6 py-2 rounded-full font-black text-[10px] uppercase flex items-center gap-2 shadow-xl">
+                                                    {isScanning ? <Loader2 className="w-3 h-3 animate-spin" /> : <Camera className="w-3 h-3" />} 执行视觉对账
+                                                </button>
+                                            </div>
                                         </div>
-                                        <div className="text-3xl font-black text-white font-mono leading-tight group-hover:text-indigo-400 transition-colors">{selectedProduct.sku}</div>
-                                        <div className="text-sm text-slate-400 mt-3 leading-relaxed font-medium">{selectedProduct.name}</div>
-                                    </div>
+                                    ) : (
+                                        <div className="bg-black/80 rounded-[2rem] p-7 border border-white/10 shadow-inner group transition-all hover:border-indigo-500/40">
+                                            <div className="text-[11px] text-slate-500 font-bold uppercase mb-3 tracking-widest flex justify-between">
+                                                <span>挂载资产详细</span>
+                                                <span className="text-emerald-400 font-mono">Synced</span>
+                                            </div>
+                                            <div className="text-3xl font-black text-white font-mono leading-tight group-hover:text-indigo-400 transition-colors">{selectedProduct.sku}</div>
+                                            <div className="text-sm text-slate-400 mt-3 leading-relaxed font-medium">{selectedProduct.name}</div>
+                                        </div>
+                                    )}
 
                                     <div className="grid grid-cols-2 gap-6">
                                         <div className="bg-white/5 rounded-[2rem] p-7 border border-white/10 relative overflow-hidden">
-                                            <div className="text-[11px] text-slate-500 font-black uppercase mb-2">当前存量</div>
+                                            <div className="text-[11px] text-slate-500 font-black uppercase mb-2">账面存量</div>
                                             <div className="text-5xl font-black text-white font-mono tracking-tighter">{selectedProduct.stock}</div>
-                                            <div className="w-full h-1.5 bg-slate-800 rounded-full mt-5 overflow-hidden">
-                                                <div className="h-full bg-emerald-500 shadow-[0_0_10px_#10b981]" style={{ width: `${(selectedProduct.stock/200)*100}%` }}></div>
-                                            </div>
                                         </div>
                                         <div className="bg-white/5 rounded-[2rem] p-7 border border-white/10">
                                             <div className="text-[11px] text-slate-500 font-black uppercase mb-2">出库频率</div>
                                             <div className="text-5xl font-black text-white font-mono tracking-tighter">{selectedProduct.dailyBurnRate || 0}</div>
                                             <div className="text-[10px] text-slate-600 mt-5 font-black uppercase italic">Pcs/Day</div>
                                         </div>
-                                    </div>
-
-                                    <div className="p-8 bg-gradient-to-br from-indigo-900/30 to-black/40 border border-indigo-500/30 rounded-[2.5rem] relative overflow-hidden group">
-                                        <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity"><Sparkles className="w-20 h-20 text-white animate-pulse" /></div>
-                                        <h4 className="text-xs font-black text-indigo-300 uppercase mb-4 flex items-center gap-3 italic tracking-widest">
-                                            <BrainCircuit className="w-5 h-5" /> 空间分布 AI 指令
-                                        </h4>
-                                        <p className="text-[12px] text-indigo-100/70 leading-relaxed font-bold">
-                                            基于近期 {(selectedProduct.dailyBurnRate || 0).toFixed(1)}/D 的流转数据，建议将该商品维持在 <span className="text-white">{selectedBin}</span> 黄金拣货位，以最大化出库能效。
-                                        </p>
                                     </div>
 
                                     {scanResult && (
@@ -256,31 +257,25 @@ const VirtualWarehouse: React.FC = () => {
                                     )}
                                 </div>
 
-                                {/* Fixed Footer Buttons */}
                                 <div className="p-10 pt-6 border-t border-white/10 flex gap-5 shrink-0 bg-white/2">
-                                    <button 
-                                        onClick={handleVisionScan}
-                                        disabled={isScanning}
-                                        className="flex-1 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-4 transition-all active:scale-95 shadow-indigo-900/40"
-                                    >
-                                        {isScanning ? <Loader2 className="w-6 h-6 animate-spin" /> : <Camera className="w-6 h-6" />}
-                                        视觉对账校准
-                                    </button>
-                                    <button onClick={() => setSelectedBin(null)} className="p-5 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white rounded-[1.5rem] transition-all border border-white/10">
-                                        <X className="w-6 h-6" />
-                                    </button>
+                                    {!showCamera ? (
+                                        <button onClick={startCamera} className="flex-1 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-4 transition-all active:scale-95 shadow-indigo-900/40">
+                                            <Camera className="w-6 h-6" /> 开启视觉对账
+                                        </button>
+                                    ) : (
+                                        <button onClick={stopCamera} className="flex-1 py-5 bg-slate-800 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.3em] flex items-center justify-center gap-4">
+                                            <CameraOff className="w-6 h-6" /> 关闭视觉
+                                        </button>
+                                    )}
+                                    <button onClick={() => setSelectedBin(null)} className="p-5 bg-white/5 hover:bg-white/10 text-slate-500 hover:text-white rounded-[1.5rem] transition-all border border-white/10"><X className="w-6 h-6" /></button>
                                 </div>
                             </div>
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-slate-700 space-y-12 opacity-30 italic p-10">
-                                <div className="w-40 h-40 bg-white/2 rounded-full flex items-center justify-center border-4 border-dashed border-indigo-500/20">
-                                    <MousePointer2 className="w-20 h-20 opacity-10" />
-                                </div>
+                                <div className="w-40 h-40 bg-white/2 rounded-full flex items-center justify-center border-4 border-dashed border-indigo-500/20"><MousePointer2 className="w-20 h-20 opacity-10" /></div>
                                 <div className="text-center space-y-4 px-6">
                                     <h3 className="text-2xl font-black uppercase tracking-[0.6em] text-slate-400">选择网格坐标</h3>
-                                    <p className="text-[12px] leading-relaxed uppercase tracking-widest text-slate-500 font-black">
-                                        点击左侧仓库网格中的任一货位，以激活全息资产监测与 AI 分析。
-                                    </p>
+                                    <p className="text-[12px] leading-relaxed uppercase tracking-widest text-slate-500 font-black">点击左侧仓库网格中的任一货位，以激活全息资产监测与 AI 分析。</p>
                                 </div>
                             </div>
                         )}
@@ -288,10 +283,7 @@ const VirtualWarehouse: React.FC = () => {
                 </div>
             </div>
             
-            <style dangerouslySetInnerHTML={{ __html: `
-                .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-                .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }
-            `}} />
+            <style dangerouslySetInnerHTML={{ __html: `.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; } .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.05); border-radius: 10px; }` }} />
         </div>
     );
 };

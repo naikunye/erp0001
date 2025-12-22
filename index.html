@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tanxing OS | LeanCloud Edition</title>
+    <title>Tanxing OS | Quantum Edition</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -20,6 +20,8 @@
               'blob': 'blob-dance 25s infinite alternate',
               'spin-slow': 'spin 12s linear infinite',
               'scan': 'scan 3s linear infinite',
+              'pulse-glow': 'pulse-glow 4s infinite alternate',
+              'aurora': 'aurora 10s linear infinite',
             },
             keyframes: {
               'blob-dance': {
@@ -27,6 +29,15 @@
                 '33%': { transform: 'translate(30px, -50px) scale(1.1) rotate(45deg)', borderRadius: '50% 50% 20% 80% / 20% 80% 20% 80%' },
                 '66%': { transform: 'translate(-20px, 20px) scale(0.9) rotate(-45deg)', borderRadius: '80% 20% 50% 50% / 50% 20% 80% 50%' },
                 '100%': { transform: 'translate(0px, 0px) scale(1) rotate(0deg)', borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%' },
+              },
+              'pulse-glow': {
+                '0%': { boxShadow: '0 0 10px rgba(16, 185, 129, 0.1), inset 0 0 5px rgba(16, 185, 129, 0.05)' },
+                '100%': { boxShadow: '0 0 25px rgba(16, 185, 129, 0.3), inset 0 0 15px rgba(16, 185, 129, 0.15)' }
+              },
+              'aurora': {
+                '0%': { backgroundPosition: '0% 50%' },
+                '50%': { backgroundPosition: '100% 50%' },
+                '100%': { backgroundPosition: '0% 50%' }
               },
               scan: {
                 '0%': { transform: 'translateY(-100%)' },
@@ -54,7 +65,6 @@
         transition: background-color 0.8s ease;
       }
 
-      /* 核心动态背景层 */
       .ambient-bg {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
         z-index: -1; overflow: hidden; 
@@ -68,25 +78,10 @@
         will-change: transform, border-radius;
       }
 
-      /* Blob 初始分布与动画 */
       .blob-1 { top: -10%; left: -5%; width: 50vw; height: 50vw; background: #312e81; animation: blob-dance 20s infinite ease-in-out; }
       .blob-2 { bottom: -10%; right: -5%; width: 55vw; height: 55vw; background: #1e1b4b; animation: blob-dance 25s infinite ease-in-out reverse; }
       .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: #4338ca; animation: blob-dance 18s infinite ease-in-out alternate; }
 
-      /* 主题色彩配置联动 */
-      body.theme-ios-glass .blob-1 { background: #312e81; }
-      body.theme-ios-glass .blob-2 { background: #1e1b4b; }
-      body.theme-ios-glass .blob-3 { background: #4338ca; }
-
-      body.theme-midnight-dark .blob-1 { background: #881337; }
-      body.theme-midnight-dark .blob-2 { background: #4c0519; }
-      body.theme-midnight-dark .blob-3 { background: #fb7185; }
-
-      body.theme-cyber-neon .blob-1 { background: #064e3b; }
-      body.theme-cyber-neon .blob-2 { background: #065f46; }
-      body.theme-cyber-neon .blob-3 { background: #10b981; }
-
-      /* 毛玻璃面板 2.0 */
       .ios-glass-panel {
         background: var(--glass-bg);
         border: 1px solid var(--glass-border);
@@ -100,16 +95,24 @@
         border: 1px solid rgba(255, 255, 255, 0.08);
         backdrop-filter: blur(25px) saturate(180%);
         -webkit-backdrop-filter: blur(25px) saturate(180%);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      .brand-logo {
-        font-family: 'Inter', sans-serif;
-        font-weight: 900;
-        letter-spacing: -0.05em;
-        font-style: italic;
-        background: linear-gradient(135deg, #fff 0%, #a5b4fc 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
+      .roi-high-glow {
+        border-color: rgba(16, 185, 129, 0.4) !important;
+        animation: pulse-glow 3s infinite alternate;
+        position: relative;
+      }
+      
+      .roi-high-glow::after {
+        content: '';
+        position: absolute;
+        inset: -2px;
+        background: linear-gradient(45deg, #10b98122, #6366f122, #10b98122);
+        background-size: 200% 200%;
+        animation: aurora 5s linear infinite;
+        border-radius: inherit;
+        z-index: -1;
       }
 
       .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }

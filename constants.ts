@@ -46,7 +46,8 @@ export const MOCK_INFLUENCERS: Influencer[] = [
         platform: 'TikTok',
         followers: 890000,
         country: 'US',
-        status: 'To Contact',
+        // Fix: Changed 'To Contact' to 'Prospecting' to match the allowed Influencer status type
+        status: 'Prospecting',
         tags: ['Lifestyle', 'Vlog']
     },
     {

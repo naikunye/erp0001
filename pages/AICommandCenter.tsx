@@ -319,7 +319,7 @@ const AICommandCenter: React.FC = () => {
                                         <button onClick={() => fileInputRef.current?.click()} className={`p-2 rounded-xl transition-all ${selectedFile ? 'text-indigo-400 bg-indigo-500/10' : 'text-slate-600 hover:text-white'}`} title="注入物理视觉证据">
                                             <ImageIcon className="w-5 h-5" />
                                         </button>
-                                        <input type="file" token={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
+                                        <input type="file" ref={fileInputRef} onChange={handleFileSelect} accept="image/*" className="hidden" />
                                     </div>
                                     <input 
                                         type="text" 

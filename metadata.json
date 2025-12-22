@@ -2,6 +2,7 @@
   "name": "探行ERP (Tanxing ERP)",
   "description": "A modern, intelligent Enterprise Resource Planning system designed for efficiency and growth. Features inventory management, order tracking, and AI-driven insights.",
   "requestFramePermissions": [
-    "microphone"
+    "microphone",
+    "camera"
   ]
 }

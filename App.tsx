@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { TanxingProvider, useTanxing } from './context/TanxingContext';
 import Sidebar from './components/Sidebar';
@@ -74,7 +73,7 @@ const MainLayout: React.FC = () => {
       case 'customers': return '客户数据库 (Client Database)';
       case 'inventory': return '库存供应链 (Inventory & Supply)';
       case 'intelligence': return 'AI 实验室 (AI Laboratory)';
-      case 'marketing': return '增长引擎 (Growth Engine)';
+      case 'marketing': return '达人建联履约 (Influencer & Fulfill)';
       case 'analytics': return '深度分析 (Deep Analytics)';
       case 'calculator': return '智能计算 (Intelligent Calc)';
       case 'calendar': return '运营日历 (Operations Timeline)';

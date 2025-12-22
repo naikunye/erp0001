@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, PackageCheck, Layers, Container, Factory, Calculator, ClipboardList, Terminal, Globe } from 'lucide-react';
 import { Page } from '../types';
@@ -26,7 +25,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
     { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
     { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },
     { id: 'calendar', label: '运营日历', subLabel: 'Calendar', icon: CalendarDays },
-    { id: 'marketing', label: '营销投放', subLabel: 'Marketing', icon: Megaphone },
+    { id: 'marketing', label: '达人建联', subLabel: 'Influencers', icon: Megaphone },
     { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
     { id: 'suppliers', label: '供应商管理', subLabel: 'Suppliers', icon: Factory },
     { id: 'settings', label: '系统设置', subLabel: 'Settings', icon: Settings },
