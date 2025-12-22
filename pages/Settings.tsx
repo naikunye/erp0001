@@ -67,8 +67,9 @@ const Settings: React.FC = () => {
   };
 
   const copyOrigin = () => {
-      navigator.clipboard.writeText(window.location.origin);
-      showToast('域名已复制，请填入 LeanCloud 安全设置', 'success');
+      const origin = window.location.origin.replace(/\/$/, "");
+      navigator.clipboard.writeText(origin);
+      showToast('核心域名已复制（已自动去除斜杠）', 'success');
   };
 
   const handleManualPull = async () => {
@@ -181,22 +182,22 @@ const Settings: React.FC = () => {
                   <div className="bg-red-500/10 border-2 border-dashed border-red-500/30 rounded-3xl p-8 flex items-center gap-8 animate-in slide-in-from-top-4">
                       <div className="p-5 bg-red-600 rounded-2xl text-white shadow-lg"><ShieldAlert className="w-10 h-10"/></div>
                       <div className="flex-1">
-                          <h4 className="text-red-400 font-black text-lg uppercase italic tracking-tighter">拦截警报：多端同步受阻 (CORS Fault)</h4>
+                          <h4 className="text-red-400 font-black text-lg uppercase italic tracking-tighter">拦截警报：CORS 物理层同步阻塞</h4>
                           <p className="text-slate-300 text-sm mt-2 leading-relaxed">
-                            您的配置步骤很正确！但检测到该电脑的请求仍被 LeanCloud 云端拦截。请按照以下步骤检查：
+                            即便网址完全一样，由于 LeanCloud 开启了白名单验证，<b>必须精确匹配字符串</b>。
                           </p>
                           <div className="mt-4 flex flex-wrap gap-4">
-                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[280px]">
+                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[300px]">
                                   <div className="text-[10px] text-slate-500 font-black mb-2 uppercase flex justify-between">
-                                      <span>1. 确认当前 Origin (必须完全一致)</span>
-                                      <button onClick={copyOrigin} className="text-indigo-400 flex items-center gap-1 hover:text-white"><Copy className="w-3 h-3"/> 复制</button>
+                                      <span>1. 确认当前 Origin (请复制下方内容)</span>
+                                      <button onClick={copyOrigin} className="text-indigo-400 flex items-center gap-1 hover:text-white transition-colors"><Copy className="w-3 h-3"/> 点击复制</button>
                                   </div>
-                                  <code className="text-xs text-indigo-400 font-mono bg-indigo-500/5 px-2 py-1 rounded block truncate">{window.location.origin}</code>
+                                  <code className="text-xs text-indigo-400 font-mono bg-indigo-500/5 px-2 py-1 rounded block truncate">{window.location.origin.replace(/\/$/, "")}</code>
                               </div>
-                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[280px]">
-                                  <div className="text-[10px] text-slate-500 font-black mb-2 uppercase">2. 控制台修正建议</div>
+                              <div className="bg-black/40 border border-white/5 rounded-xl p-4 flex-1 min-w-[300px]">
+                                  <div className="text-[10px] text-rose-500 font-black mb-2 uppercase">2. 控制台修正检查</div>
                                   <p className="text-[11px] text-slate-400 font-bold leading-tight">
-                                      请在 LeanCloud 安全域名中尝试<b>去掉末尾斜杠</b>，例如改为：<span className="text-white">https://erp0001.vercel.app</span>。修改后需等待约 1 分钟生效。
+                                      请检查 LeanCloud 设置中是否带了<b>末尾斜杠</b>。如果有，请删除斜杠（例如 <code>.app/</code> 改为 <code>.app</code>），保存后等待 60 秒再生效。
                                   </p>
                               </div>
                           </div>
@@ -261,9 +262,9 @@ const Settings: React.FC = () => {
                               <h5 className="text-white font-bold">连接指引</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>激活链路</b>后，输入框会自动锁定以防止配置意外漂移。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果需要更换 AppID，请点击 <b>Disconnect</b> 重置状态。</span></li>
-                              <li className="flex gap-3"><span className="text-rose-400 font-bold">重要</span><span>LeanCloud 安全域名配置中，请务必<b>去掉网址最后的斜杠</b> (/)。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span><b>激活链路</b>后，输入框会自动锁定。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>双机同步的核心是保持 <b>AppID、AppKey、ServerURL</b> 三者完全一致。</span></li>
+                              <li className="flex gap-3"><span className="text-rose-400 font-bold">重要</span><span>LeanCloud 安全域名中，<b>请尝试去掉网址最后的斜杠 (/)</b>。如果添加了还是报错，请刷新 LeanCloud 页面看是否保存成功。</span></li>
                           </ul>
                       </div>
                   </div>
