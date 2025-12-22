@@ -4,7 +4,7 @@ import {
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
     FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive,
-    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy, Terminal, Globe
+    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy, Terminal, Globe, Activity
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
@@ -158,8 +158,8 @@ const Settings: React.FC = () => {
                                   <span className="text-xs font-bold text-white uppercase">物理节点: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${cloudStatus === 'found' || currentSize > 0 ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : cloudStatus === 'not_found' ? 'bg-amber-500' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white uppercase">云端探测: {cloudStatus === 'found' || currentSize > 0 ? '已定位镜像' : cloudStatus === 'not_found' ? '镜像空置' : '就绪'}</span>
+                                  <div className={`w-3 h-3 rounded-full ${state.leanConfig.remoteUpdatedAt ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : 'bg-slate-700'}`}></div>
+                                  <span className="text-xs font-bold text-white uppercase">云端镜像版本: <span className="font-mono text-indigo-300">{state.leanConfig.remoteUpdatedAt || 'N/A'}</span></span>
                               </div>
                           </div>
                       </div>
@@ -187,6 +187,33 @@ const Settings: React.FC = () => {
                       <div className="h-2.5 w-full bg-black/60 rounded-full overflow-hidden mb-4 p-0.5"><div className={`h-full rounded-full transition-all duration-1000 ${sizePercentage > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${sizePercentage}%` }}></div></div>
                       <div className="flex justify-between items-baseline"><span className="text-2xl font-black text-white font-mono">{formatSize(currentSize)}</span><span className="text-[9px] text-slate-600 font-bold">MAX: 16 MB</span></div>
                   </div>
+              </div>
+
+              {/* 新增：实时纠缠日志 */}
+              <div className="bg-black/60 border border-white/10 rounded-[2.5rem] p-6">
+                <div className="flex items-center gap-3 mb-4">
+                    <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
+                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">量子纠缠监视器 (Synchronization Debugger)</span>
+                </div>
+                <div className="space-y-4">
+                    <div className="p-4 bg-white/2 rounded-2xl border border-white/5 grid grid-cols-2 gap-4">
+                        <div>
+                            <p className="text-[8px] text-slate-500 uppercase font-bold">本地最后更新</p>
+                            <p className="text-xs font-mono text-white mt-1">{new Date(state.lastMutationTime).toLocaleString()}</p>
+                        </div>
+                        <div>
+                            <p className="text-[8px] text-slate-500 uppercase font-bold">云端最后镜像</p>
+                            <p className="text-xs font-mono text-indigo-400 mt-1">{state.leanConfig.remoteUpdatedAt ? new Date(state.leanConfig.remoteUpdatedAt).toLocaleString() : 'WAITING'}</p>
+                        </div>
+                    </div>
+                    <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <Info className="w-4 h-4 text-indigo-400" />
+                            <p className="text-[10px] text-indigo-200 font-bold">同步提示：如果数据未自动更新，请点击顶部导航栏的“下载”图标强制同步。</p>
+                        </div>
+                        <button onClick={() => pullFromCloud(false)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">立即对齐</button>
+                    </div>
+                </div>
               </div>
 
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">

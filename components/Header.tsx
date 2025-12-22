@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio, ShieldAlert } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -8,13 +8,34 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ title }) => {
   const [now, setNow] = useState(new Date());
-  const { state, dispatch, showToast, syncToCloud, bootLean } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean } = useTanxing();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
 
   useEffect(() => {
       const timer = setInterval(() => setNow(new Date()), 1000);
       return () => clearInterval(timer);
   }, []);
+
+  const handlePull = async () => {
+      if (state.connectionStatus !== 'connected') {
+          showToast('尚未建立神经连接', 'warning');
+          return;
+      }
+      setIsPulling(true);
+      try {
+          const success = await pullFromCloud(false);
+          if (success) {
+              showToast('云端协议已对齐', 'success');
+          } else {
+              showToast('云端尚无可用镜像', 'info');
+          }
+      } catch (e: any) {
+          showToast(`拉取失败: ${e.message}`, 'error');
+      } finally {
+          setIsPulling(false);
+      }
+  };
 
   const handleCloudSync = async () => {
       if (state.connectionStatus !== 'connected') {
@@ -98,12 +119,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                       <Zap className="w-2.5 h-2.5 animate-bounce" /> DATA MODIFIED
                   </div>
               );
-          case 'error':
-              return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-red-500/10 border border-red-500/20 rounded text-[9px] font-black text-red-400">
-                      <AlertCircle className="w-2.5 h-2.5" /> SYNC FAILED
-                  </div>
-              );
           default:
               return (
                   <div className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[8px] font-bold transition-all ${state.connectionStatus === 'connected' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
@@ -123,14 +138,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
                 <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Live Link</span>
-            </div>
-          );
-      }
-      if (state.connectionStatus === 'error') {
-          return (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-red-600/10 border border-red-500/30 rounded-full">
-                <WifiOff className="w-3 h-3 text-red-500" />
-                <span className="text-[10px] font-black text-red-500 uppercase tracking-tighter">Access Denied</span>
             </div>
           );
       }
@@ -183,19 +190,28 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         </div>
 
         <div className="flex items-center space-x-4">
-            <button 
-                onClick={handleCloudSync}
-                disabled={isManualSyncing}
-                className={`p-2.5 border rounded-xl transition-all shadow-xl active:scale-95 disabled:opacity-30 ${
-                    isManualSyncing ? 'bg-indigo-600 text-white' : 
-                    state.saveStatus === 'dirty' ? 'bg-amber-500 border-amber-400 text-black animate-pulse' : 
-                    state.connectionStatus === 'error' ? 'bg-red-600 border-red-500 text-white' : 
-                    'bg-white/5 border-white/10 text-slate-400 hover:text-white hover:bg-white/10'
-                }`}
-                title="手动同步当前快照到云端"
-            >
-                {isManualSyncing ? <Loader2 className="w-5 h-5 animate-spin" /> : <Cloud className="w-5 h-5" />}
-            </button>
+            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+                <button 
+                    onClick={handlePull}
+                    disabled={isPulling}
+                    className={`p-2 rounded-lg transition-all hover:bg-white/10 ${isPulling ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`}
+                    title="立即从云端下载最新镜像"
+                >
+                    {isPulling ? <RefreshCw className="w-4.5 h-4.5 animate-spin" /> : <CloudDownload className="w-4.5 h-4.5" />}
+                </button>
+                <button 
+                    onClick={handleCloudSync}
+                    disabled={isManualSyncing}
+                    className={`p-2 rounded-lg transition-all hover:bg-white/10 ${
+                        isManualSyncing ? 'text-indigo-400 animate-pulse' : 
+                        state.saveStatus === 'dirty' ? 'text-amber-500 animate-bounce' : 
+                        'text-slate-400'
+                    }`}
+                    title="手动同步当前快照到云端"
+                >
+                    {isManualSyncing ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Cloud className="w-4.5 h-4.5" />}
+                </button>
+            </div>
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-white font-black text-xs">AD</div>
         </div>
       </div>

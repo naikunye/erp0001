@@ -224,7 +224,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[BootLean] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            dispatch({ type: 'UNLOCK_SYNC' }); // 即使报错也解锁，允许用户本地修改并手动重试
+            dispatch({ type: 'UNLOCK_SYNC' }); 
             const isCors = e.message.includes('terminated') || e.message.includes('Access-Control') || e.message.includes('CORS');
             throw new Error(isCors ? `[物理层拦截] 请将域名 ${window.location.origin.replace(/\/$/, "")} 加入安全域名。` : `认证失败: ${e.message}`); 
         } 
@@ -263,15 +263,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 backupObj = new Backup(); 
                 backupObj.set('uniqueId', 'GLOBAL_ERP_NODE'); 
             } 
-            const acl = new AV.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); backupObj.setACL(acl); 
+            const acl = new AV.ACL(); 
+            acl.setPublicReadAccess(true); 
+            acl.setPublicWriteAccess(true); 
+            backupObj.setACL(acl); 
             backupObj.set('payload', jsonPayload); 
             
-            const saved = await backupObj.save(); 
+            const saved = await backupObj.save(null, { useMasterKey: false }); 
+            const remoteTime = saved.updatedAt?.toISOString();
+            
             dispatch({ type: 'SET_LEAN_CONFIG', payload: { 
                 lastSync: new Date().toLocaleTimeString(), 
                 payloadSize: size, 
                 cloudObjectId: saved.id,
-                remoteUpdatedAt: saved.updatedAt?.toISOString()
+                remoteUpdatedAt: remoteTime
             } }); 
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
@@ -292,14 +297,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); 
             let backupObj = await query.first(); 
             if (backupObj) { 
-                await backupObj.fetch(); 
                 const rawPayload = backupObj.get('payload'); 
-                if (!rawPayload) {
-                    dispatch({ type: 'UNLOCK_SYNC' });
-                    return false;
-                }
+                if (!rawPayload) return false;
+                
                 const size = new Blob([rawPayload]).size; 
                 const data = JSON.parse(rawPayload); 
+                const remoteTime = backupObj.updatedAt?.toISOString();
+
                 dispatch({ type: 'HYDRATE_STATE', payload: { 
                     ...data, 
                     syncLocked: false, 
@@ -310,17 +314,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         ...state.leanConfig, 
                         payloadSize: size, 
                         cloudObjectId: backupObj.id, 
-                        remoteUpdatedAt: backupObj.updatedAt?.toISOString(),
-                        lastSync: `已同步云端 (${new Date(backupObj.updatedAt || "").toLocaleTimeString()})` 
+                        remoteUpdatedAt: remoteTime,
+                        lastSync: `热更新 (${new Date(remoteTime || "").toLocaleTimeString()})` 
                     } 
                 } }); 
-                if (!isSilent) showToast('检测到远端变动，数据已热更新', 'success'); 
+                if (!isSilent) showToast('量子纠缠：数据已从云端对齐', 'success'); 
                 return true; 
             } 
-            dispatch({ type: 'UNLOCK_SYNC' }); 
             return false; 
         } catch (e: any) { 
-            dispatch({ type: 'UNLOCK_SYNC' }); 
+            console.error("[PullFromCloud] Error:", e);
             return false; 
         } 
     };
@@ -329,7 +332,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !AV.applicationId) return; 
         const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
-    }, [state.lastMutationTime, state.syncAllowed, state.syncLocked, state.connectionStatus]);
+    }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
 
     useEffect(() => {
         if (!state.isInitialized || state.connectionStatus !== 'connected' || !AV.applicationId) return;
@@ -343,14 +346,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const remote = await query.first();
                 if (remote && remote.updatedAt) {
                     const remoteTime = remote.updatedAt.toISOString();
+                    // 核心修复：更严格的比较逻辑
                     if (remoteTime !== state.leanConfig.remoteUpdatedAt) {
-                        await pullFromCloud(false);
+                        console.log("[Heartbeat] Detecting newer cloud version:", remoteTime);
+                        await pullFromCloud(true);
                     }
                 }
-            } catch (e) {}
+            } catch (e) {
+                console.error("[Heartbeat] Failed:", e.message);
+            }
         };
 
-        const heartbeat = setInterval(checkRemoteUpdate, 10000); 
+        const heartbeat = setInterval(checkRemoteUpdate, 8000); // 稍微加快轮询
         return () => clearInterval(heartbeat);
     }, [state.isInitialized, state.connectionStatus, state.leanConfig.remoteUpdatedAt, state.saveStatus]);
 
