@@ -145,7 +145,7 @@ const safeLocalSave = (state: AppState) => { idb.set('GLOBAL_STATE', state).catc
 
 const appReducer = (state: AppState, action: Action): AppState => {
     const markDirty = (newState: Partial<AppState>): AppState => {
-        const updated = { ...state, ...newState, syncAllowed: !state.syncLocked, saveStatus: 'dirty' as SaveStatus };
+        const updated = { ...state, ...newState, syncAllowed: true, saveStatus: 'dirty' as SaveStatus };
         safeLocalSave(updated); return updated;
     };
     switch (action.type) {
@@ -202,13 +202,147 @@ const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const isSyncingRef = useRef(false);
-    const bootLean = async (appId: string, appKey: string, serverURL: string) => { if (!appId || !appKey || !serverURL) return; try { AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: serverURL.trim().replace(/\/$/, "") }); const query = new AV.Query('Backup'); await query.limit(1).find(); dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); } catch (e: any) { dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); throw new Error(`认证失败: ${e.message}`); } };
-    const disconnectLean = () => { AV._config.appId = null; dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0 } }); };
-    const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { if (!AV.applicationId) return false; if (state.syncLocked && !isForce) return false; if (!state.syncAllowed && !isForce) return false; if (isSyncingRef.current) return false; isSyncingRef.current = true; dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' }); try { const payloadData = { products: state.products || [], orders: state.orders || [], shipments: state.shipments || [], transactions: state.transactions || [], customers: state.customers || [], influencers: state.influencers || [], suppliers: state.suppliers || [], tasks: state.tasks || [], inboundShipments: state.inboundShipments || [], automationRules: state.automationRules || [], timestamp: new Date().toISOString() }; const jsonPayload = JSON.stringify(payloadData); const size = new Blob([jsonPayload]).size; const query = new AV.Query('Backup'); query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); let backupObj = await query.first(); if (!backupObj) { const Backup = AV.Object.extend('Backup'); backupObj = new Backup(); backupObj.set('uniqueId', 'GLOBAL_ERP_NODE'); } const acl = new AV.ACL(); acl.setPublicReadAccess(true); acl.setPublicWriteAccess(true); backupObj.setACL(acl); backupObj.set('payload', jsonPayload); const saved = await backupObj.save(); dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString(), payloadSize: size, cloudObjectId: saved.id } }); dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); return true; } catch (e: any) { dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); return false; } finally { isSyncingRef.current = false; } };
-    const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => { if (!AV.applicationId) return false; try { const query = new AV.Query('Backup'); query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); let backupObj = await query.first(); if (backupObj) { await backupObj.fetch(); const rawPayload = backupObj.get('payload'); if (!rawPayload) return false; const size = new Blob([rawPayload]).size; const data = JSON.parse(rawPayload); dispatch({ type: 'HYDRATE_STATE', payload: { ...data, syncLocked: false, syncAllowed: false, saveStatus: 'idle', isInitialized: true, leanConfig: { ...state.leanConfig, payloadSize: size, cloudObjectId: backupObj.id, lastSync: `来自云端 ${new Date(backupObj.updatedAt || "").toLocaleTimeString()}` } } }); if (!isSilent) showToast('云端镜像同步成功', 'success'); return true; } dispatch({ type: 'UNLOCK_SYNC' }); return false; } catch (e: any) { dispatch({ type: 'UNLOCK_SYNC' }); return false; } };
-    useEffect(() => { if (!state.isInitialized) return; if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) { const timer = setTimeout(() => syncToCloud(), 3000); return () => clearTimeout(timer); } }, [state.products, state.transactions, state.shipments, state.orders, state.customers, state.suppliers, state.tasks, state.inboundShipments, state.influencers, state.automationRules, state.syncAllowed, state.syncLocked]);
-    useEffect(() => { const startup = async () => { try { const savedDb: any = await idb.get('GLOBAL_STATE'); if (savedDb) dispatch({ type: 'HYDRATE_STATE', payload: { ...savedDb, syncLocked: true } }); } catch(e) {} const savedConfig = localStorage.getItem(CONFIG_KEY); const savedStatus = localStorage.getItem(CONN_STATUS_KEY) as ConnectionStatus; if (savedConfig) { try { const config = JSON.parse(savedConfig); dispatch({ type: 'SET_LEAN_CONFIG', payload: config }); if (config.appId && config.appKey && config.serverURL) { await bootLean(config.appId, config.appKey, config.serverURL); if (savedStatus === 'connected') await pullFromCloud(true); else dispatch({ type: 'UNLOCK_SYNC' }); } else dispatch({ type: 'UNLOCK_SYNC' }); } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); } } else dispatch({ type: 'LOAD_MOCK_DATA' }); dispatch({ type: 'INITIALIZED_SUCCESS' }); }; startup(); }, []);
+
+    const bootLean = async (appId: string, appKey: string, serverURL: string) => { 
+        if (!appId || !appKey || !serverURL) return; 
+        try { 
+            AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: serverURL.trim().replace(/\/$/, "") }); 
+            const query = new AV.Query('Backup'); 
+            await query.limit(1).find(); 
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
+        } catch (e: any) { 
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
+            throw new Error(`认证失败: ${e.message}`); 
+        } 
+    };
+
+    const disconnectLean = () => { 
+        AV._config.appId = null; 
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
+        dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0 } }); 
+    };
+
+    const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { 
+        if (!AV.applicationId) {
+            console.warn("[CloudSync] LeanCloud not initialized");
+            return false;
+        }
+        // 如果不是强制同步，且当前处于锁定状态或没有变动，则跳过
+        if (!isForce && (state.syncLocked || !state.syncAllowed)) {
+            return false;
+        }
+        if (isSyncingRef.current) return false; 
+        
+        isSyncingRef.current = true; 
+        dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' }); 
+
+        try { 
+            const payloadData = { 
+                products: state.products || [], 
+                orders: state.orders || [], 
+                shipments: state.shipments || [], 
+                transactions: state.transactions || [], 
+                customers: state.customers || [], 
+                influencers: state.influencers || [], 
+                suppliers: state.suppliers || [], 
+                tasks: state.tasks || [], 
+                inboundShipments: state.inboundShipments || [], 
+                automationRules: state.automationRules || [], 
+                timestamp: new Date().toISOString() 
+            }; 
+            const jsonPayload = JSON.stringify(payloadData); 
+            const size = new Blob([jsonPayload]).size; 
+            
+            const query = new AV.Query('Backup'); 
+            query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); 
+            let backupObj = await query.first(); 
+
+            if (!backupObj) { 
+                const Backup = AV.Object.extend('Backup'); 
+                backupObj = new Backup(); 
+                backupObj.set('uniqueId', 'GLOBAL_ERP_NODE'); 
+            } 
+
+            const acl = new AV.ACL(); 
+            acl.setPublicReadAccess(true); 
+            acl.setPublicWriteAccess(true); 
+            backupObj.setACL(acl); 
+            backupObj.set('payload', jsonPayload); 
+            
+            const saved = await backupObj.save(); 
+            dispatch({ type: 'SET_LEAN_CONFIG', payload: { lastSync: new Date().toLocaleTimeString(), payloadSize: size, cloudObjectId: saved.id } }); 
+            dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
+            
+            setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
+            return true; 
+        } catch (e: any) { 
+            console.error("[CloudSync] Push Failed:", e);
+            dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
+            return false; 
+        } finally { 
+            isSyncingRef.current = false; 
+        } 
+    };
+
+    const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => { 
+        if (!AV.applicationId) return false; 
+        try { 
+            const query = new AV.Query('Backup'); 
+            query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); 
+            let backupObj = await query.first(); 
+            if (backupObj) { 
+                await backupObj.fetch(); 
+                const rawPayload = backupObj.get('payload'); 
+                if (!rawPayload) return false; 
+                const size = new Blob([rawPayload]).size; 
+                const data = JSON.parse(rawPayload); 
+                dispatch({ type: 'HYDRATE_STATE', payload: { ...data, syncLocked: false, syncAllowed: false, saveStatus: 'idle', isInitialized: true, leanConfig: { ...state.leanConfig, payloadSize: size, cloudObjectId: backupObj.id, lastSync: `来自云端 ${new Date(backupObj.updatedAt || "").toLocaleTimeString()}` } } }); 
+                if (!isSilent) showToast('云端镜像同步成功', 'success'); 
+                return true; 
+            } 
+            dispatch({ type: 'UNLOCK_SYNC' }); 
+            return false; 
+        } catch (e: any) { 
+            dispatch({ type: 'UNLOCK_SYNC' }); 
+            return false; 
+        } 
+    };
+
+    useEffect(() => { 
+        if (!state.isInitialized) return; 
+        if (AV.applicationId && state.syncAllowed && !isSyncingRef.current && !state.syncLocked) { 
+            const timer = setTimeout(() => syncToCloud(), 5000); 
+            return () => clearTimeout(timer); 
+        } 
+    }, [state.products, state.transactions, state.shipments, state.orders, state.customers, state.suppliers, state.tasks, state.inboundShipments, state.influencers, state.automationRules, state.syncAllowed, state.syncLocked]);
+
+    useEffect(() => { 
+        const startup = async () => { 
+            try { 
+                const savedDb: any = await idb.get('GLOBAL_STATE'); 
+                if (savedDb) dispatch({ type: 'HYDRATE_STATE', payload: { ...savedDb, syncLocked: true } }); 
+            } catch(e) {} 
+            const savedConfig = localStorage.getItem(CONFIG_KEY); 
+            const savedStatus = localStorage.getItem(CONN_STATUS_KEY) as ConnectionStatus; 
+            if (savedConfig) { 
+                try { 
+                    const config = JSON.parse(savedConfig); 
+                    dispatch({ type: 'SET_LEAN_CONFIG', payload: config }); 
+                    if (config.appId && config.appKey && config.serverURL) { 
+                        await bootLean(config.appId, config.appKey, config.serverURL); 
+                        if (savedStatus === 'connected') await pullFromCloud(true); 
+                        else dispatch({ type: 'UNLOCK_SYNC' }); 
+                    } else dispatch({ type: 'UNLOCK_SYNC' }); 
+                } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); } 
+            } else dispatch({ type: 'LOAD_MOCK_DATA' }); 
+            dispatch({ type: 'INITIALIZED_SUCCESS' }); 
+        }; 
+        startup(); 
+    }, []);
+
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
+    
     return ( <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean, disconnectLean }}> {children} </TanxingContext.Provider> );
 };
+
 export const useTanxing = () => { const context = useContext(TanxingContext); if (!context) throw new Error('useTanxing error'); return context; };
