@@ -30,7 +30,7 @@ const Analytics: React.FC = () => {
   const analysisData = useMemo(() => {
     const products = (state.products || []).filter(p => !p.deletedAt);
     let totalPotentialProfitUSD = 0;
-    let totalInvestmentCNY = 0;
+    let totalInvestmentUSD = 0; // 改为 USD 核算以保证 ROI 精度
     
     const matrixData = products.map(p => {
         const stock = Math.max(p.stock || 0, 0);
@@ -38,36 +38,60 @@ const Analytics: React.FC = () => {
         const dos = velocity > 0 ? (stock / velocity) : 150;
         const costPriceCNY = p.costPrice || 0;
         
-        // 模拟运费上涨
+        // --- 核心修复：同步 Inventory.tsx 的物流分摊逻辑 ---
         const dims = p.dimensions || {l:0, w:0, h:0};
         const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
         const autoUnitWeight = Math.max(p.unitWeight || 0, unitVolWeight);
-        const rate = (p.logistics?.unitFreightCost || 0) * (logisticsShock / 100);
-        const unitLogisticsCNY = (autoUnitWeight * rate) + (p.logistics?.consumablesFee || 0);
+        
+        // 模拟运费：应用 shock 系数
+        const baseRate = p.logistics?.unitFreightCost || 0;
+        const simulatedRate = baseRate * (logisticsShock / 100);
+        
+        // 计算模拟单品头程成本 (CNY)
+        const unitLogisticsCNY = (autoUnitWeight * simulatedRate) + (p.logistics?.consumablesFee || 0);
 
         const priceUSD = p.price || 0;
         const eco = p.economics;
+        
+        // --- 核心修复：补齐所有成本项，确保与备货单对账 ---
         const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
         const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
         const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100) * refundShock;
+        const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
+        const adCostUSD = (eco?.adCost || 0); 
         
-        const totalUnitCostUSD = (costPriceCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + refundLossUSD + (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
+        // 单品总成本 (USD) - 包含采购 + 物流 + 运营
+        const totalUnitCostUSD = (costPriceCNY / EXCHANGE_RATE) + (unitLogisticsCNY / EXCHANGE_RATE) + platformFeeUSD + creatorFeeUSD + refundLossUSD + fixedFeesUSD + adCostUSD;
+        
         const unitProfitUSD = priceUSD - totalUnitCostUSD;
         
         totalPotentialProfitUSD += unitProfitUSD * stock;
-        totalInvestmentCNY += (costPriceCNY + unitLogisticsCNY) * stock;
+        // 投资总额定义：采购成本 + 运费成本 (USD)
+        totalInvestmentUSD += ((costPriceCNY + unitLogisticsCNY) / EXCHANGE_RATE) * stock;
 
-        return { x: Math.min(dos, 150), y: velocity, z: Math.max(stock * costPriceCNY, 10), sku: p.sku, profit: Math.round(unitProfitUSD * stock), roi: (unitProfitUSD * EXCHANGE_RATE / (costPriceCNY + unitLogisticsCNY)) * 100, fill: unitProfitUSD < 0 ? COLORS.low : (unitProfitUSD > 10 ? COLORS.high : COLORS.medium) };
+        return { 
+            x: Math.min(dos, 150), 
+            y: velocity, 
+            z: Math.max(stock * costPriceCNY, 10), 
+            sku: p.sku, 
+            profit: Math.round(unitProfitUSD * stock), 
+            roi: totalUnitCostUSD > 0 ? (unitProfitUSD / totalUnitCostUSD) * 100 : 0, 
+            fill: unitProfitUSD < 0 ? COLORS.low : (unitProfitUSD > 10 ? COLORS.high : COLORS.medium) 
+        };
     });
 
-    return { matrixData, totalPotentialProfitUSD, currentROI: totalInvestmentCNY > 0 ? (totalPotentialProfitUSD * EXCHANGE_RATE / totalInvestmentCNY * 100) : 0 };
-  }, [state.products, logisticsShock, exchangeShock, refundShock]);
+    return { 
+        matrixData, 
+        totalPotentialProfitUSD, 
+        currentROI: totalInvestmentUSD > 0 ? (totalPotentialProfitUSD / totalInvestmentUSD * 100) : 0 
+    };
+  }, [state.products, logisticsShock, exchangeShock, refundShock, EXCHANGE_RATE]);
 
   const handleAiDeepDive = async () => {
       setIsAiThinking(true);
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `压力测试：运费波动${logisticsShock}%，汇率${exchangeShock}。模拟后总利 $${analysisData.totalPotentialProfitUSD.toLocaleString()}，ROI ${analysisData.currentROI.toFixed(1)}%。请指出获利能力最脆弱的环节（中文 HTML）。`;
+          const prompt = `压力测试：运费波动${logisticsShock}%，汇率${exchangeShock}。模拟后总利 $${analysisData.totalPotentialProfitUSD.toLocaleString()}，全盘 ROI ${analysisData.currentROI.toFixed(1)}%。请指出获利能力最脆弱的环节（中文 HTML）。`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setAiInsight(response.text);
       } catch (e) { setAiInsight("AI 神经链路受干扰。"); } finally { setIsAiThinking(false); }
@@ -132,7 +156,6 @@ const Analytics: React.FC = () => {
                     <div className="ios-glass-panel p-8 rounded-[3rem] border-white/10 bg-black/40 flex-1 relative overflow-hidden">
                         <div className="flex justify-between items-center mb-8 relative z-10">
                             <h3 className="text-sm font-black text-white flex items-center gap-3 uppercase italic"><BrainCircuit className="w-6 h-6 text-indigo-400" /> 风险受损预测云图</h3>
-                            {/* Added Loader2 to fix 'Cannot find name Loader2' error */}
                             <button onClick={handleAiDeepDive} disabled={isAiThinking} className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-xl flex items-center gap-2 active:scale-95 transition-all">
                                 {isAiThinking ? <Loader2 className="w-4 h-4 animate-spin"/> : <Sparkles className="w-4 h-4"/>} 神经元推演报告
                             </button>
