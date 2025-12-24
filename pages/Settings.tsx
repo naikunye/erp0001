@@ -4,7 +4,8 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Palette, Moon, 
     Zap, ShieldCheck, DatabaseZap, Terminal, Globe, HardDrive,
-    Sun, Waves, Wind, Link2Off, Lock, DbIcon, Info, ShieldAlert
+    Sun, Waves, Wind, Link2Off, Lock, DbIcon, Info, ShieldAlert,
+    Trash2, RotateCcw
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -13,7 +14,6 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud'); 
   const [isSaving, setIsSaving] = useState(false);
   const [supaForm, setSupaForm] = useState({ url: '', anonKey: '' });
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isConnected = state.connectionStatus === 'connected';
   const isError = state.connectionStatus === 'error';
@@ -37,17 +37,20 @@ const Settings: React.FC = () => {
           return;
       }
 
-      // 关键修复：自动去除末尾的斜杠，防止 fetch 报错
+      if (!cleanUrl.startsWith('http')) {
+          cleanUrl = 'https://' + cleanUrl;
+      }
       if (cleanUrl.endsWith('/')) {
           cleanUrl = cleanUrl.slice(0, -1);
       }
 
       setIsSaving(true);
       try {
-          const configToSave = { url: cleanUrl, anonKey: cleanKey };
-          dispatch({ type: 'SET_SUPA_CONFIG', payload: configToSave });
+          // 保存至配置
+          dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: cleanUrl, anonKey: cleanKey } });
           
-          await bootSupa(cleanUrl, cleanKey);
+          // 手动模式启动（包含查表验证）
+          await bootSupa(cleanUrl, cleanKey, true);
           
           const found = await pullFromCloud(true);
           if (found) {
@@ -59,6 +62,13 @@ const Settings: React.FC = () => {
           showToast(e.message, 'error');
       } finally {
           setIsSaving(false);
+      }
+  };
+
+  const handleFullReset = () => {
+      if (confirm('警告：此操作将清除所有云端同步配置（不影响本地数据），是否继续？')) {
+          disconnectSupa();
+          showToast('云端协议已注销', 'info');
       }
   };
 
@@ -79,7 +89,10 @@ const Settings: React.FC = () => {
           </h2>
           <p className="text-[10px] text-slate-500 mt-2 font-mono tracking-[0.4em] uppercase">Enterprise Data Control Hub</p>
         </div>
-        <button onClick={() => confirm('确定重置所有本地缓存数据？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-95">Reset Local Node</button>
+        <div className="flex gap-3">
+            <button onClick={handleFullReset} className="px-4 py-2 border border-slate-700 text-slate-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-white/5 transition-all active:scale-95">Reset Cloud Protocol</button>
+            <button onClick={() => confirm('确定重置所有本地缓存数据？') && dispatch({type:'RESET_DATA'})} className="px-4 py-2 border border-red-500/30 text-red-500 rounded-xl text-[10px] font-bold uppercase tracking-widest hover:bg-red-500 hover:text-white transition-all active:scale-95">Reset Local Node</button>
+        </div>
       </div>
 
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit backdrop-blur-md">
@@ -143,7 +156,7 @@ const Settings: React.FC = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className={`lg:col-span-2 border rounded-[2.5rem] p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
-                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}`}>
+                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : isError ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
                         {isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
                       </div>
                       <div className="flex-1">
@@ -161,9 +174,9 @@ const Settings: React.FC = () => {
                               </div>
                           </div>
                       </div>
-                      {isConnected && (
+                      {(isConnected || isError) && (
                           <div className="flex flex-col gap-2">
-                              <button onClick={disconnectSupa} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
+                              <button onClick={handleFullReset} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
                                   断开连接
                               </button>
                           </div>
@@ -185,7 +198,7 @@ const Settings: React.FC = () => {
                               <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center rounded-3xl">
                                   <Lock className="w-10 h-10 text-indigo-400 mb-4" />
                                   <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">配置已锁定</p>
-                                  <button onClick={disconnectSupa} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">修改配置</button>
+                                  <button onClick={handleFullReset} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">重置配置</button>
                               </div>
                           )}
                           <div className="space-y-1">
@@ -208,9 +221,9 @@ const Settings: React.FC = () => {
                               <h5 className="text-white font-bold uppercase italic tracking-widest">同步排障指南</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>如果提示“Failed to fetch”，请确认 URL 是否多带了尾部斜杠，或者网络是否屏蔽了 supabase.co 域名。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>确保使用的是 **anon public key** 而非 service_role key。</span></li>
-                              <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>点击顶部 Header 的“云下载”图标可以手动拉取另一台设备的最新更改。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>如果提示“Failed to fetch”，请检查网络环境。在国内建议关闭 VPN 的分流模式或切换至全局模式。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>确保数据库 **backups** 表已按照上方的 SQL 指令创建并开启了 **Allow All** 权限。</span></li>
+                              <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>如果配置卡死，点击页面顶部的“Reset Cloud Protocol”彻底清除缓存后再重新输入。</span></li>
                           </ul>
                       </div>
                   </div>

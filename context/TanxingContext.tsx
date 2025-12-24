@@ -206,7 +206,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 };
 
-interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<boolean>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootSupa: (url: string, key: string) => Promise<void>; disconnectSupa: () => void; }
+interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<boolean>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootSupa: (url: string, key: string, isManual?: boolean) => Promise<void>; disconnectSupa: () => void; }
 const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -214,12 +214,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
     const supaClientRef = useRef<SupabaseClient | null>(null);
 
-    const bootSupa = async (url: string, key: string) => { 
+    const bootSupa = async (url: string, key: string, isManual: boolean = false) => { 
         if (!url || !key) return; 
         try { 
             const client = createClient(url, key);
-            const { error } = await client.from('backups').select('unique_id').limit(1);
-            if (error) throw error;
+            
+            // 只有在手动点击测试时，才执行查表校验
+            if (isManual) {
+                const { error } = await client.from('backups').select('unique_id').limit(1);
+                if (error) throw error;
+            }
             
             supaClientRef.current = client;
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
@@ -230,12 +234,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             let errorMsg = `接入失败: ${e.message || '网络或配置错误'}`;
             if (e.message?.includes('Failed to fetch')) {
-                errorMsg = "接入失败: 无法连接服务器。请检查 URL 是否正确（不带尾部斜杠），或是否存在网络防火墙/VPN。";
+                errorMsg = "接入失败: 无法连接服务器。请检查 URL 是否正确，并确认本地网络可访问 supabase.co。";
             } else if (e.message?.includes('404')) {
                 errorMsg = '找不到 backups 表，请确认已在 Supabase 运行 SQL 创建表。';
             }
             
-            throw new Error(errorMsg); 
+            if (isManual) throw new Error(errorMsg); 
         } 
     };
 
@@ -243,6 +247,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         supaClientRef.current = null;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
         dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } }); 
+        localStorage.removeItem(CONN_STATUS_KEY);
+        localStorage.removeItem(CONFIG_KEY);
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { 
@@ -374,7 +380,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const config = JSON.parse(savedConfig); 
                     dispatch({ type: 'SET_SUPA_CONFIG', payload: config }); 
                     if (config.url && config.anonKey) { 
-                        await bootSupa(config.url, config.anonKey); 
+                        // 启动时仅创建客户端，不执行强制校验查表
+                        await bootSupa(config.url, config.anonKey, false); 
                         if (savedStatus === 'connected') await pullFromCloud(true);
                         else dispatch({ type: 'UNLOCK_SYNC' });
                     } else {
