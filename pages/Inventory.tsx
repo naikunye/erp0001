@@ -12,7 +12,7 @@ import {
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
   Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet,
   PieChart, FileDown, Copy, CopyPlus, History, History as HistoryIcon,
-  ArrowRight
+  ArrowRight, Coins
 } from 'lucide-react';
 
 const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
@@ -227,6 +227,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         setSkuTags(skuTags.filter(t => t !== tagToRemove));
     };
 
+    // --- 核心修复逻辑 (物流费用对齐) ---
     const exchangeRate = 7.2;
     const manualBoxes = formData.boxCount || 0;
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * manualBoxes;
@@ -247,19 +248,26 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const rate = formData.logistics?.unitFreightCost || 0;
     const baseFreightCost = activeTotalBillingWeight * rate;
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
+    
+    // 这是“纯运费”部分
     const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
     const effectiveTotalFreightCNY = formData.logistics?.totalFreightCost ?? autoTotalFreightCNY;
 
-    const effectiveUnitFreightCNY = formData.stock > 0 
-        ? effectiveTotalFreightCNY / formData.stock 
-        : 0;
-    
+    // 这是“单品耗材”部分
     const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
-    const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
+    const totalConsumablesCNY = unitConsumablesCNY * formData.stock;
+    
+    // 全口径物流总额 (运费 + 耗材) -> 这就是产生 125,456 的根源，我们将其统一显示
+    const allInLogisticsTotalCNY = effectiveTotalFreightCNY + totalConsumablesCNY;
+
+    // 单品全口径物流费用
+    const effectiveUnitLogisticsCNY = formData.stock > 0 
+        ? allInLogisticsTotalCNY / formData.stock 
+        : 0;
     
     const priceUSD = formData.price || 0;
     const cogsUSD = (formData.costPrice || 0) / exchangeRate;
-    const freightUSD = totalUnitLogisticsCNY / exchangeRate;
+    const freightUSD = effectiveUnitLogisticsCNY / exchangeRate;
     
     const platformFeeUSD = priceUSD * ((formData.economics?.platformFeePercent || 0) / 100);
     const creatorFeeUSD = priceUSD * ((formData.economics?.creatorFeePercent || 0) / 100);
@@ -574,15 +582,29 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                </div>
                                
+                               {/* 核心修正：显示全口径物流总额预览 */}
                                <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
-                                       <span className="text-[10px] text-blue-300 font-bold">预估运费总额 (Total Freight)</span>
+                                       <span className="text-[10px] text-blue-300 font-bold uppercase">全口径预估物流总计 (含耗材)</span>
                                        <span className="text-sm font-bold text-blue-100 font-mono">
-                                           ¥ {effectiveTotalFreightCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                                           ¥ {allInLogisticsTotalCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                        </span>
                                    </div>
                                    
                                    <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-blue-500/20">
+                                       <div>
+                                           <label className="text-[9px] text-blue-300 block mb-0.5">物流运费 (Manual ¥)</label>
+                                           <input 
+                                                type="number" 
+                                                value={formData.logistics?.totalFreightCost ?? ''}
+                                                onChange={e => {
+                                                    const val = parseFloat(e.target.value);
+                                                    handleNestedChange('logistics', 'totalFreightCost', isNaN(val) ? undefined : val);
+                                                }}
+                                                placeholder={`Auto: ${autoTotalFreightCNY.toFixed(0)}`}
+                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
+                                           />
+                                       </div>
                                        <div>
                                            <label className="text-[9px] text-blue-300 block mb-0.5">整批计费重 (Total KG)</label>
                                            <input 
@@ -596,24 +618,11 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                 className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
                                            />
                                        </div>
-                                       <div>
-                                           <label className="text-[9px] text-blue-300 block mb-0.5">头程总运费 (手动 ¥)</label>
-                                           <input 
-                                                type="number" 
-                                                value={formData.logistics?.totalFreightCost ?? ''}
-                                                onChange={e => {
-                                                    const val = parseFloat(e.target.value);
-                                                    handleNestedChange('logistics', 'totalFreightCost', isNaN(val) ? undefined : val);
-                                                }}
-                                                placeholder={`Auto: ${autoTotalFreightCNY.toFixed(0)}`}
-                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
-                                           />
-                                       </div>
                                    </div>
                                    
-                                   <div className="flex justify-between items-end text-[9px] text-blue-300/50 mt-1">
-                                       <span>{activeTotalBillingWeight.toFixed(1)}kg * ¥{rate} + Fees</span>
-                                       <span>折合单品头程: ¥{effectiveUnitFreightCNY.toFixed(2)}</span>
+                                   <div className="flex justify-between items-end text-[9px] text-blue-300/50 mt-1 italic">
+                                       <span>{activeTotalBillingWeight.toFixed(1)}kg * ¥{rate} + 杂费 + (¥{unitConsumablesCNY} × {formData.stock}pcs)</span>
+                                       <span className="font-bold">单品总摊: ¥{effectiveUnitLogisticsCNY.toFixed(2)}</span>
                                    </div>
                                </div>
 
@@ -627,6 +636,9 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                             className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
                                             placeholder="30"
                                        />
+                                       {unitConsumablesCNY > 50 && (
+                                            <p className="text-[8px] text-rose-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-2 h-2"/> 警告: 单品耗材费过高，请确认为单价而非总价</p>
+                                       )}
                                    </div>
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥/Total Batch)</label>
@@ -722,8 +734,8 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <h4 className="text-sm font-bold text-white mb-1">单品利润实时测算 (Unit Profit Analysis)</h4>
                                    <div className="text-[10px] text-slate-400 flex gap-4">
                                        <span>单品成本(Total Cost): <span className="text-white">${totalUnitCostUSD.toFixed(2)}</span></span>
-                                       <span>汇率: 7.2</span>
-                                       <span>运费: ¥{totalUnitLogisticsCNY.toFixed(2)}</span>
+                                       <span>汇率: {exchangeRate}</span>
+                                       <span>全口径单摊运费: ¥{effectiveUnitLogisticsCNY.toFixed(2)}</span>
                                    </div>
                                </div>
                            </div>
@@ -846,18 +858,24 @@ const Inventory: React.FC = () => {
             const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
             const autoTotalFreightCNY = (activeTotalBillingWeight * rate) + batchFeesCNY;
             
+            // 基础运费
             const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
             
-            const effectiveUnitFreightCNY = p.stock > 0 
-                ? effectiveTotalFreightCNY / p.stock 
-                : (rate * autoUnitChargeableWeight);
-
+            // 耗材杂项 (严格按每件计算)
             const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
-            const totalUnitLogisticsCNY = effectiveUnitFreightCNY + unitConsumablesCNY;
+            const totalConsumablesForBatch = unitConsumablesCNY * stock;
+
+            // 全口径物流成本汇总 (运费 + 报关/港口费 + 耗材)
+            const totalAllInLogisticsCNY = effectiveTotalFreightCNY + totalConsumablesForBatch;
+
+            // 单品最终全口径分摊
+            const effectiveUnitLogisticsCNY = p.stock > 0 
+                ? totalAllInLogisticsCNY / p.stock 
+                : (effectiveTotalFreightCNY / 1 + unitConsumablesCNY); // 兜底处理
 
             const priceUSD = p.price || 0;
             const costPriceUSD = (p.costPrice || 0) / exchangeRate;
-            const freightCostUSD = totalUnitLogisticsCNY / exchangeRate;
+            const freightCostUSD = effectiveUnitLogisticsCNY / exchangeRate;
 
             const eco = p.economics;
             const platformFee = priceUSD * ((eco?.platformFeePercent || 0) / 100);
@@ -870,7 +888,6 @@ const Inventory: React.FC = () => {
             const totalUnitCost = costPriceUSD + freightCostUSD + platformFee + creatorFee + fixedFee + lastLeg + adSpend + estimatedRefundCost;
             const unitProfit = priceUSD - totalUnitCost;
             const totalPotentialProfit = unitProfit * stock;
-            const totalFreightDisplayCNY = effectiveTotalFreightCNY + (unitConsumablesCNY * stock);
 
             const matchingShipment = (state.shipments || []).find(s => 
                 p.logistics?.trackingNo && s.trackingNo === p.logistics.trackingNo
@@ -883,7 +900,7 @@ const Inventory: React.FC = () => {
                 safetyStock,
                 reorderPoint,
                 totalInvestment: stock * (p.costPrice || 0), 
-                freightCost: totalFreightDisplayCNY,
+                freightCost: totalAllInLogisticsCNY, // 这里现在显示正确的 125,456
                 goodsCost: stock * (p.costPrice || 0),
                 revenue30d: pStats.revenue30d,
                 growth: growth,
@@ -1095,7 +1112,6 @@ const Inventory: React.FC = () => {
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex gap-3">
                                         <div className="w-12 h-12 bg-white/5 rounded border border-white/10 shrink-0 overflow-hidden relative">
-                                            {/* 核心修复：显示图片时增加 fallback 判断，如果 image 丢失尝试从 images 数组恢复 */}
                                             {(item.image || (item.images && item.images.length > 0)) ? (
                                                 <img src={item.image || item.images![0]} className="w-full h-full object-cover" />
                                             ) : (
@@ -1148,7 +1164,7 @@ const Inventory: React.FC = () => {
                                     <div className="font-mono space-y-1">
                                         <div className="text-sm font-bold text-emerald-400">¥{(item.totalInvestment || 0).toLocaleString()}</div>
                                         <div className="text-[10px] text-slate-500">货值: ¥{(item.goodsCost || 0).toLocaleString()}</div>
-                                        <div className="text-[10px] text-slate-500">运费: ¥{(item.freightCost || 0).toLocaleString()}</div>
+                                        <div className="text-[10px] text-slate-500">物流全口径: ¥{(item.freightCost || 0).toLocaleString()}</div>
                                     </div>
                                 </td>
 
