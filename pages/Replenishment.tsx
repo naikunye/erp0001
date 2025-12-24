@@ -357,11 +357,23 @@ const Replenishment: React.FC = () => {
     const { state, dispatch, showToast } = useTanxing();
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
+    const [copiedId, setCopiedId] = useState<string | null>(null);
 
-    const copyToClipboard = (text: string) => {
+    const copyToClipboard = (text: string, id: string) => {
         if (!text) return;
-        navigator.clipboard.writeText(text);
-        showToast(`SKU ${text} 已复制到剪贴板`, 'success');
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            setCopiedId(id);
+            setTimeout(() => setCopiedId(null), 1500);
+            showToast(`已复制到剪贴板`, 'success');
+        } catch (err) {
+            console.error('Fallback copy failed', err);
+        }
+        document.body.removeChild(textArea);
     };
 
     const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
@@ -458,17 +470,20 @@ const Replenishment: React.FC = () => {
                                 <td className="px-4 py-4"><input type="checkbox" className="rounded bg-black/40 border-white/20"/></td>
                                 <td className="px-4 py-4 align-top">
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2">
+                                        <div className="flex items-center gap-2 relative">
                                             <div className={`w-2 h-2 rounded-full ${item.dailyBurnRate > 5 ? 'bg-emerald-500 shadow-[0_0_8px_#10b981]' : 'bg-slate-500'}`}></div>
                                             <span 
                                                 className="text-xl font-bold text-white tracking-tight font-mono cursor-pointer hover:text-indigo-400 transition-colors"
-                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, item.id); }}
                                                 title="点击复制 SKU"
                                             >
                                                 {item.sku}
                                             </span>
+                                            {copiedId === item.id && (
+                                                <span className="absolute -top-6 left-6 text-[9px] bg-emerald-600 text-white px-1.5 py-0.5 rounded shadow-lg animate-in fade-in slide-in-from-bottom-1 z-20">已复制</span>
+                                            )}
                                             <button 
-                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku); }}
+                                                onClick={(e) => { e.stopPropagation(); copyToClipboard(item.sku, item.id); }}
                                                 className="p-1 hover:bg-white/10 rounded transition-colors group/copy"
                                                 title="复制 SKU"
                                             >
@@ -486,8 +501,23 @@ const Replenishment: React.FC = () => {
                                         <div className="flex flex-col gap-1 min-w-0">
                                             <div className="text-sm font-bold text-white truncate" title={item.name}>{item.name}</div>
                                             <div className="text-xs text-slate-500 flex items-center gap-1"><Box className="w-3 h-3"/> {item.supplier || '未指定'}</div>
-                                            <div className="text-[10px] bg-[#312e81] text-[#a5b4fc] px-1.5 py-0.5 rounded w-fit border border-[#4338ca] font-mono font-bold tracking-tight">
-                                                LX: {item.lingXingId || 'N/A'}
+                                            
+                                            <div className="relative flex items-center gap-1.5 group/lx-node">
+                                                <div className="text-[10px] bg-[#312e81] text-[#a5b4fc] px-1.5 py-0.5 rounded w-fit border border-[#4338ca] font-mono font-bold tracking-tight">
+                                                    LX: {item.lingXingId || 'IB...'}
+                                                </div>
+                                                {item.lingXingId && (
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); copyToClipboard(item.lingXingId!, `${item.id}-lx`); }}
+                                                        className="p-1 hover:bg-white/10 rounded transition-colors group/lx"
+                                                        title="复制领星单号"
+                                                    >
+                                                        <Copy className="w-2.5 h-2.5 text-slate-600 group-hover/lx:text-indigo-400" />
+                                                    </button>
+                                                )}
+                                                {copiedId === `${item.id}-lx` && (
+                                                    <span className="absolute -top-6 left-0 text-[8px] bg-emerald-600 text-white px-1 py-0.5 rounded shadow-lg animate-in fade-in slide-in-from-bottom-1 z-20">已复制</span>
+                                                )}
                                             </div>
                                         </div>
                                     </div>
