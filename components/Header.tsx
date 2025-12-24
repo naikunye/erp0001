@@ -20,16 +20,16 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
 
   const handlePull = async () => {
       if (state.connectionStatus !== 'connected') {
-          showToast('尚未建立神经连接', 'warning');
+          showToast('尚未建立云端连接', 'warning');
           return;
       }
       setIsPulling(true);
       try {
           const success = await pullFromCloud(false);
           if (success) {
-              showToast('云端协议已对齐', 'success');
+              showToast('数据已手动同步至最新状态', 'success');
           } else {
-              showToast('云端尚无可用镜像', 'info');
+              showToast('云端暂无可更新镜像', 'info');
           }
       } catch (e: any) {
           showToast(`拉取失败: ${e.message}`, 'error');
@@ -47,11 +47,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
 
       setIsManualSyncing(true);
       try {
-          const success = await syncToCloud(true);
-          if (success) {
+          const result = await syncToCloud(true);
+          if (result.success) {
               showToast('云端镜像已强制更新', 'success');
           } else {
-              showToast('同步失败，请检查配置', 'error');
+              let msg = '同步失败：请检查数据库表结构。';
+              if (result.error?.includes('Failed to fetch')) msg = '网络连接失败，请检查防火墙。';
+              if (result.error?.includes('backups')) msg = '数据库表 backups 缺失，请先运行 SQL 建表。';
+              showToast(msg, 'error');
           }
       } catch (e: any) {
           showToast(`通信故障: ${e.message}`, 'error');
@@ -79,7 +82,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       if (state.connectionStatus === 'error') {
           return (
               <div className="flex items-center gap-1.5 px-2 py-1 bg-red-600/20 border border-red-500/50 rounded text-[9px] font-black text-red-400 animate-pulse">
-                  <ShieldAlert className="w-2.5 h-2.5" /> 安全拦截 (CORS)
+                  <ShieldAlert className="w-2.5 h-2.5" /> 安全拦截 (CORS / Network)
               </div>
           );
       }
@@ -88,14 +91,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           case 'saving':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] font-black text-indigo-400 animate-pulse">
-                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 同步中...
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 实时上传中...
                   </div>
               );
           case 'saved':
               return (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 animate-in fade-in zoom-in">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> 云端对齐
+                        <CheckCircle2 className="w-2.5 h-2.5" /> 状态对齐
                     </div>
                     {state.supaConfig.lastSync && (
                         <span className="text-[8px] text-slate-600 font-mono font-bold uppercase tracking-tighter">
@@ -107,14 +110,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           case 'dirty':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                      <Zap className="w-2.5 h-2.5 animate-bounce" /> 待同步
+                      <Zap className="w-2.5 h-2.5 animate-bounce" /> 等待毫秒同步
                   </div>
               );
           default:
               return (
                   <div className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[8px] font-bold transition-all ${state.connectionStatus === 'connected' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                       <Radio className={`w-2 h-2 ${state.connectionStatus === 'connected' ? 'animate-pulse text-indigo-500' : 'text-slate-700'}`} /> 
-                      {state.connectionStatus === 'connected' ? '就绪' : '离线'}
+                      {state.connectionStatus === 'connected' ? 'Realtime 链路就绪' : '离线模式'}
                   </div>
               );
       }
@@ -128,14 +131,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">数据实时链路</span>
+                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">毫秒级同步中 (WebSocket)</span>
             </div>
           );
       }
       return (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
             <WifiOff className="w-3 h-3 text-slate-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">本地单机模式</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">单机模式</span>
         </div>
       );
   };
@@ -190,7 +193,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     onClick={handlePull}
                     disabled={isPulling}
                     className={`p-2 rounded-lg transition-all hover:bg-white/10 ${isPulling ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`}
-                    title="立即从云端下载最新镜像"
+                    title="从云端手动同步"
                 >
                     {isPulling ? <RefreshCw className="w-4.5 h-4.5 animate-spin" /> : <CloudDownload className="w-4.5 h-4.5" />}
                 </button>
@@ -202,7 +205,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                         state.saveStatus === 'dirty' ? 'text-amber-500 animate-bounce' : 
                         'text-slate-400'
                     }`}
-                    title="手动同步当前快照到云端"
+                    title="强制全量推送到云端"
                 >
                     {isManualSyncing ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Cloud className="w-4.5 h-4.5" />}
                 </button>

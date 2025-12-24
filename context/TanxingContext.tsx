@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
     InboundShipment, Order, AuditLog, AutomationRule, AutomationLog, Supplier,
@@ -206,26 +206,40 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 };
 
-interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<boolean>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootSupa: (url: string, key: string, isManual?: boolean) => Promise<void>; disconnectSupa: () => void; }
+interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<{success: boolean, error?: string}>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootSupa: (url: string, key: string, isManual?: boolean) => Promise<void>; disconnectSupa: () => void; }
 const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const isSyncingRef = useRef(false);
     const supaClientRef = useRef<SupabaseClient | null>(null);
+    const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
 
     const bootSupa = async (url: string, key: string, isManual: boolean = false) => { 
         if (!url || !key) return; 
         try { 
             const client = createClient(url, key);
             
-            // 只有在手动点击测试时，才执行查表校验
-            if (isManual) {
-                const { error } = await client.from('backups').select('unique_id').limit(1);
-                if (error) throw error;
-            }
+            // 立即尝试一个轻量级请求来验证
+            const { error } = await client.from('backups').select('unique_id').limit(1);
+            if (error) throw error;
             
             supaClientRef.current = client;
+            
+            // 🚀 核心：初始化实时监听频道
+            if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
+            
+            realtimeChannelRef.current = client
+                .channel('global_sync')
+                .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'backups', filter: 'unique_id=eq.GLOBAL_ERP_NODE' }, (payload) => {
+                    const remoteTime = payload.new.updated_at;
+                    // 仅当远程时间比本地镜像更新时才拉取，且非本人正在同步时
+                    if (!isSyncingRef.current && remoteTime !== state.supaConfig.remoteUpdatedAt) {
+                        pullFromCloud(true);
+                    }
+                })
+                .subscribe();
+
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
             dispatch({ type: 'UNLOCK_SYNC' }); 
         } catch (e: any) { 
@@ -234,9 +248,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             
             let errorMsg = `接入失败: ${e.message || '网络或配置错误'}`;
             if (e.message?.includes('Failed to fetch')) {
-                errorMsg = "接入失败: 无法连接服务器。请检查 URL 是否正确，并确认本地网络可访问 supabase.co。";
-            } else if (e.message?.includes('404')) {
-                errorMsg = '找不到 backups 表，请确认已在 Supabase 运行 SQL 创建表。';
+                errorMsg = "网络连接受阻：请确保 URL 正确（不带尾部斜杠），或尝试关闭 VPN/广告拦截插件。";
+            } else if (e.message?.includes('404') || e.message?.includes('relation "backups" does not exist')) {
+                errorMsg = '数据库表缺失：请先在 Supabase SQL Editor 运行建表代码。';
+            } else if (e.message?.includes('403') || e.code === 'PGRST301') {
+                errorMsg = '权限不足：请确认 RLS 策略已允许公共读写 (Allow All 策略)。';
             }
             
             if (isManual) throw new Error(errorMsg); 
@@ -244,6 +260,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const disconnectSupa = () => { 
+        if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
         supaClientRef.current = null;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
         dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } }); 
@@ -251,10 +268,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         localStorage.removeItem(CONFIG_KEY);
     };
 
-    const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { 
-        if (!supaClientRef.current) return false;
-        if (!isForce && !state.syncAllowed) return false;
-        if (isSyncingRef.current) return false; 
+    const syncToCloud = async (isForce: boolean = false): Promise<{success: boolean, error?: string}> => { 
+        if (!supaClientRef.current) return { success: false, error: '未连接云端' };
+        if (!isForce && !state.syncAllowed) return { success: true };
+        if (isSyncingRef.current) return { success: true }; 
         
         isSyncingRef.current = true; 
         dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' }); 
@@ -280,10 +297,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 .select('updated_at')
                 .single();
 
-            if (error) {
-                console.error("[SupaSync] Database Error:", error);
-                throw error;
-            }
+            if (error) throw error;
 
             dispatch({ type: 'SET_SUPA_CONFIG', payload: { 
                 lastSync: new Date().toLocaleTimeString(), 
@@ -291,12 +305,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 remoteUpdatedAt: data.updated_at
             } }); 
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
-            setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
-            return true; 
+            setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 1500); 
+            return { success: true }; 
         } catch (e: any) { 
-            console.error("[SupaSync] Fatal Error:", e);
+            console.error("[SupaSync] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
-            return false; 
+            return { success: false, error: e.message }; 
         } finally { 
             isSyncingRef.current = false; 
         } 
@@ -328,10 +342,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     ...state.supaConfig, 
                     payloadSize: size, 
                     remoteUpdatedAt: data.updated_at,
-                    lastSync: `热更新 (${new Date(data.updated_at).toLocaleTimeString()})` 
+                    lastSync: `已同步 (${new Date(data.updated_at).toLocaleTimeString()})` 
                 } 
             } }); 
-            if (!isSilent) showToast('量子纠缠：云端数据同步完成', 'success'); 
+            if (!isSilent) showToast('量子纠缠：数据已与云端镜像对齐', 'success'); 
             return true; 
         } catch (e: any) { 
             console.error("[SupaPull] Error:", e);
@@ -339,33 +353,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } 
     };
 
+    // 自动同步逻辑：有变动后 2 秒自动推送到云端
     useEffect(() => { 
         if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !supaClientRef.current) return; 
-        const timer = setTimeout(() => syncToCloud(), 3000); 
+        const timer = setTimeout(() => syncToCloud(), 2000); 
         return () => clearTimeout(timer); 
     }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
-
-    useEffect(() => {
-        if (!state.isInitialized || state.connectionStatus !== 'connected' || !supaClientRef.current) return;
-
-        const checkRemoteUpdate = async () => {
-            if (state.saveStatus === 'dirty' || state.saveStatus === 'saving' || isSyncingRef.current) return;
-            try {
-                const { data } = await supaClientRef.current!
-                    .from('backups')
-                    .select('updated_at')
-                    .eq('unique_id', 'GLOBAL_ERP_NODE')
-                    .maybeSingle();
-                    
-                if (data && data.updated_at !== state.supaConfig.remoteUpdatedAt) {
-                    await pullFromCloud(true);
-                }
-            } catch (e) {}
-        };
-
-        const heartbeat = setInterval(checkRemoteUpdate, 8000);
-        return () => clearInterval(heartbeat);
-    }, [state.isInitialized, state.connectionStatus, state.supaConfig.remoteUpdatedAt, state.saveStatus]);
 
     useEffect(() => { 
         const startup = async () => { 
@@ -380,7 +373,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     const config = JSON.parse(savedConfig); 
                     dispatch({ type: 'SET_SUPA_CONFIG', payload: config }); 
                     if (config.url && config.anonKey) { 
-                        // 启动时仅创建客户端，不执行强制校验查表
                         await bootSupa(config.url, config.anonKey, false); 
                         if (savedStatus === 'connected') await pullFromCloud(true);
                         else dispatch({ type: 'UNLOCK_SYNC' });
