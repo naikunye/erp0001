@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload, SignalLow } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -51,10 +51,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           if (result.success) {
               showToast('云端镜像已强制更新', 'success');
           } else {
-              let msg = '同步失败：请检查数据库表结构。';
-              if (result.error?.includes('Failed to fetch')) msg = '网络连接失败，请检查防火墙。';
-              if (result.error?.includes('backups')) msg = '数据库表 backups 缺失，请先运行 SQL 建表。';
-              showToast(msg, 'error');
+              showToast(`同步失败：${result.error}`, 'error');
           }
       } catch (e: any) {
           showToast(`通信故障: ${e.message}`, 'error');
@@ -79,10 +76,18 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   };
 
   const renderSaveStatus = () => {
+      if (state.connectionStatus === 'restricted') {
+          return (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-600/20 border border-amber-500/50 rounded text-[9px] font-black text-amber-400">
+                  <SignalLow className="w-2.5 h-2.5" /> 连接受限 (检查 VPN/防火墙)
+              </div>
+          );
+      }
+      
       if (state.connectionStatus === 'error') {
           return (
               <div className="flex items-center gap-1.5 px-2 py-1 bg-red-600/20 border border-red-500/50 rounded text-[9px] font-black text-red-400 animate-pulse">
-                  <ShieldAlert className="w-2.5 h-2.5" /> 安全拦截 (CORS / Network)
+                  <ShieldAlert className="w-2.5 h-2.5" /> 数据库协议异常
               </div>
           );
       }
@@ -91,56 +96,36 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           case 'saving':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] font-black text-indigo-400 animate-pulse">
-                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 实时上传中...
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 同步镜像中...
                   </div>
               );
           case 'saved':
               return (
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 animate-in fade-in zoom-in">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> 状态对齐
+                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400">
+                        <CheckCircle2 className="w-2.5 h-2.5" /> 云端同步就绪
                     </div>
                     {state.supaConfig.lastSync && (
                         <span className="text-[8px] text-slate-600 font-mono font-bold uppercase tracking-tighter">
-                            最后响应: {state.supaConfig.lastSync}
+                            {state.supaConfig.lastSync}
                         </span>
                     )}
                   </div>
               );
           case 'dirty':
               return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                      <Zap className="w-2.5 h-2.5 animate-bounce" /> 等待毫秒同步
+                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400">
+                      <Zap className="w-2.5 h-2.5 animate-bounce" /> 待协同更新
                   </div>
               );
           default:
               return (
                   <div className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[8px] font-bold transition-all ${state.connectionStatus === 'connected' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                       <Radio className={`w-2 h-2 ${state.connectionStatus === 'connected' ? 'animate-pulse text-indigo-500' : 'text-slate-700'}`} /> 
-                      {state.connectionStatus === 'connected' ? 'Realtime 链路就绪' : '离线模式'}
+                      {state.connectionStatus === 'connected' ? 'WebSocket 链路开启' : '单机节点运行'}
                   </div>
               );
       }
-  };
-
-  const getStatusUI = () => {
-      if (state.connectionStatus === 'connected') {
-          return (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
-                <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                </span>
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">毫秒级同步中 (WebSocket)</span>
-            </div>
-          );
-      }
-      return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
-            <WifiOff className="w-3 h-3 text-slate-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">单机模式</span>
-        </div>
-      );
   };
 
   return (
@@ -184,7 +169,20 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         </div>
 
         <div className="hidden md:block">
-            {getStatusUI()}
+            {state.connectionStatus === 'connected' ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+                    <span className="relative flex h-2 w-2">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">多机实时协同中</span>
+                </div>
+            ) : (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
+                    <WifiOff className="w-3 h-3 text-slate-500" />
+                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">离线工作模式</span>
+                </div>
+            )}
         </div>
 
         <div className="flex items-center space-x-4">
