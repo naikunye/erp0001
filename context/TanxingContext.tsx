@@ -218,8 +218,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!url || !key) return; 
         try { 
             const client = createClient(url, key);
-            // 验证连接
-            const { error } = await client.from('backups').select('id').limit(1);
+            // 验证连接：修复 bug，主键是 unique_id 而不是 id
+            const { error } = await client.from('backups').select('unique_id').limit(1);
             if (error) throw error;
             
             supaClientRef.current = client;
@@ -228,7 +228,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[SupaBoot] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            throw new Error(`连接失败: 请确保数据库已建立 backups 表。`); 
+            // 优化错误显示，避免误导
+            const errorMsg = e.message?.includes('404') ? '找不到 backups 表，请确认已运行 SQL 创建表结构。' : `接入失败: ${e.message || '网络或配置错误'}`;
+            throw new Error(errorMsg); 
         } 
     };
 

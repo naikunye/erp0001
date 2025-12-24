@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { useTanxing } from '../context/TanxingContext';
@@ -249,18 +250,18 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const baseFreightCost = activeTotalBillingWeight * rate;
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
     
-    // 这是“纯运费”部分
+    // 基础运费总额 (仅含运费与杂费)
     const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
     const effectiveTotalFreightCNY = formData.logistics?.totalFreightCost ?? autoTotalFreightCNY;
 
-    // 这是“单品耗材”部分
+    // 单品耗材总额 (按库存件数计算)
     const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
     const totalConsumablesCNY = unitConsumablesCNY * formData.stock;
     
-    // 全口径物流总额 (运费 + 耗材) -> 这就是产生 125,456 的根源，我们将其统一显示
+    // 全口径物流总额 (运费 + 耗材) -> 这就是产生 125,456 的根源
     const allInLogisticsTotalCNY = effectiveTotalFreightCNY + totalConsumablesCNY;
 
-    // 单品全口径物流费用
+    // 单品全口径物流分摊 (用于利润测算)
     const effectiveUnitLogisticsCNY = formData.stock > 0 
         ? allInLogisticsTotalCNY / formData.stock 
         : 0;
@@ -582,47 +583,29 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                </div>
                                
-                               {/* 核心修正：显示全口径物流总额预览 */}
-                               <div className="bg-blue-900/10 border border-blue-500/20 rounded p-2 flex flex-col gap-2">
+                               {/* 核心修正：显示全口径物流总额预览，明确拆分运费与耗材 */}
+                               <div className="bg-blue-900/10 border border-blue-500/20 rounded-xl p-4 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
-                                       <span className="text-[10px] text-blue-300 font-bold uppercase">全口径预估物流总计 (含耗材)</span>
-                                       <span className="text-sm font-bold text-blue-100 font-mono">
+                                       <span className="text-[10px] text-blue-300 font-black uppercase">全口径预估总投入 (含耗材)</span>
+                                       <span className="text-xl font-black text-blue-100 font-mono">
                                            ¥ {allInLogisticsTotalCNY.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}
                                        </span>
                                    </div>
                                    
-                                   <div className="grid grid-cols-2 gap-2 mt-1 pt-1 border-t border-blue-500/20">
+                                   <div className="grid grid-cols-2 gap-4 mt-2 pt-2 border-t border-blue-500/20">
                                        <div>
-                                           <label className="text-[9px] text-blue-300 block mb-0.5">物流运费 (Manual ¥)</label>
-                                           <input 
-                                                type="number" 
-                                                value={formData.logistics?.totalFreightCost ?? ''}
-                                                onChange={e => {
-                                                    const val = parseFloat(e.target.value);
-                                                    handleNestedChange('logistics', 'totalFreightCost', isNaN(val) ? undefined : val);
-                                                }}
-                                                placeholder={`Auto: ${autoTotalFreightCNY.toFixed(0)}`}
-                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
-                                           />
+                                           <div className="text-[9px] text-blue-400 uppercase font-bold">基础运费 (Freight)</div>
+                                           <div className="text-sm font-bold text-white font-mono">¥ {effectiveTotalFreightCNY.toLocaleString()}</div>
                                        </div>
-                                       <div>
-                                           <label className="text-[9px] text-blue-300 block mb-0.5">整批计费重 (Total KG)</label>
-                                           <input 
-                                                type="number" 
-                                                value={formData.logistics?.billingWeight ?? ''}
-                                                onChange={e => {
-                                                    const val = parseFloat(e.target.value);
-                                                    handleNestedChange('logistics', 'billingWeight', isNaN(val) ? undefined : val);
-                                                }}
-                                                placeholder={`Auto: ${activeTotalBillingWeight.toFixed(1)}`}
-                                                className="w-full bg-black/40 border border-blue-500/30 rounded px-2 py-1 text-xs text-white font-mono focus:border-blue-400 outline-none"
-                                           />
+                                       <div className="text-right">
+                                           <div className="text-[9px] text-blue-400 uppercase font-bold">耗材总计 (Consumables)</div>
+                                           <div className="text-sm font-bold text-amber-400 font-mono">¥ {totalConsumablesCNY.toLocaleString()}</div>
                                        </div>
                                    </div>
                                    
-                                   <div className="flex justify-between items-end text-[9px] text-blue-300/50 mt-1 italic">
-                                       <span>{activeTotalBillingWeight.toFixed(1)}kg * ¥{rate} + 杂费 + (¥{unitConsumablesCNY} × {formData.stock}pcs)</span>
-                                       <span className="font-bold">单品总摊: ¥{effectiveUnitLogisticsCNY.toFixed(2)}</span>
+                                   <div className="flex justify-between items-end text-[9px] text-blue-300/40 mt-1 italic">
+                                       <span>算法: {activeTotalBillingWeight.toFixed(1)}kg*¥{rate} + (¥{unitConsumablesCNY} * {formData.stock}pcs)</span>
+                                       <span className="font-bold text-blue-300/60">单品全分摊: ¥{effectiveUnitLogisticsCNY.toFixed(2)}</span>
                                    </div>
                                </div>
 
@@ -637,7 +620,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                             placeholder="30"
                                        />
                                        {unitConsumablesCNY > 50 && (
-                                            <p className="text-[8px] text-rose-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-2 h-2"/> 警告: 单品耗材费过高，请确认为单价而非总价</p>
+                                            <p className="text-[8px] text-rose-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5"/> 警告: 耗材费远超平均值，请确认为单价而非总价</p>
                                        )}
                                    </div>
                                    <div>
@@ -664,7 +647,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">目的仓库</label>
-                                       <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="火星/休斯顿/美中" />
+                                       <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="美西-乐达" />
                                    </div>
                                </div>
                            </div>
@@ -735,7 +718,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div className="text-[10px] text-slate-400 flex gap-4">
                                        <span>单品成本(Total Cost): <span className="text-white">${totalUnitCostUSD.toFixed(2)}</span></span>
                                        <span>汇率: {exchangeRate}</span>
-                                       <span>全口径单摊运费: ¥{effectiveUnitLogisticsCNY.toFixed(2)}</span>
+                                       <span>全口径单摊运费: <span className="text-blue-400 font-bold">¥{effectiveUnitLogisticsCNY.toFixed(2)}</span></span>
                                    </div>
                                </div>
                            </div>
