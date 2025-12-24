@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark">
   <head>
@@ -65,14 +66,8 @@
         transition: background-color 0.8s ease;
       }
 
-      /* 修复点击可视化图表时的白色边框 */
-      *:focus {
-        outline: none !important;
-      }
-      
-      svg, rect, path, circle {
-        outline: none !important;
-      }
+      *:focus { outline: none !important; }
+      svg, rect, path, circle { outline: none !important; }
 
       .ambient-bg {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
@@ -146,7 +141,7 @@
     "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
     "recharts": "https://esm.sh/recharts@^3.6.0",
     "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "leancloud-storage": "https://esm.sh/leancloud-storage@4.15.0"
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.0"
   }
 }
 </script>

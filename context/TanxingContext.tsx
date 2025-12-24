@@ -1,5 +1,6 @@
+
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
-import AV from 'leancloud-storage';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
     InboundShipment, Order, AuditLog, AutomationRule, AutomationLog, Supplier,
@@ -12,8 +13,8 @@ import {
 
 const DB_NAME = 'TANXING_IDB_V1';
 const STORE_NAME = 'STATE_STORE';
-const CONFIG_KEY = 'TANXING_CONFIG_V15'; 
-const CONN_STATUS_KEY = 'TANXING_CONN_STATUS_V1';
+const CONFIG_KEY = 'TANXING_SUPA_CONFIG_V1'; 
+const CONN_STATUS_KEY = 'TANXING_CONN_STATUS_SUPA';
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 const idb = {
@@ -56,13 +57,13 @@ const idb = {
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
-interface LeanConfig { appId: string; appKey: string; serverURL: string; lastSync: string | null; payloadSize?: number; cloudObjectId?: string; remoteUpdatedAt?: string; }
+interface SupaConfig { url: string; anonKey: string; lastSync: string | null; payloadSize?: number; remoteUpdatedAt?: string; }
 
 interface AppState {
     theme: 'ios-glass' | 'cyber-neon' | 'midnight-dark';
     activePage: Page;
     navParams: { searchQuery?: string };
-    leanConfig: LeanConfig;
+    supaConfig: SupaConfig;
     connectionStatus: ConnectionStatus;
     saveStatus: SaveStatus;
     exchangeRate: number;
@@ -98,7 +99,7 @@ type Action =
     | { type: 'ADD_PRODUCT'; payload: Product }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
-    | { type: 'SET_LEAN_CONFIG'; payload: Partial<LeanConfig> }
+    | { type: 'SET_SUPA_CONFIG'; payload: Partial<SupaConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'RESET_DATA' }
     | { type: 'INITIALIZED_SUCCESS' }
@@ -134,7 +135,7 @@ type Action =
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
-    leanConfig: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0, remoteUpdatedAt: '' },
+    supaConfig: { url: '', anonKey: '', lastSync: null, payloadSize: 0, remoteUpdatedAt: '' },
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
@@ -165,12 +166,12 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         case 'HYDRATE_STATE': { const updated = { ...state, ...action.payload }; if (action.payload.syncLocked !== undefined) updated.syncLocked = action.payload.syncLocked; safeLocalSave(updated); return updated; }
-        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, influencers: MOCK_INFLUENCERS, automationRules: [{ id: 'R-001', name: '库存水位红色警戒', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }], isInitialized: true, syncLocked: false, lastMutationTime: Date.now() };
+        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, influencers: MOCK_INFLUENCERS, automationRules: [{ id: 'R-001', name: '库存水位预警', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }], isInitialized: true, syncLocked: false, lastMutationTime: Date.now() };
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
-        case 'SET_LEAN_CONFIG': { const newConfig = { ...state.leanConfig, ...action.payload }; localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig)); return { ...state, leanConfig: newConfig }; }
+        case 'SET_SUPA_CONFIG': { const newConfig = { ...state.supaConfig, ...action.payload }; localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig)); return { ...state, supaConfig: newConfig }; }
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'RESET_DATA': { idb.clear(); localStorage.clear(); AV._config.appId = null; return { ...emptyState, isInitialized: true, syncLocked: false }; }
+        case 'RESET_DATA': { idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false }; }
         case 'UPDATE_PRODUCT': return markDirty({ products: state.products.map(p => p.id === action.payload.id ? action.payload : p) });
         case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...state.products] });
         case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...state.transactions] });
@@ -205,39 +206,40 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 };
 
-interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<boolean>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootLean: (appId: string, appKey: string, serverURL: string) => Promise<void>; disconnectLean: () => void; }
+interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<boolean>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootSupa: (url: string, key: string) => Promise<void>; disconnectSupa: () => void; }
 const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const isSyncingRef = useRef(false);
+    const supaClientRef = useRef<SupabaseClient | null>(null);
 
-    const bootLean = async (appId: string, appKey: string, serverURL: string) => { 
-        if (!appId || !appKey || !serverURL) return; 
+    const bootSupa = async (url: string, key: string) => { 
+        if (!url || !key) return; 
         try { 
-            const cleanUrl = serverURL.trim().replace(/\/$/, "");
-            AV.init({ appId: appId.trim(), appKey: appKey.trim(), serverURL: cleanUrl }); 
-            const query = new AV.Query('Backup'); 
-            await query.limit(1).find(); 
+            const client = createClient(url, key);
+            // 验证连接
+            const { error } = await client.from('backups').select('id').limit(1);
+            if (error) throw error;
+            
+            supaClientRef.current = client;
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
             dispatch({ type: 'UNLOCK_SYNC' }); 
         } catch (e: any) { 
-            console.error("[BootLean] Error:", e);
+            console.error("[SupaBoot] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            dispatch({ type: 'UNLOCK_SYNC' }); 
-            const isCors = e.message.includes('terminated') || e.message.includes('Access-Control') || e.message.includes('CORS');
-            throw new Error(isCors ? `[物理层拦截] 请将域名 ${window.location.origin.replace(/\/$/, "")} 加入安全域名。` : `认证失败: ${e.message}`); 
+            throw new Error(`连接失败: 请确保数据库已建立 backups 表。`); 
         } 
     };
 
-    const disconnectLean = () => { 
-        AV._config.appId = null; 
+    const disconnectSupa = () => { 
+        supaClientRef.current = null;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
-        dispatch({ type: 'SET_LEAN_CONFIG', payload: { appId: '', appKey: '', serverURL: '', lastSync: null, payloadSize: 0 } }); 
+        dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } }); 
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<boolean> => { 
-        if (!AV.applicationId) return false;
+        if (!supaClientRef.current) return false;
         if (!isForce && !state.syncAllowed) return false;
         if (isSyncingRef.current) return false; 
         
@@ -255,34 +257,28 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const jsonPayload = JSON.stringify(payloadData); 
             const size = new Blob([jsonPayload]).size; 
             
-            const query = new AV.Query('Backup'); 
-            query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); 
-            let backupObj = await query.first(); 
-            if (!backupObj) { 
-                const Backup = AV.Object.extend('Backup'); 
-                backupObj = new Backup(); 
-                backupObj.set('uniqueId', 'GLOBAL_ERP_NODE'); 
-            } 
-            const acl = new AV.ACL(); 
-            acl.setPublicReadAccess(true); 
-            acl.setPublicWriteAccess(true); 
-            backupObj.setACL(acl); 
-            backupObj.set('payload', jsonPayload); 
-            
-            const saved = await backupObj.save(null, { useMasterKey: false }); 
-            const remoteTime = saved.updatedAt?.toISOString();
-            
-            dispatch({ type: 'SET_LEAN_CONFIG', payload: { 
+            const { data, error } = await supaClientRef.current
+                .from('backups')
+                .upsert({ 
+                    unique_id: 'GLOBAL_ERP_NODE', 
+                    payload: jsonPayload,
+                    updated_at: new Date().toISOString()
+                }, { onConflict: 'unique_id' })
+                .select('updated_at')
+                .single();
+
+            if (error) throw error;
+
+            dispatch({ type: 'SET_SUPA_CONFIG', payload: { 
                 lastSync: new Date().toLocaleTimeString(), 
                 payloadSize: size, 
-                cloudObjectId: saved.id,
-                remoteUpdatedAt: remoteTime
+                remoteUpdatedAt: data.updated_at
             } }); 
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
             return true; 
         } catch (e: any) { 
-            console.error("[SyncToCloud] Error:", e);
+            console.error("[SupaSync] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
             return false; 
         } finally { 
@@ -291,75 +287,68 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => { 
-        if (!AV.applicationId) return false; 
+        if (!supaClientRef.current) return false; 
         try { 
-            const query = new AV.Query('Backup'); 
-            query.equalTo('uniqueId', 'GLOBAL_ERP_NODE'); 
-            let backupObj = await query.first(); 
-            if (backupObj) { 
-                const rawPayload = backupObj.get('payload'); 
-                if (!rawPayload) return false;
+            const { data, error } = await supaClientRef.current
+                .from('backups')
+                .select('*')
+                .eq('unique_id', 'GLOBAL_ERP_NODE')
+                .single();
                 
-                const size = new Blob([rawPayload]).size; 
-                const data = JSON.parse(rawPayload); 
-                const remoteTime = backupObj.updatedAt?.toISOString();
+            if (error || !data) return false;
+            
+            const rawPayload = data.payload; 
+            const size = new Blob([rawPayload]).size; 
+            const payload = JSON.parse(rawPayload); 
 
-                dispatch({ type: 'HYDRATE_STATE', payload: { 
-                    ...data, 
-                    syncLocked: false, 
-                    syncAllowed: false, 
-                    saveStatus: 'idle', 
-                    isInitialized: true, 
-                    leanConfig: { 
-                        ...state.leanConfig, 
-                        payloadSize: size, 
-                        cloudObjectId: backupObj.id, 
-                        remoteUpdatedAt: remoteTime,
-                        lastSync: `热更新 (${new Date(remoteTime || "").toLocaleTimeString()})` 
-                    } 
-                } }); 
-                if (!isSilent) showToast('量子纠缠：数据已从云端对齐', 'success'); 
-                return true; 
-            } 
-            return false; 
+            dispatch({ type: 'HYDRATE_STATE', payload: { 
+                ...payload, 
+                syncLocked: false, 
+                syncAllowed: false, 
+                saveStatus: 'idle', 
+                isInitialized: true, 
+                supaConfig: { 
+                    ...state.supaConfig, 
+                    payloadSize: size, 
+                    remoteUpdatedAt: data.updated_at,
+                    lastSync: `热更新 (${new Date(data.updated_at).toLocaleTimeString()})` 
+                } 
+            } }); 
+            if (!isSilent) showToast('量子纠缠：Supabase 数据已同步', 'success'); 
+            return true; 
         } catch (e: any) { 
-            console.error("[PullFromCloud] Error:", e);
+            console.error("[SupaPull] Error:", e);
             return false; 
         } 
     };
 
     useEffect(() => { 
-        if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !AV.applicationId) return; 
+        if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !supaClientRef.current) return; 
         const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
     }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
 
     useEffect(() => {
-        if (!state.isInitialized || state.connectionStatus !== 'connected' || !AV.applicationId) return;
+        if (!state.isInitialized || state.connectionStatus !== 'connected' || !supaClientRef.current) return;
 
         const checkRemoteUpdate = async () => {
             if (state.saveStatus === 'dirty' || state.saveStatus === 'saving' || isSyncingRef.current) return;
             try {
-                const query = new AV.Query('Backup');
-                query.equalTo('uniqueId', 'GLOBAL_ERP_NODE');
-                query.select(['updatedAt']);
-                const remote = await query.first();
-                if (remote && remote.updatedAt) {
-                    const remoteTime = remote.updatedAt.toISOString();
-                    // 核心修复：更严格的比较逻辑
-                    if (remoteTime !== state.leanConfig.remoteUpdatedAt) {
-                        console.log("[Heartbeat] Detecting newer cloud version:", remoteTime);
-                        await pullFromCloud(true);
-                    }
+                const { data } = await supaClientRef.current!
+                    .from('backups')
+                    .select('updated_at')
+                    .eq('unique_id', 'GLOBAL_ERP_NODE')
+                    .single();
+                    
+                if (data && data.updated_at !== state.supaConfig.remoteUpdatedAt) {
+                    await pullFromCloud(true);
                 }
-            } catch (e) {
-                console.error("[Heartbeat] Failed:", e.message);
-            }
+            } catch (e) {}
         };
 
-        const heartbeat = setInterval(checkRemoteUpdate, 8000); // 稍微加快轮询
+        const heartbeat = setInterval(checkRemoteUpdate, 8000);
         return () => clearInterval(heartbeat);
-    }, [state.isInitialized, state.connectionStatus, state.leanConfig.remoteUpdatedAt, state.saveStatus]);
+    }, [state.isInitialized, state.connectionStatus, state.supaConfig.remoteUpdatedAt, state.saveStatus]);
 
     useEffect(() => { 
         const startup = async () => { 
@@ -372,14 +361,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (savedConfig) { 
                 try { 
                     const config = JSON.parse(savedConfig); 
-                    dispatch({ type: 'SET_LEAN_CONFIG', payload: config }); 
-                    if (config.appId && config.appKey && config.serverURL) { 
-                        await bootLean(config.appId, config.appKey, config.serverURL); 
-                        if (savedStatus === 'connected') {
-                            await pullFromCloud(true); 
-                        } else {
-                            dispatch({ type: 'UNLOCK_SYNC' }); 
-                        }
+                    dispatch({ type: 'SET_SUPA_CONFIG', payload: config }); 
+                    if (config.url && config.anonKey) { 
+                        await bootSupa(config.url, config.anonKey); 
+                        if (savedStatus === 'connected') await pullFromCloud(true);
+                        else dispatch({ type: 'UNLOCK_SYNC' });
                     } else {
                         dispatch({ type: 'UNLOCK_SYNC' }); 
                     }
@@ -394,7 +380,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
     
-    return ( <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean, disconnectLean }}> {children} </TanxingContext.Provider> );
+    return ( <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa, disconnectSupa }}> {children} </TanxingContext.Provider> );
 };
 
 export const useTanxing = () => { const context = useContext(TanxingContext); if (!context) throw new Error('useTanxing error'); return context; };

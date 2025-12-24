@@ -1,74 +1,57 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { 
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Eye, EyeOff, Wifi, 
     Download, Upload, Palette, Sparkles, Moon, MonitorDot,
     FileJson, Eraser, LogOut, Zap, Loader2, ShieldCheck, CheckCircle2, ExternalLink, CloudUpload, CloudDownload, Info, MousePointer2, AlertCircle, ListChecks, DatabaseZap, FileCode, History, HardDrive,
-    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy, Terminal, Globe, Activity
+    Sun, Waves, Wind, Search, Link2, Unplug, ShieldAlert, Link2Off, Lock, Copy, Terminal, Globe, Activity, Database as DbIcon
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean, disconnectLean } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa, disconnectSupa } = useTanxing();
   const [activeTab, setActiveTab] = useState<'theme' | 'cloud' | 'data'>('cloud'); 
   const [isSaving, setIsSaving] = useState(false);
   const [isPullingNow, setIsPullingNow] = useState(false);
-  const [cloudStatus, setCloudStatus] = useState<'unknown' | 'found' | 'not_found'>('unknown');
-
-  const [leanForm, setLeanForm] = useState({ appId: '', appKey: '', serverURL: '' });
+  const [supaForm, setSupaForm] = useState({ url: '', anonKey: '' });
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isConnected = state.connectionStatus === 'connected';
   const isError = state.connectionStatus === 'error';
-  const LEANCLOUD_LIMIT = 16 * 1024 * 1024; 
-  const currentSize = state.leanConfig?.payloadSize || 0;
-  const sizePercentage = Math.min(100, (currentSize / LEANCLOUD_LIMIT) * 100);
+  const currentSize = state.supaConfig?.payloadSize || 0;
+  // Supabase 免费版通常有较大的存储空间，此处仅作展示
+  const sizePercentage = Math.min(100, (currentSize / (1024 * 1024 * 50)) * 100);
 
   useEffect(() => {
-    if (state.leanConfig) {
-        setLeanForm({
-            appId: state.leanConfig.appId || '',
-            appKey: state.leanConfig.appKey || '',
-            serverURL: state.leanConfig.serverURL || ''
+    if (state.supaConfig) {
+        setSupaForm({
+            url: state.supaConfig.url || '',
+            anonKey: state.supaConfig.anonKey || ''
         });
     }
-  }, [state.leanConfig]);
+  }, [state.supaConfig]);
 
   const handleSaveConfig = async () => {
-      if (!leanForm.appId || !leanForm.appKey || !leanForm.serverURL) {
-          showToast('请完整填写配置信息', 'warning');
+      if (!supaForm.url || !supaForm.anonKey) {
+          showToast('请完整填写 Supabase 配置', 'warning');
           return;
       }
       setIsSaving(true);
-      setCloudStatus('unknown');
-
       try {
-          const cleanUrl = leanForm.serverURL.trim().replace(/\/$/, "");
-          const cleanConfig = { ...leanForm, serverURL: cleanUrl };
-          
-          dispatch({ type: 'SET_LEAN_CONFIG', payload: cleanConfig });
-          await bootLean(cleanConfig.appId, cleanConfig.appKey, cleanConfig.serverURL);
+          dispatch({ type: 'SET_SUPA_CONFIG', payload: supaForm });
+          await bootSupa(supaForm.url, supaForm.anonKey);
           const found = await pullFromCloud(true);
           if (found) {
-              setCloudStatus('found');
               showToast('同步成功：已拉取云端数据', 'success');
           } else {
-              setCloudStatus('not_found');
-              showToast('连接成功：云端尚无数据', 'info');
+              showToast('连接成功：请点击右上角云图标上传数据', 'info');
           }
       } catch (e: any) {
           showToast(e.message, 'error');
       } finally {
           setIsSaving(false);
       }
-  };
-
-  const getCleanOrigin = () => window.location.origin.replace(/\/$/, "");
-
-  const copyOrigin = () => {
-      const origin = getCleanOrigin();
-      navigator.clipboard.writeText(origin);
-      showToast('域名已复制，请前往 LeanCloud 后台粘贴', 'success');
   };
 
   const formatSize = (bytes: number) => {
@@ -84,7 +67,7 @@ const Settings: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-black text-white flex items-center gap-3 italic tracking-tighter">
-              <SettingsIcon className="w-8 h-8 text-indigo-500" /> 系统偏好与同步协议
+              <SettingsIcon className="w-8 h-8 text-indigo-500" /> 系统偏好与 Supabase 协议
           </h2>
           <p className="text-[10px] text-slate-500 mt-2 font-mono tracking-[0.4em] uppercase">Enterprise Data Control Hub</p>
         </div>
@@ -94,7 +77,7 @@ const Settings: React.FC = () => {
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit backdrop-blur-md">
           {[
             { id: 'theme', label: '视觉外观', icon: Palette },
-            { id: 'cloud', label: '云端同步', icon: Cloud },
+            { id: 'cloud', label: '云端同步 (Supa)', icon: Cloud },
             { id: 'data', label: '离线管理', icon: Database }
           ].map(tab => (
               <button 
@@ -122,24 +105,21 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-6 animate-in fade-in duration-500">
-              {/* 第一步：强制展示域名校验 */}
               <div className="bg-indigo-600/10 border-2 border-indigo-500/20 rounded-[2.5rem] p-8 flex items-center gap-8 relative overflow-hidden">
                   <div className="absolute top-0 right-0 p-10 opacity-5"><Terminal className="w-40 h-40"/></div>
-                  <div className="p-5 bg-indigo-600 rounded-3xl text-white shadow-2xl shrink-0"><Globe className="w-10 h-10"/></div>
+                  <div className="p-5 bg-indigo-600 rounded-3xl text-white shadow-2xl shrink-0"><DbIcon className="w-10 h-10"/></div>
                   <div className="flex-1">
-                      <h4 className="text-white font-black text-lg uppercase italic tracking-tighter">必看：物理层授权自检</h4>
-                      <p className="text-slate-400 text-sm mt-1">如果你看到“指令被拦截”，是因为你没有把下方网址告诉 LeanCloud。</p>
-                      <div className="mt-5 flex items-center gap-4">
-                          <code className="bg-black/60 border border-white/10 px-6 py-3 rounded-2xl text-indigo-400 font-mono text-sm font-bold shadow-inner">
-                              {getCleanOrigin()}
+                      <h4 className="text-white font-black text-lg uppercase italic tracking-tighter">数据库指令集 (Table Setup)</h4>
+                      <p className="text-slate-400 text-sm mt-1">请在 Supabase SQL Editor 中运行以下代码以开启神经链路：</p>
+                      <div className="mt-5">
+                          <code className="block bg-black/60 border border-white/10 px-6 py-4 rounded-2xl text-emerald-400 font-mono text-[10px] shadow-inner leading-relaxed">
+                            create table backups (<br/>
+                            &nbsp;&nbsp;unique_id text primary key,<br/>
+                            &nbsp;&nbsp;payload text,<br/>
+                            &nbsp;&nbsp;updated_at timestamptz default now()<br/>
+                            );
                           </code>
-                          <button onClick={copyOrigin} className="px-6 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center gap-2 transition-all active:scale-95">
-                              <Copy className="w-4 h-4"/> 复制域名
-                          </button>
                       </div>
-                      <p className="text-[10px] text-rose-500 font-black uppercase mt-3 tracking-widest flex items-center gap-2">
-                          <AlertCircle className="w-3 h-3"/> 警告：粘贴到 LeanCloud 后台时，末尾一定不能有斜杠 /
-                      </p>
                   </div>
               </div>
 
@@ -150,109 +130,69 @@ const Settings: React.FC = () => {
                       </div>
                       <div className="flex-1">
                           <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : isError ? 'text-red-400' : 'text-indigo-300'}`}>
-                              {isConnected ? '神经链路：稳固连接中' : isError ? '物理连接受限 (CORS)' : '存储协议状态'}
+                              {isConnected ? 'Supabase：神经链路稳固' : isError ? '数据库访问受限' : '云端同步协议'}
                           </h4>
                           <div className="mt-4 space-y-3">
                               <div className="flex items-center gap-3">
                                   <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : isError ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white uppercase">物理节点: {state.connectionStatus.toUpperCase()}</span>
+                                  <span className="text-xs font-bold text-white uppercase">状态: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${state.leanConfig.remoteUpdatedAt ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : 'bg-slate-700'}`}></div>
-                                  <span className="text-xs font-bold text-white uppercase">云端镜像版本: <span className="font-mono text-indigo-300">{state.leanConfig.remoteUpdatedAt || 'N/A'}</span></span>
+                                  <div className={`w-3 h-3 rounded-full ${state.supaConfig.remoteUpdatedAt ? 'bg-indigo-500 shadow-[0_0_12px_#6366f1]' : 'bg-slate-700'}`}></div>
+                                  <span className="text-xs font-bold text-white uppercase">最新镜像: <span className="font-mono text-indigo-300">{state.supaConfig.remoteUpdatedAt ? new Date(state.supaConfig.remoteUpdatedAt).toLocaleString() : 'N/A'}</span></span>
                               </div>
                           </div>
                       </div>
                       {isConnected && (
                           <div className="flex flex-col gap-2">
-                              <div className="flex items-center gap-2 bg-emerald-500/20 px-4 py-2 rounded-xl text-emerald-400 font-black text-[10px] uppercase">
-                                  <CheckCircle2 className="w-4 h-4" /> Live
-                              </div>
-                              <button onClick={disconnectLean} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
+                              <button onClick={disconnectSupa} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
                                   <Link2Off className="w-3 h-3" /> Disconnect
                               </button>
                           </div>
                       )}
                   </div>
-                  <div className="ios-glass-panel p-8 rounded-[2.5rem] flex flex-col justify-center border-white/10 relative overflow-hidden">
-                      {isPullingNow && <div className="absolute inset-0 bg-indigo-500/10 backdrop-blur-[1px] z-10 flex items-center justify-center"><Loader2 className="w-6 h-6 text-indigo-400 animate-spin"/></div>}
+                  <div className="ios-glass-panel p-8 rounded-[2.5rem] flex flex-col justify-center border-white/10">
                       <div className="flex justify-between items-center mb-4">
-                          <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2">
-                              <HardDrive className="w-4 h-4 text-indigo-400" /> 镜像占用
-                          </span>
-                          <span className={`text-[10px] font-mono font-black ${sizePercentage > 80 ? 'text-rose-400' : 'text-emerald-400'}`}>
-                              {sizePercentage.toFixed(2)}%
-                          </span>
+                          <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><HardDrive className="w-4 h-4 text-indigo-400" /> 载荷尺寸</span>
                       </div>
-                      <div className="h-2.5 w-full bg-black/60 rounded-full overflow-hidden mb-4 p-0.5"><div className={`h-full rounded-full transition-all duration-1000 ${sizePercentage > 80 ? 'bg-rose-500' : 'bg-emerald-500'}`} style={{ width: `${sizePercentage}%` }}></div></div>
-                      <div className="flex justify-between items-baseline"><span className="text-2xl font-black text-white font-mono">{formatSize(currentSize)}</span><span className="text-[9px] text-slate-600 font-bold">MAX: 16 MB</span></div>
+                      <div className="text-2xl font-black text-white font-mono">{formatSize(currentSize)}</div>
+                      <p className="text-[9px] text-slate-600 mt-2 font-bold uppercase italic">Syncing via PostgreSQL JSONB Pipeline</p>
                   </div>
-              </div>
-
-              {/* 新增：实时纠缠日志 */}
-              <div className="bg-black/60 border border-white/10 rounded-[2.5rem] p-6">
-                <div className="flex items-center gap-3 mb-4">
-                    <Activity className="w-4 h-4 text-emerald-400 animate-pulse" />
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">量子纠缠监视器 (Synchronization Debugger)</span>
-                </div>
-                <div className="space-y-4">
-                    <div className="p-4 bg-white/2 rounded-2xl border border-white/5 grid grid-cols-2 gap-4">
-                        <div>
-                            <p className="text-[8px] text-slate-500 uppercase font-bold">本地最后更新</p>
-                            <p className="text-xs font-mono text-white mt-1">{new Date(state.lastMutationTime).toLocaleString()}</p>
-                        </div>
-                        <div>
-                            <p className="text-[8px] text-slate-500 uppercase font-bold">云端最后镜像</p>
-                            <p className="text-xs font-mono text-indigo-400 mt-1">{state.leanConfig.remoteUpdatedAt ? new Date(state.leanConfig.remoteUpdatedAt).toLocaleString() : 'WAITING'}</p>
-                        </div>
-                    </div>
-                    <div className="p-4 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <Info className="w-4 h-4 text-indigo-400" />
-                            <p className="text-[10px] text-indigo-200 font-bold">同步提示：如果数据未自动更新，请点击顶部导航栏的“下载”图标强制同步。</p>
-                        </div>
-                        <button onClick={() => pullFromCloud(false)} className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-[10px] font-black uppercase shadow-lg">立即对齐</button>
-                    </div>
-                </div>
               </div>
 
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                       <div className="space-y-6 relative">
                           {isConnected && (
-                              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center rounded-3xl border border-white/5">
+                              <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center rounded-3xl">
                                   <Lock className="w-10 h-10 text-indigo-400 mb-4" />
-                                  <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">配置已激活锁定</p>
-                                  <button onClick={disconnectLean} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">断开连接以修改</button>
+                                  <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">配置已锁定</p>
+                                  <button onClick={disconnectSupa} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">修改配置</button>
                               </div>
                           )}
                           <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Application ID</label>
-                              <input type="text" value={leanForm.appId} onChange={e=>setLeanForm({...leanForm, appId: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="App ID" disabled={isConnected} />
+                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Supabase Project URL</label>
+                              <input type="text" value={supaForm.url} onChange={e=>setSupaForm({...supaForm, url: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="https://xyz.supabase.co" />
                           </div>
                           <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">App Key</label>
-                              <input type="password" value={leanForm.appKey} onChange={e=>setLeanForm({...leanForm, appKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="App Key" disabled={isConnected} />
-                          </div>
-                          <div className="space-y-1">
-                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Rest API Server URL</label>
-                              <input type="text" value={leanForm.serverURL} onChange={e=>setLeanForm({...leanForm, serverURL: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="https://xxx.lncldglobal.com" disabled={isConnected} />
+                              <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Anon Public Key</label>
+                              <input type="password" value={supaForm.anonKey} onChange={e=>setSupaForm({...supaForm, anonKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="eyJhbG..." />
                           </div>
                           <button onClick={handleSaveConfig} disabled={isSaving || isConnected} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
-                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : isConnected ? <CheckCircle2 className="w-5 h-5" /> : <ShieldCheck className="w-5 h-5" />}
-                              {isConnected ? '神经链路已连接' : '激活链路并尝试同步'}
+                              {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <DbIcon className="w-5 h-5" />}
+                              接入 Supabase 神经链接
                           </button>
                       </div>
                       
                       <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col justify-center">
                           <div className="flex items-center gap-4 mb-6">
                               <Info className="w-6 h-6 text-indigo-400" />
-                              <h5 className="text-white font-bold uppercase italic tracking-widest">排障矩阵 (Debug Matrix)</h5>
+                              <h5 className="text-white font-bold uppercase italic tracking-widest">同步排障指令</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>请确保登录 LeanCloud → 设置 → 安全设置 → <b>Web 安全域名</b> 填入了顶部的网址。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果你有两台电脑，两台电脑的“域名”可能不同，都要填进去。</span></li>
-                              <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>填入时如果网址最后有个 <code>/</code>，请务必删掉它。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>确保已在 Supabase Dashboard 开启了 <b>RLS</b> 或者为 `backups` 表配置了对 `anon` 角色的所有权限。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>如果你有两台电脑，两边填入的 URL 和 Key 必须完全一致。</span></li>
+                              <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>点击顶部 Header 的“云下载”图标可以手动拉取另一台设备的最新更改。</span></li>
                           </ul>
                       </div>
                   </div>
