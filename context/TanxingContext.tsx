@@ -218,7 +218,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!url || !key) return; 
         try { 
             const client = createClient(url, key);
-            // 验证连接：修复 bug，主键是 unique_id 而不是 id
             const { error } = await client.from('backups').select('unique_id').limit(1);
             if (error) throw error;
             
@@ -228,7 +227,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[SupaBoot] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            // 优化错误显示，避免误导
             const errorMsg = e.message?.includes('404') ? '找不到 backups 表，请确认已运行 SQL 创建表结构。' : `接入失败: ${e.message || '网络或配置错误'}`;
             throw new Error(errorMsg); 
         } 
@@ -269,7 +267,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 .select('updated_at')
                 .single();
 
-            if (error) throw error;
+            if (error) {
+                console.error("[SupaSync] Database Error:", error);
+                throw error;
+            }
 
             dispatch({ type: 'SET_SUPA_CONFIG', payload: { 
                 lastSync: new Date().toLocaleTimeString(), 
@@ -280,7 +281,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 2000); 
             return true; 
         } catch (e: any) { 
-            console.error("[SupaSync] Error:", e);
+            console.error("[SupaSync] Fatal Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
             return false; 
         } finally { 
@@ -295,9 +296,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 .from('backups')
                 .select('*')
                 .eq('unique_id', 'GLOBAL_ERP_NODE')
-                .single();
+                .maybeSingle();
                 
-            if (error || !data) return false;
+            if (error) throw error;
+            if (!data) return false;
             
             const rawPayload = data.payload; 
             const size = new Blob([rawPayload]).size; 
@@ -316,7 +318,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     lastSync: `热更新 (${new Date(data.updated_at).toLocaleTimeString()})` 
                 } 
             } }); 
-            if (!isSilent) showToast('量子纠缠：Supabase 数据已同步', 'success'); 
+            if (!isSilent) showToast('量子纠缠：云端数据同步完成', 'success'); 
             return true; 
         } catch (e: any) { 
             console.error("[SupaPull] Error:", e);
@@ -340,7 +342,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     .from('backups')
                     .select('updated_at')
                     .eq('unique_id', 'GLOBAL_ERP_NODE')
-                    .single();
+                    .maybeSingle();
                     
                 if (data && data.updated_at !== state.supaConfig.remoteUpdatedAt) {
                     await pullFromCloud(true);
