@@ -29,14 +29,26 @@ const Settings: React.FC = () => {
   }, [state.supaConfig]);
 
   const handleSaveConfig = async () => {
-      if (!supaForm.url || !supaForm.anonKey) {
+      let cleanUrl = supaForm.url.trim();
+      let cleanKey = supaForm.anonKey.trim();
+
+      if (!cleanUrl || !cleanKey) {
           showToast('请完整填写 Supabase 配置', 'warning');
           return;
       }
+
+      // 关键修复：自动去除末尾的斜杠，防止 fetch 报错
+      if (cleanUrl.endsWith('/')) {
+          cleanUrl = cleanUrl.slice(0, -1);
+      }
+
       setIsSaving(true);
       try {
-          dispatch({ type: 'SET_SUPA_CONFIG', payload: supaForm });
-          await bootSupa(supaForm.url, supaForm.anonKey);
+          const configToSave = { url: cleanUrl, anonKey: cleanKey };
+          dispatch({ type: 'SET_SUPA_CONFIG', payload: configToSave });
+          
+          await bootSupa(cleanUrl, cleanKey);
+          
           const found = await pullFromCloud(true);
           if (found) {
               showToast('同步成功：已从云端恢复数据', 'success');
@@ -131,7 +143,7 @@ const Settings: React.FC = () => {
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   <div className={`lg:col-span-2 border rounded-[2.5rem] p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
-                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : isError ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}`}>
                         {isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
                       </div>
                       <div className="flex-1">
@@ -178,11 +190,11 @@ const Settings: React.FC = () => {
                           )}
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Supabase Project URL</label>
-                              <input type="text" value={supaForm.url} onChange={e=>setSupaForm({...supaForm, url: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="https://xyz.supabase.co" />
+                              <input type="text" value={supaForm.url} onChange={e=>setSupaForm({...supaForm, url: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="https://xyz.supabase.co" />
                           </div>
                           <div className="space-y-1">
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Anon Public Key</label>
-                              <input type="password" value={supaForm.anonKey} onChange={e=>setSupaForm({...supaForm, anonKey: e.target.value.trim()})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="eyJhbG..." />
+                              <input type="password" value={supaForm.anonKey} onChange={e=>setSupaForm({...supaForm, anonKey: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="eyJhbG..." />
                           </div>
                           <button onClick={handleSaveConfig} disabled={isSaving || isConnected} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
                               {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <DatabaseZap className="w-5 h-5" />}
@@ -196,7 +208,7 @@ const Settings: React.FC = () => {
                               <h5 className="text-white font-bold uppercase italic tracking-widest">同步排障指南</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>如果提示“同步失败”，请检查 Supabase 控制台的 **SQL Editor** 是否已成功运行 RLS 开启指令。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>如果提示“Failed to fetch”，请确认 URL 是否多带了尾部斜杠，或者网络是否屏蔽了 supabase.co 域名。</span></li>
                               <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>确保使用的是 **anon public key** 而非 service_role key。</span></li>
                               <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>点击顶部 Header 的“云下载”图标可以手动拉取另一台设备的最新更改。</span></li>
                           </ul>
@@ -205,7 +217,6 @@ const Settings: React.FC = () => {
               </div>
           </div>
       )}
-      {/* 离线管理部分保持不变 */}
     </div>
   );
 };

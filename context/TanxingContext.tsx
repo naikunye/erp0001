@@ -227,7 +227,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[SupaBoot] Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' }); 
-            const errorMsg = e.message?.includes('404') ? '找不到 backups 表，请确认已运行 SQL 创建表结构。' : `接入失败: ${e.message || '网络或配置错误'}`;
+            
+            let errorMsg = `接入失败: ${e.message || '网络或配置错误'}`;
+            if (e.message?.includes('Failed to fetch')) {
+                errorMsg = "接入失败: 无法连接服务器。请检查 URL 是否正确（不带尾部斜杠），或是否存在网络防火墙/VPN。";
+            } else if (e.message?.includes('404')) {
+                errorMsg = '找不到 backups 表，请确认已在 Supabase 运行 SQL 创建表。';
+            }
+            
             throw new Error(errorMsg); 
         } 
     };
