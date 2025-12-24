@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
@@ -8,7 +9,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ title }) => {
   const [now, setNow] = useState(new Date());
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootLean } = useTanxing();
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa } = useTanxing();
   const [isManualSyncing, setIsManualSyncing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
 
@@ -39,20 +40,9 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
 
   const handleCloudSync = async () => {
       if (state.connectionStatus !== 'connected') {
-          if (state.leanConfig.appId) {
-              showToast('正在尝试重新激活物理链路...', 'info');
-              try {
-                  await bootLean(state.leanConfig.appId, state.leanConfig.appKey, state.leanConfig.serverURL);
-              } catch (e: any) {
-                  showToast(e.message, 'error');
-                  dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } });
-                  return;
-              }
-          } else {
-              showToast('云端配置未就绪', 'warning');
-              dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } });
-              return;
-          }
+          showToast('云端配置未就绪', 'warning');
+          dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } });
+          return;
       }
 
       setIsManualSyncing(true);
@@ -61,7 +51,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           if (success) {
               showToast('云端镜像已强制更新', 'success');
           } else {
-              showToast('同步指令被拦截，请检查 LeanCloud 控制台安全域名', 'error');
+              showToast('同步失败，请检查配置', 'error');
           }
       } catch (e: any) {
           showToast(`通信故障: ${e.message}`, 'error');
@@ -71,16 +61,17 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   };
 
   const formatTime = (tz: string) => {
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat('zh-CN', {
       timeZone: tz,
       hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
     }).format(now);
   };
 
   const getUSDate = () => {
-    return new Intl.DateTimeFormat('en-US', {
+    return new Intl.DateTimeFormat('zh-CN', {
       timeZone: 'America/Los_Angeles',
-      month: 'short', day: 'numeric', year: 'numeric',
+      year: 'numeric', month: 'long', day: 'numeric',
+      weekday: 'long'
     }).format(now);
   };
 
@@ -88,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       if (state.connectionStatus === 'error') {
           return (
               <div className="flex items-center gap-1.5 px-2 py-1 bg-red-600/20 border border-red-500/50 rounded text-[9px] font-black text-red-400 animate-pulse">
-                  <ShieldAlert className="w-2.5 h-2.5" /> SECURITY BLOCK (CORS)
+                  <ShieldAlert className="w-2.5 h-2.5" /> 安全拦截 (CORS)
               </div>
           );
       }
@@ -97,18 +88,18 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           case 'saving':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] font-black text-indigo-400 animate-pulse">
-                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> SYNCING...
+                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 同步中...
                   </div>
               );
           case 'saved':
               return (
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400 animate-in fade-in zoom-in">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> CLOUD SECURED
+                        <CheckCircle2 className="w-2.5 h-2.5" /> 云端对齐
                     </div>
-                    {state.leanConfig.lastSync && (
+                    {state.supaConfig.lastSync && (
                         <span className="text-[8px] text-slate-600 font-mono font-bold uppercase tracking-tighter">
-                            Last Ack: {state.leanConfig.lastSync}
+                            最后响应: {state.supaConfig.lastSync}
                         </span>
                     )}
                   </div>
@@ -116,14 +107,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
           case 'dirty':
               return (
                   <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400 shadow-[0_0_10px_rgba(245,158,11,0.2)]">
-                      <Zap className="w-2.5 h-2.5 animate-bounce" /> DATA MODIFIED
+                      <Zap className="w-2.5 h-2.5 animate-bounce" /> 待同步
                   </div>
               );
           default:
               return (
                   <div className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[8px] font-bold transition-all ${state.connectionStatus === 'connected' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                       <Radio className={`w-2 h-2 ${state.connectionStatus === 'connected' ? 'animate-pulse text-indigo-500' : 'text-slate-700'}`} /> 
-                      {state.connectionStatus === 'connected' ? 'SYNC READY' : 'SYNC OFF'}
+                      {state.connectionStatus === 'connected' ? '就绪' : '离线'}
                   </div>
               );
       }
@@ -137,14 +128,14 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                     <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                 </span>
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">Live Link</span>
+                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">数据实时链路</span>
             </div>
           );
       }
       return (
         <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
             <WifiOff className="w-3 h-3 text-slate-500" />
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">Standalone</span>
+            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">本地单机模式</span>
         </div>
       );
   };
@@ -162,22 +153,26 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       </div>
 
       <div className="flex items-center space-x-6">
-        <div className="hidden xl:flex items-center gap-6 pr-6 border-r border-white/5">
+        <div className="hidden xl:flex items-center gap-8 pr-8 border-r border-white/5">
             <div className="flex flex-col items-end">
                 <div className="flex items-center gap-1.5 text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">
                     <Globe className="w-2.5 h-2.5" />
-                    SYSTEM DATE (PT)
+                    系统日期 (美西 PT)
                 </div>
-                <div className="text-xs font-mono font-bold text-white">{getUSDate()}</div>
+                <div className="text-xs font-mono font-black text-white">{getUSDate()}</div>
             </div>
             
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-6">
                 <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">New York</span>
+                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美东 ET</span>
                     <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
                 </div>
                 <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">Los Angeles</span>
+                    <span className="text-[9px] text-amber-500 font-bold uppercase tracking-tighter">美中 CT</span>
+                    <span className="text-xs font-mono text-amber-400/80">{formatTime('America/Chicago')}</span>
+                </div>
+                <div className="flex flex-col items-center">
+                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">美西 PT</span>
                     <span className="text-xs font-mono text-indigo-100 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
                         {formatTime('America/Los_Angeles')}
                     </span>
@@ -212,7 +207,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     {isManualSyncing ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Cloud className="w-4.5 h-4.5" />}
                 </button>
             </div>
-            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-white font-black text-xs">AD</div>
+            <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-white font-black text-xs shadow-inner">AD</div>
         </div>
       </div>
     </header>

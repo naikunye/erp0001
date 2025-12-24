@@ -29,7 +29,7 @@ const Analytics: React.FC = () => {
   const [isAiThinking, setIsAiThinking] = useState(false);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
 
-  // 对齐模式：是否显示扣除广告费后的真实净利
+  // 对齐模式控制
   const [showFullNetProfit, setShowFullNetProfit] = useState(true);
 
   // 压力实验室参数
@@ -50,61 +50,59 @@ const Analytics: React.FC = () => {
         const priceUSD = p.price || 0;
         const eco = p.economics;
 
+        // --- 核心逻辑修复：重新计算物理运费，不信任旧的 totalFreightCost 字段 ---
+        const unitRealWeight = p.unitWeight || 0;
         const dims = p.dimensions || {l:0, w:0, h:0};
         const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
-        const autoUnitWeight = Math.max(p.unitWeight || 0, unitVolWeight);
+        // 自动取较大者作为计费重
+        const autoUnitWeight = Math.max(unitRealWeight, unitVolWeight);
         
-        let baselineUnitFreightCNY = 0;
-        if (p.logistics?.totalFreightCost && p.stock > 0) {
-            baselineUnitFreightCNY = p.logistics.totalFreightCost / p.stock;
-        } else {
-            baselineUnitFreightCNY = (autoUnitWeight * (p.logistics?.unitFreightCost || 0));
-        }
-        baselineUnitFreightCNY += (p.logistics?.consumablesFee || 0);
+        // 基础运费单价 (CNY)
+        const baseFreightRateCNY = p.logistics?.unitFreightCost || 0;
+        const customsAndPortPerSkuCNY = stock > 0 ? ((p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0)) / stock : 0;
+        
+        // 单品物流总成本 (CNY) = (单品计费重 * 运费单价) + 单品分摊报关费 + 单品贴标耗材费
+        const unitBaselineLogisticsCNY = (autoUnitWeight * baseFreightRateCNY) + customsAndPortPerSkuCNY + (p.logistics?.consumablesFee || 0);
 
-        const simulatedUnitLogisticsCNY = baselineUnitFreightCNY * (logisticsShock / 100);
+        // 应用压力模拟倍率
+        const simulatedUnitLogisticsUSD = (unitBaselineLogisticsCNY * (logisticsShock / 100)) / EXCHANGE_RATE;
+        const cogsUSD = costPriceCNY / EXCHANGE_RATE;
 
+        // 运营各项支出 (USD)
         const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
         const creatorFeeUSD = priceUSD * ((eco?.creatorFeePercent || 0) / 100);
         const refundLossUSD = priceUSD * ((eco?.refundRatePercent || 0) / 100) * refundShock;
         const fixedFeesUSD = (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0);
         const adCostUSD = (eco?.adCost || 0); 
         
-        const cogsUSD = costPriceCNY / EXCHANGE_RATE;
-        const logisticsUSD = simulatedUnitLogisticsCNY / EXCHANGE_RATE;
+        // 静态利润 (与备货清单对齐)
+        const staticProfitUSD = priceUSD - (cogsUSD + simulatedUnitLogisticsUSD + platformFeeUSD + creatorFeeUSD + fixedFeesUSD);
         
-        // 静态利润：售价 - 货值 - 运费 - 平台/达人分佣 - 尾程固定费 (用于对齐备货清单)
-        const staticProfitUSD = priceUSD - (cogsUSD + logisticsUSD + platformFeeUSD + creatorFeeUSD + (eco?.fixedCost || 0) + (eco?.lastLegShipping || 0));
-        
-        // 全额模拟净利：额外扣除广告和退货预提
+        // 模拟净利 (额外扣除广告和退货)
         const netProfitUSD = staticProfitUSD - (adCostUSD + refundLossUSD);
 
         const activeUnitProfitUSD = showFullNetProfit ? netProfitUSD : staticProfitUSD;
-        const totalOpUSD = platformFeeUSD + creatorFeeUSD + fixedFeesUSD + (showFullNetProfit ? (adCostUSD + refundLossUSD) : 0);
-
-        totalTargetProfitUSD += activeUnitProfitUSD * stock;
-        const unitInvestmentUSD = cogsUSD + logisticsUSD; 
-        totalInvestmentUSD += unitInvestmentUSD * stock;
+        
+        // 只有当库存 > 0 时才计入总盘统计
+        if (stock > 0) {
+            totalTargetProfitUSD += activeUnitProfitUSD * stock;
+            totalInvestmentUSD += (cogsUSD + simulatedUnitLogisticsUSD) * stock;
+        }
 
         return { 
             x: Math.max(0, Math.min(p.dailyBurnRate ? stock / p.dailyBurnRate : 0, 150)), 
             y: p.dailyBurnRate || 0, 
-            z: Math.max(stock * unitInvestmentUSD, 10), 
+            z: Math.max(stock * (cogsUSD + simulatedUnitLogisticsUSD), 10), 
             sku: p.sku, 
             name: p.name,
+            stock,
             profit: Math.round(activeUnitProfitUSD * stock),
             unitProfit: activeUnitProfitUSD,
             staticProfit: staticProfitUSD,
             netProfit: netProfitUSD,
-            unitCost: cogsUSD + logisticsUSD + totalOpUSD,
-            cogsUSD,
-            logisticsUSD,
-            opUSD: totalOpUSD,
             price: priceUSD,
-            adCost: adCostUSD,
-            refundLoss: refundLossUSD,
-            roi: unitInvestmentUSD > 0 ? (activeUnitProfitUSD / unitInvestmentUSD) * 100 : 0, 
-            fill: activeUnitProfitUSD < 0 ? COLORS.low : (activeUnitProfitUSD > (priceUSD * 0.2) ? COLORS.high : COLORS.medium) 
+            roi: (cogsUSD + simulatedUnitLogisticsUSD) > 0 ? (activeUnitProfitUSD / (cogsUSD + simulatedUnitLogisticsUSD)) * 100 : 0, 
+            fill: activeUnitProfitUSD < 0 ? COLORS.low : (activeUnitProfitUSD > (priceUSD * 0.2) ? COLORS.high : COLORS.neutral) 
         };
     });
 
@@ -124,10 +122,10 @@ const Analytics: React.FC = () => {
       try {
           const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
           const lossSkus = analysisData.matrixData.filter(d => d.unitProfit < 0).map(d => d.sku).join(', ');
-          const prompt = `分析 SKU 盈利风险。当前模拟：汇率${exchangeShock}, 运费倍率${logisticsShock}%。亏损节点：${lossSkus || '无'}。请指出如何优化 ROI。中文 HTML。`;
+          const prompt = `分析 SKU 盈利风险。当前大盘 ROI: ${analysisData.currentROI.toFixed(1)}%。亏损节点：${lossSkus || '无'}。请给出资产优化建议。使用 HTML。`;
           const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
           setAiInsight(response.text);
-      } catch (e) { setAiInsight("AI 连接失败。"); } finally { setIsAiThinking(false); }
+      } catch (e) { setAiInsight("AI 链路波动中..."); } finally { setIsAiThinking(false); }
   };
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -143,14 +141,18 @@ const Analytics: React.FC = () => {
                 </div>
                 <div className="space-y-3">
                     <div className="flex justify-between text-[10px] border-b border-white/5 pb-2">
-                        <span className="text-slate-400">备货清单参考 (静态):</span>
+                        <span className="text-slate-400">单品备货利润 (静态):</span>
                         <span className="text-white font-mono font-bold">${data.staticProfit.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-[10px] border-b border-white/5 pb-2">
-                        <span className="text-indigo-400 font-black italic">当前模拟利润:</span>
+                        <span className="text-indigo-400 font-black italic">模拟预估利润:</span>
                         <span className={`font-mono font-black ${data.unitProfit < 0 ? 'text-red-500' : 'text-emerald-400'}`}>
                             ${data.unitProfit.toFixed(2)}
                         </span>
+                    </div>
+                    <div className="flex justify-between text-[10px] pt-1">
+                        <span className="text-slate-500">当前在库:</span>
+                        <span className="text-slate-300 font-mono">{data.stock} pcs</span>
                     </div>
                 </div>
             </div>
@@ -169,7 +171,7 @@ const Analytics: React.FC = () => {
                 </h1>
                 <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.4em] flex items-center gap-2">
                     <ShieldAlert className="w-3 h-3 text-rose-500 animate-pulse"/> 
-                    {showFullNetProfit ? 'FULL COST PENETRATION ACTIVE (Deducting Ad/Refund)' : 'STATIC PROFIT ALIGNMENT MODE'}
+                    {showFullNetProfit ? 'FULL COST PENETRATION ACTIVE' : 'STATIC PROFIT ALIGNMENT MODE'}
                 </p>
             </div>
             <div className="flex gap-3">
@@ -249,7 +251,7 @@ const Analytics: React.FC = () => {
         {activeTab === 'matrix' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-1 min-h-0 animate-in slide-in-from-bottom-6">
                 <div className="ios-glass-card p-8 flex flex-col min-h-[500px] border-white/5">
-                    <h3 className="text-xs font-black text-slate-400 uppercase mb-10 flex items-center gap-3 italic tracking-widest"><Target className="w-6 h-6 text-cyan-400"/> 资产健康矩阵 ({showFullNetProfit ? '全额扣除后' : '备货对齐模式'})</h3>
+                    <h3 className="text-xs font-black text-slate-400 uppercase mb-10 flex items-center gap-3 italic tracking-widest"><Target className="w-6 h-6 text-cyan-400"/> 资产健康矩阵 ({showFullNetProfit ? '全额扣除后' : '备货模式'})</h3>
                     <div className="flex-1 bg-black/40 rounded-[2.5rem] overflow-hidden border border-white/5 relative group">
                         <ResponsiveContainer width="100%" height="100%">
                             <ScatterChart margin={{ top: 40, right: 40, bottom: 40, left: 0 }}>
@@ -269,11 +271,11 @@ const Analytics: React.FC = () => {
 
                 <div className="ios-glass-card p-8 flex flex-col overflow-hidden border-white/5">
                     <div className="flex justify-between items-center mb-10">
-                        <h3 className="text-xs font-black text-slate-400 uppercase flex items-center gap-3 italic tracking-widest"><BarChart4 className="w-6 h-6 text-purple-400"/> 模拟效益排行</h3>
+                        <h3 className="text-xs font-black text-slate-400 uppercase flex items-center gap-3 italic tracking-widest"><BarChart4 className="w-6 h-6 text-purple-400"/> 效益诊断排行 (Projected)</h3>
                     </div>
                     <div className="flex-1 overflow-y-auto space-y-4 pr-3 custom-scrollbar">
                         {[...analysisData.matrixData].sort((a,b) => b.roi - a.roi).map((sku, i) => (
-                            <div key={sku.sku} className={`bg-black/60 border border-white/5 rounded-3xl p-5 flex flex-col gap-4 group hover:border-indigo-500/40 transition-all ${sku.roi < 0 ? 'border-rose-500/30' : ''}`}>
+                            <div key={sku.sku} className={`bg-black/60 border border-white/5 rounded-3xl p-5 flex flex-col gap-4 group hover:border-indigo-500/40 transition-all ${sku.unitProfit < 0 ? 'border-rose-500/30 shadow-[0_0_15px_rgba(244,63,94,0.1)]' : ''}`}>
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="text-base font-black text-white font-mono uppercase italic truncate max-w-[150px]">{sku.sku}</div>
@@ -281,7 +283,7 @@ const Analytics: React.FC = () => {
                                     </div>
                                     <div className="text-right">
                                         <div className={`text-xl font-black font-mono tracking-tighter ${sku.roi < 0 ? 'text-rose-500' : 'text-emerald-400'}`}>{sku.roi.toFixed(1)}%</div>
-                                        <div className="text-[9px] text-slate-700 font-black uppercase tracking-widest">Projected ROI</div>
+                                        <div className="text-[9px] text-slate-700 font-black uppercase tracking-widest">SKU ROI</div>
                                     </div>
                                 </div>
                             </div>
