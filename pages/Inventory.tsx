@@ -124,6 +124,10 @@ const HistoryPanel: React.FC<{ sku: string; logs: AuditLog[]; onClose: () => voi
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
     const { state } = useTanxing();
     const [showHistory, setShowHistory] = useState(false);
+    
+    // 强制同步全局汇率
+    const exchangeRate = state.exchangeRate || 7.2;
+
     const [formData, setFormData] = useState<Product>({
         ...product,
         dimensions: product.dimensions || { l: 0, w: 0, h: 0 },
@@ -228,8 +232,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         setSkuTags(skuTags.filter(t => t !== tagToRemove));
     };
 
-    // --- 核心修复逻辑 (物流费用对齐) ---
-    const exchangeRate = 7.2;
     const manualBoxes = formData.boxCount || 0;
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * manualBoxes;
 
@@ -250,18 +252,14 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const baseFreightCost = activeTotalBillingWeight * rate;
     const batchFeesCNY = (formData.logistics?.customsFee || 0) + (formData.logistics?.portFee || 0);
     
-    // 基础运费总额 (仅含运费与杂费)
     const autoTotalFreightCNY = baseFreightCost + batchFeesCNY;
     const effectiveTotalFreightCNY = formData.logistics?.totalFreightCost ?? autoTotalFreightCNY;
 
-    // 单品耗材总额 (按库存件数计算)
     const unitConsumablesCNY = (formData.logistics?.consumablesFee || 0);
     const totalConsumablesCNY = unitConsumablesCNY * formData.stock;
     
-    // 全口径物流总额 (运费 + 耗材) -> 这就是产生 125,456 的根源
     const allInLogisticsTotalCNY = effectiveTotalFreightCNY + totalConsumablesCNY;
 
-    // 单品全口径物流分摊 (用于利润测算)
     const effectiveUnitLogisticsCNY = formData.stock > 0 
         ? allInLogisticsTotalCNY / formData.stock 
         : 0;
@@ -583,7 +581,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                </div>
                                
-                               {/* 核心修正：显示全口径物流总额预览，明确拆分运费与耗材 */}
                                <div className="bg-blue-900/10 border border-blue-500/20 rounded-xl p-4 flex flex-col gap-2">
                                    <div className="flex justify-between items-center">
                                        <span className="text-[10px] text-blue-300 font-black uppercase">全口径预估总投入 (含耗材)</span>
@@ -775,6 +772,9 @@ const Inventory: React.FC = () => {
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
 
+    // 强制同步全局汇率
+    const exchangeRate = state.exchangeRate || 7.2;
+
     useEffect(() => {
         if (state.navParams?.searchQuery) {
             setSearchTerm(state.navParams.searchQuery);
@@ -822,7 +822,6 @@ const Inventory: React.FC = () => {
                 ? ((pStats.revenue30d - pStats.revenuePrev30d) / pStats.revenuePrev30d) * 100 
                 : 0;
 
-            const exchangeRate = 7.2;
             const unitRealWeight = p.unitWeight || 0;
             const dims = p.dimensions || {l:0, w:0, h:0};
             const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
@@ -841,20 +840,14 @@ const Inventory: React.FC = () => {
             const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
             const autoTotalFreightCNY = (activeTotalBillingWeight * rate) + batchFeesCNY;
             
-            // 基础运费
             const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
-            
-            // 耗材杂项 (严格按每件计算)
             const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
             const totalConsumablesForBatch = unitConsumablesCNY * stock;
-
-            // 全口径物流成本汇总 (运费 + 报关/港口费 + 耗材)
             const totalAllInLogisticsCNY = effectiveTotalFreightCNY + totalConsumablesForBatch;
 
-            // 单品最终全口径分摊
             const effectiveUnitLogisticsCNY = p.stock > 0 
                 ? totalAllInLogisticsCNY / p.stock 
-                : (effectiveTotalFreightCNY / 1 + unitConsumablesCNY); // 兜底处理
+                : (effectiveTotalFreightCNY / 1 + unitConsumablesCNY); 
 
             const priceUSD = p.price || 0;
             const costPriceUSD = (p.costPrice || 0) / exchangeRate;
@@ -882,8 +875,8 @@ const Inventory: React.FC = () => {
                 daysRemaining,
                 safetyStock,
                 reorderPoint,
-                totalInvestment: stock * (p.costPrice || 0), 
-                freightCost: totalAllInLogisticsCNY, // 这里现在显示正确的 125,456
+                totalInvestment: stock * (p.costPrice || 0) + totalAllInLogisticsCNY, 
+                freightCost: totalAllInLogisticsCNY,
                 goodsCost: stock * (p.costPrice || 0),
                 revenue30d: pStats.revenue30d,
                 growth: growth,
@@ -895,7 +888,7 @@ const Inventory: React.FC = () => {
                 liveTrackingStatus: matchingShipment ? matchingShipment.status : null
             } as ReplenishmentItem;
         });
-    }, [state.products, state.orders, state.shipments, productStats]);
+    }, [state.products, state.orders, state.shipments, productStats, exchangeRate]);
 
     const handleSaveProduct = (updatedProduct: Product) => {
         const exists = (state.products || []).find(p => p.id === updatedProduct.id);
