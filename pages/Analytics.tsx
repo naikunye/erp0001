@@ -50,23 +50,39 @@ const Analytics: React.FC = () => {
         const priceUSD = p.price || 0;
         const eco = p.economics;
 
-        // --- 核心逻辑修复：重新计算物理运费，不信任旧的 totalFreightCost 字段 ---
+        // --- 核心逻辑：与 Inventory.tsx 完全对齐 ---
+        
+        // 1. 计算物流总投入 (CNY)
         const unitRealWeight = p.unitWeight || 0;
         const dims = p.dimensions || {l:0, w:0, h:0};
         const unitVolWeight = (dims.l * dims.w * dims.h) / 6000;
-        // 自动取较大者作为计费重
         const autoUnitWeight = Math.max(unitRealWeight, unitVolWeight);
         
-        // 基础运费单价 (CNY)
-        const baseFreightRateCNY = p.logistics?.unitFreightCost || 0;
-        const customsAndPortPerSkuCNY = stock > 0 ? ((p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0)) / stock : 0;
-        
-        // 单品物流总成本 (CNY) = (单品计费重 * 运费单价) + 单品分摊报关费 + 单品贴标耗材费
-        const unitBaselineLogisticsCNY = (autoUnitWeight * baseFreightRateCNY) + customsAndPortPerSkuCNY + (p.logistics?.consumablesFee || 0);
+        // 计费重逻辑
+        let activeTotalBillingWeight = 0;
+        if (p.logistics?.billingWeight && p.logistics.billingWeight > 0) {
+            activeTotalBillingWeight = p.logistics.billingWeight; 
+        } else if (p.logistics?.unitBillingWeight && p.logistics.unitBillingWeight > 0) {
+            activeTotalBillingWeight = p.logistics.unitBillingWeight * stock;
+        } else {
+            activeTotalBillingWeight = autoUnitWeight * stock;
+        }
 
-        // 应用压力模拟倍率
-        const simulatedUnitLogisticsUSD = (unitBaselineLogisticsCNY * (logisticsShock / 100)) / EXCHANGE_RATE;
-        const cogsUSD = costPriceCNY / EXCHANGE_RATE;
+        const rate = p.logistics?.unitFreightCost || 0;
+        const batchFeesCNY = (p.logistics?.customsFee || 0) + (p.logistics?.portFee || 0);
+        const autoTotalFreightCNY = (activeTotalBillingWeight * rate) + batchFeesCNY;
+        
+        // 优先使用总运费字段，否则使用自动推算
+        const effectiveTotalFreightCNY = p.logistics?.totalFreightCost ?? autoTotalFreightCNY;
+        const unitConsumablesCNY = (p.logistics?.consumablesFee || 0);
+        const totalConsumablesForBatch = unitConsumablesCNY * stock;
+        
+        // 全口径物流总成本 (CNY)
+        const totalAllInLogisticsCNY = (effectiveTotalFreightCNY + totalConsumablesForBatch) * (logisticsShock / 100);
+
+        // 单品物流成本 (USD)
+        const unitLogisticsUSD = stock > 0 ? (totalAllInLogisticsCNY / stock) / EXCHANGE_RATE : 0;
+        const unitCogsUSD = costPriceCNY / EXCHANGE_RATE;
 
         // 运营各项支出 (USD)
         const platformFeeUSD = priceUSD * ((eco?.platformFeePercent || 0) / 100);
@@ -76,23 +92,23 @@ const Analytics: React.FC = () => {
         const adCostUSD = (eco?.adCost || 0); 
         
         // 静态利润 (与备货清单对齐)
-        const staticProfitUSD = priceUSD - (cogsUSD + simulatedUnitLogisticsUSD + platformFeeUSD + creatorFeeUSD + fixedFeesUSD);
+        const staticProfitUSD = priceUSD - (unitCogsUSD + unitLogisticsUSD + platformFeeUSD + creatorFeeUSD + fixedFeesUSD);
         
         // 模拟净利 (额外扣除广告和退货)
         const netProfitUSD = staticProfitUSD - (adCostUSD + refundLossUSD);
 
         const activeUnitProfitUSD = showFullNetProfit ? netProfitUSD : staticProfitUSD;
         
-        // 只有当库存 > 0 时才计入总盘统计
+        // 只有当库存 > 0 时才计入总盘统计，避免被空库存 SKU 干扰
         if (stock > 0) {
             totalTargetProfitUSD += activeUnitProfitUSD * stock;
-            totalInvestmentUSD += (cogsUSD + simulatedUnitLogisticsUSD) * stock;
+            totalInvestmentUSD += (unitCogsUSD + unitLogisticsUSD) * stock;
         }
 
         return { 
             x: Math.max(0, Math.min(p.dailyBurnRate ? stock / p.dailyBurnRate : 0, 150)), 
             y: p.dailyBurnRate || 0, 
-            z: Math.max(stock * (cogsUSD + simulatedUnitLogisticsUSD), 10), 
+            z: Math.max(stock * (unitCogsUSD + unitLogisticsUSD), 10), 
             sku: p.sku, 
             name: p.name,
             stock,
@@ -101,7 +117,7 @@ const Analytics: React.FC = () => {
             staticProfit: staticProfitUSD,
             netProfit: netProfitUSD,
             price: priceUSD,
-            roi: (cogsUSD + simulatedUnitLogisticsUSD) > 0 ? (activeUnitProfitUSD / (cogsUSD + simulatedUnitLogisticsUSD)) * 100 : 0, 
+            roi: (unitCogsUSD + unitLogisticsUSD) > 0 ? (activeUnitProfitUSD / (unitCogsUSD + unitLogisticsUSD)) * 100 : 0, 
             fill: activeUnitProfitUSD < 0 ? COLORS.low : (activeUnitProfitUSD > (priceUSD * 0.2) ? COLORS.high : COLORS.neutral) 
         };
     });
@@ -279,11 +295,11 @@ const Analytics: React.FC = () => {
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-4">
                                         <div className="text-base font-black text-white font-mono uppercase italic truncate max-w-[150px]">{sku.sku}</div>
-                                        <div className="text-[9px] text-slate-600 font-bold uppercase mt-0.5">静态: <span className="text-slate-300">${sku.staticProfit.toFixed(1)}</span> | 模拟: <span className={sku.unitProfit < 0 ? 'text-red-500' : 'text-emerald-500'}>${sku.unitProfit.toFixed(1)}</span></div>
+                                        <div className="text-[9px] text-slate-600 font-bold uppercase mt-0.5">单品: <span className="text-slate-300">${sku.unitProfit.toFixed(2)}</span> | 利润率: <span className={sku.roi < 0 ? 'text-red-500' : 'text-emerald-500'}>{sku.roi.toFixed(1)}%</span></div>
                                     </div>
                                     <div className="text-right">
-                                        <div className={`text-xl font-black font-mono tracking-tighter ${sku.roi < 0 ? 'text-rose-500' : 'text-emerald-400'}`}>{sku.roi.toFixed(1)}%</div>
-                                        <div className="text-[9px] text-slate-700 font-black uppercase tracking-widest">SKU ROI</div>
+                                        <div className={`text-xl font-black font-mono tracking-tighter ${sku.profit < 0 ? 'text-rose-500' : 'text-emerald-400'}`}>${sku.profit.toLocaleString()}</div>
+                                        <div className="text-[9px] text-slate-700 font-black uppercase tracking-widest">库存预估总利</div>
                                     </div>
                                 </div>
                             </div>
