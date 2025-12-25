@@ -55,7 +55,8 @@ const Tracking: React.FC = () => {
 
   const getTrackingUrl = (carrier: string, trackingNo: string) => {
       const c = (carrier || '').toLowerCase();
-      if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
+      // 强制携带 loc=zh_CN 确保进入 UPS 中国站点
+      if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}&requester=WT/trackdetails`;
       if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
       if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
       if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
@@ -207,7 +208,7 @@ const Tracking: React.FC = () => {
                                    <Box className="w-4 h-4 text-indigo-400" />
                                </div>
                                <div className="truncate">
-                                   <div className="text-sm font-bold text-white leading-tight truncate">{shipment.productName || '未命名货品'}</div>
+                                   <div className="text-sm font-bold text-white leading-tight truncate">{selectedShipment?.id === shipment.id ? shipment.productName : (shipment.productName || '未命名货品')}</div>
                                    <div className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
                                        <Scale className="w-2.5 h-2.5" /> 净重: 12.5kg | 5包
                                    </div>

@@ -19,7 +19,8 @@ import {
 const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     if (!trackingNo) return '#';
     const c = carrier.toLowerCase();
-    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}`;
+    // 强制指定 zh_CN 语言环境，确保跳转至 UPS 中国查询界面
+    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}&requester=WT/trackdetails`;
     if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
     if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
     if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;

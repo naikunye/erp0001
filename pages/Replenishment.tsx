@@ -13,6 +13,17 @@ import {
   Plus, Trash2, Copy
 } from 'lucide-react';
 
+const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
+    if (!trackingNo) return '#';
+    const c = carrier.toLowerCase();
+    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}&requester=WT/trackdetails`;
+    if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
+    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
+    if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+    if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
+    return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+};
+
 const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
     let color = 'bg-slate-800 text-slate-400 border-slate-700';
     let icon = <Info className="w-3 h-3" />;
@@ -528,7 +539,12 @@ const Replenishment: React.FC = () => {
                                             {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5" /> : <Plane className="w-3.5 h-3.5" />}
                                             <span>{item.logistics?.method || 'Air'}</span>
                                         </div>
-                                        <a href="#" className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono">
+                                        <a 
+                                            href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)}
+                                            target="_blank"
+                                            rel="noreferrer" 
+                                            className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono"
+                                        >
                                             {item.logistics?.trackingNo || 'N/A'}
                                         </a>
                                         <div className="text-[10px] text-slate-500 font-mono">
