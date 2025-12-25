@@ -14,14 +14,21 @@ import {
 } from 'lucide-react';
 
 const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
-    if (!trackingNo) return '#';
-    const c = carrier.toLowerCase();
-    if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}&requester=WT/trackdetails`;
-    if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
-    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
-    if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+    const t = trackingNo.trim();
+    if (!t) return '#';
+    const c = carrier.toLowerCase().trim();
+    
+    // 自动识别 UPS 编码特征 (1Z...)
+    if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
+        return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+    }
+    
+    if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${t}`;
+    if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
+    if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
     if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
-    return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+    
+    return `https://www.google.com/search?q=${encodeURIComponent(carrier)}+tracking+${encodeURIComponent(t)}`;
 };
 
 const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {

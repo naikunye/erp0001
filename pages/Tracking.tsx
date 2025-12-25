@@ -56,11 +56,17 @@ const Tracking: React.FC = () => {
   const getTrackingUrl = (carrier: string, trackingNo: string) => {
       const t = (trackingNo || '').trim();
       const c = (carrier || '').toLowerCase().trim();
-      if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+      
+      // 增加 1Z 自动识别 UPS 逻辑
+      if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
+          return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+      }
+      
       if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${t}`;
       if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
       if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
       if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
+      
       return `https://www.google.com/search?q=${encodeURIComponent(carrier)}+tracking+${encodeURIComponent(t)}`;
   };
 
