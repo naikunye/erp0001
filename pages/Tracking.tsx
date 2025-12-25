@@ -54,14 +54,14 @@ const Tracking: React.FC = () => {
   );
 
   const getTrackingUrl = (carrier: string, trackingNo: string) => {
-      const c = (carrier || '').toLowerCase();
-      // 强制携带 loc=zh_CN 确保进入 UPS 中国站点
-      if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${trackingNo}&requester=WT/trackdetails`;
-      if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${trackingNo}`;
-      if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${trackingNo}`;
-      if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingNo}`;
+      const t = (trackingNo || '').trim();
+      const c = (carrier || '').toLowerCase().trim();
+      if (c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+      if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${t}`;
+      if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
+      if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
       if (c.includes('matson')) return `https://www.matson.com/tracking.html`;
-      return `https://www.google.com/search?q=${carrier}+tracking+${trackingNo}`;
+      return `https://www.google.com/search?q=${encodeURIComponent(carrier)}+tracking+${encodeURIComponent(t)}`;
   };
 
   const handleAnalyze = async () => {
