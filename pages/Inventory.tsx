@@ -21,8 +21,6 @@ const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     if (!t) return '#';
     const c = carrier.toLowerCase().trim();
     
-    // 核心修复：自动识别 UPS 编码特征 (1Z...) 或 carrier 包含 ups 关键字
-    // 这样即使您在承运商里填了 "Air" 或空着，只要单号对，就能跳 UPS 中国
     if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
         return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
     }
@@ -239,6 +237,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         setSkuTags(skuTags.filter(t => t !== tagToRemove));
     };
 
+    // --- 核心计算引擎 (修复版：确保总重量逻辑显性化) ---
     const manualBoxes = formData.boxCount || 0;
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * manualBoxes;
 
@@ -247,11 +246,16 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const autoUnitChargeableWeight = Math.max(unitRealWeight, unitVolWeight);
 
     let activeTotalBillingWeight = 0;
-    if (formData.logistics?.billingWeight && formData.logistics.billingWeight > 0) {
-        activeTotalBillingWeight = formData.logistics.billingWeight;
+    const hasManualTotalWeight = formData.logistics?.billingWeight && formData.logistics.billingWeight > 0;
+    
+    if (hasManualTotalWeight) {
+        // 如果有手动输入的批次总重量，优先使用
+        activeTotalBillingWeight = formData.logistics!.billingWeight!;
     } else if (formData.logistics?.unitBillingWeight && formData.logistics.unitBillingWeight > 0) {
+        // 如果有单品计费重，使用单品计费重 * 数量
         activeTotalBillingWeight = formData.logistics.unitBillingWeight * formData.stock;
     } else {
+        // 兜底：理论单重 * 数量
         activeTotalBillingWeight = autoUnitChargeableWeight * formData.stock;
     }
 
@@ -520,6 +524,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
+                       {/* 修复后的头程物流板块 */}
                        <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">4</div>
@@ -550,9 +555,11 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                        </div>
                                    </div>
                                </div>
-                               <div className="grid grid-cols-2 gap-4">
+                               
+                               {/* 核心修复：增加显性的总重量输入 */}
+                               <div className="grid grid-cols-3 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">单价 (¥/KG)</label>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">运费单价 (¥/KG)</label>
                                        <div className="flex items-center gap-1">
                                            <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
                                                <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">¥</span>
@@ -565,24 +572,26 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                            />
                                        </div>
                                    </div>
-                                   <div>
+                                   
+                                   <div className="col-span-2">
                                        <div className="flex justify-between mb-1">
-                                            <label className="text-[10px] text-slate-500 font-bold">单品计费重 (KG)</label>
-                                            <span className="text-[9px] text-slate-500">Auto: {autoUnitChargeableWeight.toFixed(2)}</span>
+                                            <label className="text-[10px] text-indigo-400 font-black uppercase">批次总计费重 (KG)</label>
+                                            <span className="text-[9px] text-slate-600 font-mono">Auto Calc: {activeTotalBillingWeight.toFixed(1)}kg</span>
                                        </div>
                                        <div className="flex items-center gap-1">
-                                           <div className="flex bg-black/40 border border-white/10 rounded-l overflow-hidden">
-                                               <span className="px-2 py-2 text-[10px] text-slate-400 font-bold bg-white/5 border-r border-white/10">⚖️</span>
+                                           <div className="flex bg-indigo-500/10 border border-indigo-500/20 rounded-l overflow-hidden">
+                                               <span className="px-3 py-2 text-[10px] text-indigo-400 font-black bg-white/5 border-r border-indigo-500/20">TOTAL</span>
                                            </div>
                                            <input 
                                                 type="number" 
-                                                value={formData.logistics?.unitBillingWeight ?? ''} 
+                                                step="0.1"
+                                                value={formData.logistics?.billingWeight || ''} 
                                                 onChange={e => {
                                                     const val = parseFloat(e.target.value);
-                                                    handleNestedChange('logistics', 'unitBillingWeight', isNaN(val) ? undefined : val);
+                                                    handleNestedChange('logistics', 'billingWeight', isNaN(val) ? undefined : val);
                                                 }}
-                                                placeholder={autoUnitChargeableWeight.toFixed(2)}
-                                                className="w-full bg-black/40 border border-white/10 rounded-r px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold placeholder-slate-600" 
+                                                placeholder={activeTotalBillingWeight.toFixed(1)}
+                                                className="w-full bg-black/60 border border-indigo-500/30 rounded-r px-4 py-2 text-sm text-white font-mono focus:border-indigo-500 outline-none font-bold placeholder-slate-700 shadow-[0_0_15px_rgba(99,102,241,0.1)]" 
                                            />
                                        </div>
                                    </div>
@@ -599,7 +608,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    <div className="grid grid-cols-2 gap-4 mt-2 pt-2 border-t border-blue-500/20">
                                        <div>
                                            <div className="text-[9px] text-blue-400 uppercase font-bold">基础运费 (Freight)</div>
-                                           <div className="text-sm font-bold text-white font-mono">¥ {effectiveTotalFreightCNY.toLocaleString()}</div>
+                                           <div className="text-sm font-bold text-white font-mono">
+                                               ¥ {effectiveTotalFreightCNY.toLocaleString()} 
+                                               <span className="text-[10px] text-slate-500 font-normal ml-1">({activeTotalBillingWeight.toFixed(1)}kg * ¥{rate})</span>
+                                           </div>
                                        </div>
                                        <div className="text-right">
                                            <div className="text-[9px] text-blue-400 uppercase font-bold">耗材总计 (Consumables)</div>
@@ -608,7 +620,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                    
                                    <div className="flex justify-between items-end text-[9px] text-blue-300/40 mt-1 italic">
-                                       <span>算法: {activeTotalBillingWeight.toFixed(1)}kg*¥{rate} + (¥{unitConsumablesCNY} * {formData.stock}pcs)</span>
+                                       <span>逻辑: 基于 {(hasManualTotalWeight ? '手动填写的总重' : '系统推算的计费重')} 参与最终分摊</span>
                                        <span className="font-bold text-blue-300/60">单品全分摊: ¥{effectiveUnitLogisticsCNY.toFixed(2)}</span>
                                    </div>
                                </div>
@@ -623,9 +635,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                             className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
                                             placeholder="30"
                                        />
-                                       {unitConsumablesCNY > 50 && (
-                                            <p className="text-[8px] text-rose-400 mt-1 flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5"/> 警告: 耗材费远超平均值，请确认为单价而非总价</p>
-                                       )}
                                    </div>
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">报关费 (¥/Total Batch)</label>
@@ -640,18 +649,17 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                </div>
                                <div className="grid grid-cols-2 gap-4">
                                    <div>
-                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">港口/操作费 (¥/Total Batch)</label>
-                                       <input 
-                                            type="number" 
-                                            value={formData.logistics?.portFee} 
-                                            onChange={e => handleNestedChange('logistics', 'portFee', parseFloat(e.target.value))}
-                                            className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white font-mono focus:border-blue-500 outline-none font-bold" 
-                                            placeholder="0"
-                                       />
-                                   </div>
-                                   <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">目的仓库</label>
                                        <input type="text" value={formData.logistics?.targetWarehouse} onChange={e => handleNestedChange('logistics', 'targetWarehouse', e.target.value)} className="w-full bg-black/40 border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-blue-500 outline-none" placeholder="美西-乐达" />
+                                   </div>
+                                   <div>
+                                       <label className="text-[10px] text-slate-500 block mb-1 font-bold">单品计费重 (灰字提示)</label>
+                                       <input 
+                                            type="number" 
+                                            readOnly
+                                            placeholder={autoUnitChargeableWeight.toFixed(2)}
+                                            className="w-full bg-black/20 border border-white/5 rounded px-3 py-2 text-sm text-slate-600 font-mono outline-none" 
+                                       />
                                    </div>
                                </div>
                            </div>

@@ -5,7 +5,7 @@ import {
     RefreshCw, Palette, Moon, 
     Zap, ShieldCheck, DatabaseZap, Terminal, Globe, HardDrive,
     Sun, Waves, Wind, Link2Off, Lock, DbIcon, Info, ShieldAlert,
-    Trash2, RotateCcw
+    Trash2, RotateCcw, Download, Upload, FileJson, AlertTriangle
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -46,12 +46,8 @@ const Settings: React.FC = () => {
 
       setIsSaving(true);
       try {
-          // 保存至配置
           dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: cleanUrl, anonKey: cleanKey } });
-          
-          // 手动模式启动（包含查表验证）
           await bootSupa(cleanUrl, cleanKey, true);
-          
           const found = await pullFromCloud(true);
           if (found) {
               showToast('同步成功：已从云端恢复数据', 'success');
@@ -72,6 +68,50 @@ const Settings: React.FC = () => {
       }
   };
 
+  const handleExportData = () => {
+      const exportData = {
+          products: state.products,
+          transactions: state.transactions,
+          customers: state.customers,
+          orders: state.orders,
+          shipments: state.shipments,
+          influencers: state.influencers,
+          suppliers: state.suppliers,
+          tasks: state.tasks,
+          inboundShipments: state.inboundShipments,
+          automationRules: state.automationRules
+      };
+      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Tanxing_OS_Backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('数据镜像已成功导出至本地', 'success');
+  };
+
+  const handleImportData = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+          try {
+              const data = JSON.parse(event.target?.result as string);
+              // 基础校验
+              if (!data.products || !Array.isArray(data.products)) {
+                  throw new Error("无效的探行数据格式");
+              }
+              dispatch({ type: 'HYDRATE_STATE', payload: data });
+              showToast('本地镜像解析成功，系统节点已重组', 'success');
+          } catch (err: any) {
+              showToast(`导入失败: ${err.message}`, 'error');
+          }
+      };
+      reader.readAsText(file);
+      e.target.value = ''; // 重置 input
+  };
+
   const formatSize = (bytes: number) => {
       if (bytes === 0) return '0 KB';
       const k = 1024;
@@ -85,7 +125,7 @@ const Settings: React.FC = () => {
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-black text-white flex items-center gap-3 italic tracking-tighter">
-              <SettingsIcon className="w-8 h-8 text-indigo-500" /> 系统偏好与 Supabase 协议
+              <SettingsIcon className="w-8 h-8 text-indigo-500" /> 系统偏好与数据协议
           </h2>
           <p className="text-[10px] text-slate-500 mt-2 font-mono tracking-[0.4em] uppercase">Enterprise Data Control Hub</p>
         </div>
@@ -227,6 +267,55 @@ const Settings: React.FC = () => {
                           </ul>
                       </div>
                   </div>
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'data' && (
+          <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="ios-glass-card p-8 border-l-4 border-l-blue-500 bg-blue-500/5 group">
+                      <div className="flex items-center gap-4 mb-8">
+                          <div className="p-4 bg-blue-600 rounded-2xl text-white shadow-lg group-hover:scale-110 transition-transform"><Download className="w-7 h-7"/></div>
+                          <div>
+                              <h4 className="text-lg font-black text-white uppercase italic tracking-tighter">导出全域镜像 (Export)</h4>
+                              <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-widest">PACKING BUSINESS LOGIC TO JSON</p>
+                          </div>
+                      </div>
+                      <p className="text-sm text-slate-400 leading-relaxed mb-8">将当前本地存储中的所有产品、订单、财务和物流协议导出为一份独立的加密 JSON 文件。该文件可用于跨设备离线恢复或长期归档。</p>
+                      <button 
+                        onClick={handleExportData}
+                        className="w-full py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3"
+                      >
+                          <FileJson className="w-5 h-5"/> 执行全量备份导出
+                      </button>
+                  </div>
+
+                  <div className="ios-glass-card p-8 border-l-4 border-l-purple-500 bg-purple-500/5 group">
+                      <div className="flex items-center gap-4 mb-8">
+                          <div className="p-4 bg-purple-600 rounded-2xl text-white shadow-lg group-hover:scale-110 transition-transform"><Upload className="w-7 h-7"/></div>
+                          <div>
+                              <h4 className="text-lg font-black text-white uppercase italic tracking-tighter">重构/恢复镜像 (Import)</h4>
+                              <p className="text-[10px] text-slate-500 mt-1 uppercase font-bold tracking-widest">RECONSTRUCTING SYSTEM STATE</p>
+                          </div>
+                      </div>
+                      <p className="text-sm text-slate-400 leading-relaxed mb-8">上传之前导出的 JSON 备份文件。系统将清除当前所有本地内存数据，并根据上传的文件重新初始化所有业务节点。该操作不可撤销。</p>
+                      <label className="w-full py-5 bg-purple-600 hover:bg-purple-500 text-white rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-xl transition-all active:scale-95 flex items-center justify-center gap-3 cursor-pointer">
+                          <RefreshCw className="w-5 h-5"/> 解析本地 JSON 镜像
+                          <input type="file" accept=".json" onChange={handleImportData} className="hidden" />
+                      </label>
+                  </div>
+              </div>
+
+              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 bg-amber-500/5 border border-dashed border-amber-500/20">
+                  <div className="flex items-center gap-4 mb-4">
+                      <AlertTriangle className="w-6 h-6 text-amber-500" />
+                      <h4 className="text-amber-200 font-bold uppercase tracking-widest">数据主权声明</h4>
+                  </div>
+                  <p className="text-xs text-amber-500/70 leading-relaxed font-medium">
+                      探行 ERP 采用 **本地优先 (Local-First)** 架构。您的业务数据默认仅存储在当前浏览器的 IndexedDB 安全沙箱中。
+                      导出功能允许您将数据主权掌握在自己手中。请妥善保管导出的 JSON 文件，任何拥有该文件的人都能读取您的完整经营机密。
+                  </p>
               </div>
           </div>
       )}
