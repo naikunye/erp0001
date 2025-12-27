@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
-import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
     InboundShipment, Order, AuditLog, AutomationRule, AutomationLog, Supplier,
@@ -213,9 +213,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const isSyncingRef = useRef(false);
     const supaClientRef = useRef<SupabaseClient | null>(null);
-    const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
-    const reconnectTimerRef = useRef<any>(null);
-    const retryCountRef = useRef(0);
 
     const bootSupa = async (url: string, key: string, isManual: boolean = false) => { 
         if (!url || !key) return; 
@@ -225,79 +222,46 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
 
         try { 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: retryCountRef.current === 0 ? 'connecting' : 'reconnecting' });
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
 
             const client = createClient(cleanUrl, key, {
                 auth: { persistSession: false },
-                realtime: { params: { events_per_second: 10 }, timeout: 20000 }
+                // 彻底禁用 Realtime 握手，避免并发额度超限导致的握手挂起
+                realtime: { params: { events_per_second: 0 } },
+                global: { headers: { 'x-client-info': 'tanxing-erp-rest-only' } }
             });
             
-            // 核心修复 1：立即挂载实例，不再等待 Ping 成功
             supaClientRef.current = client;
+            // 只要实例创建成功，即视为 connected 状态，允许手动推拉数据
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
 
-            // 核心修复 2：探测 REST API 连通性
-            // 如果此步骤失败且报错包含 "fetch"，通常是网络（VPN/CORS）问题
-            try {
-                const { error: pingError } = await client.from('backups').select('unique_id').limit(1);
-                if (pingError) {
-                    console.warn("[CloudLink] REST Ping Restricted:", pingError);
-                    dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'restricted' });
-                    if (isManual) showToast(`额度超限或表不存在：请检查 Supabase 后台`, 'warning');
-                } else {
-                    retryCountRef.current = 0;
-                    dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-                    if (isManual) showToast('量子链路已锁定（REST 模式）', 'success');
+            // 静默测试 REST 通信，不阻塞 UI
+            client.from('backups').select('unique_id').limit(1).then(({ error }) => {
+                if (error) {
+                    console.warn("[CloudLink] REST Probe Alert:", error);
+                    // 只有在手动接入时才报详细错误
+                    if (isManual) {
+                        if (error.message.includes('fetch')) {
+                            showToast('接入受限：请检查 VPN 是否开启了“全局模式”', 'warning');
+                        } else {
+                            showToast(`接入受限：${error.message}`, 'warning');
+                        }
+                    }
+                } else if (isManual) {
+                    showToast('量子链路已锁定（REST 模式）', 'success');
                 }
-            } catch (fetchErr: any) {
-                // 如果直接 fetch 报错，说明网络物理不通（GFW/VPN/DNS）
-                console.error("[CloudLink] Physical Fetch Error:", fetchErr);
-                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-                if (isManual) showToast(`网络拦截：请尝试开启全局 VPN 或检查 URL`, 'error');
-                throw fetchErr;
-            }
-
-            // 在后台尝试初始化长连接（额度超限会在这里产生报错，但不应影响主逻辑）
-            if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
-            
-            realtimeChannelRef.current = client
-                .channel('global_sync')
-                .on('postgres_changes', { 
-                    event: 'UPDATE', 
-                    schema: 'public', 
-                    table: 'backups', 
-                    filter: 'unique_id=eq.GLOBAL_ERP_NODE' 
-                }, (payload) => {
-                    const remoteTime = payload.new.updated_at;
-                    if (!isSyncingRef.current && remoteTime !== state.supaConfig.remoteUpdatedAt) {
-                        pullFromCloud(true);
-                    }
-                })
-                .subscribe((status) => {
-                    // 如果订阅受限，仅作记录，不中断 REST 通信
-                    if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-                        console.warn("[CloudLink] Realtime (WS) is unavailable, using manual-rest mode.");
-                    }
-                });
+            });
 
             dispatch({ type: 'UNLOCK_SYNC' }); 
         } catch (e: any) { 
             console.error("[SupaBoot] Fatal Error:", e);
-            scheduleReconnect(cleanUrl, key);
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
+            if (isManual) showToast(`配置错误: ${e.message}`, 'error');
         } 
     };
 
-    const scheduleReconnect = (url: string, key: string) => {
-        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
-        retryCountRef.current++;
-        reconnectTimerRef.current = setTimeout(() => bootSupa(url, key, false), delay);
-    };
-
     const disconnectSupa = () => { 
-        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-        if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
         supaClientRef.current = null;
-        retryCountRef.current = 0;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
         dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } }); 
         localStorage.removeItem(CONN_STATUS_KEY);
@@ -305,15 +269,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<{success: boolean, error?: string}> => { 
-        // 核心修复 3：放宽同步限制。只要有实例，且不是断开状态，即允许执行。
-        const canAttempt = supaClientRef.current && (
-            state.connectionStatus === 'connected' || 
-            state.connectionStatus === 'restricted' || 
-            state.connectionStatus === 'error'
-        );
-
-        if (!canAttempt) {
-            if (isForce) return { success: false, error: '链路尚未建立，请检查设置中的 URL' };
+        // 核心改写：只要有 client 就执行，不被 connectionStatus 阻塞
+        if (!supaClientRef.current) {
+            if (isForce) return { success: false, error: '请先在设置中配置 Supabase URL' };
             return { success: true };
         }
         
@@ -334,7 +292,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const jsonPayload = JSON.stringify(payloadData); 
             const size = new Blob([jsonPayload]).size; 
             
-            const { data, error } = await supaClientRef.current!
+            const { data, error } = await supaClientRef.current
                 .from('backups')
                 .upsert({ 
                     unique_id: 'GLOBAL_ERP_NODE', 
@@ -357,8 +315,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[SupaSync] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
-            let msg = e.message || '未知错误';
-            if (msg.includes('Failed to fetch')) msg = '网络请求被拦截 (建议开启全局代理)';
+            let msg = e.message || '未知连接错误';
+            if (msg.includes('Failed to fetch')) msg = '网络被拦截，请尝试开启 VPN “全局模式”';
             return { success: false, error: msg }; 
         } finally { 
             isSyncingRef.current = false; 
@@ -390,20 +348,21 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     ...state.supaConfig, 
                     payloadSize: size, 
                     remoteUpdatedAt: data.updated_at,
-                    lastSync: `协同更新: ${new Date(data.updated_at).toLocaleTimeString()}` 
+                    lastSync: `手动拉取: ${new Date(data.updated_at).toLocaleTimeString()}` 
                 } 
             } }); 
-            if (!isSilent) showToast('量子对齐：已同步最新协同镜像', 'success'); 
+            if (!isSilent) showToast('量子对齐：已从云端恢复最新镜像', 'success'); 
             return true; 
         } catch (e: any) { 
             console.error("[SupaPull] Error:", e);
+            if (!isSilent) showToast('拉取失败：请确认 VPN 是否已开全局模式', 'error');
             return false; 
         } 
     };
 
     useEffect(() => { 
         if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !supaClientRef.current) return; 
-        const timer = setTimeout(() => syncToCloud(), 1500); 
+        const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
     }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
 
@@ -432,9 +391,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             dispatch({ type: 'INITIALIZED_SUCCESS' }); 
         }; 
         startup(); 
-        return () => {
-            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
-        };
     }, []);
 
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
