@@ -13,7 +13,7 @@ import {
   CheckCircle2, Clock, Edit2, AlertTriangle, ExternalLink,
   Plus, Trash2, Upload, Link as LinkIcon, ChevronLeft, ChevronRight, Wallet,
   PieChart, FileDown, Copy, CopyPlus, History, History as HistoryIcon,
-  ArrowRight, Coins
+  ArrowRight, Coins, RefreshCw
 } from 'lucide-react';
 
 const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
@@ -286,6 +286,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const adSpendUSD = formData.economics?.adCost || 0;
     const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
     
+    // Fix: changed lastLeg to lastLegUSD and adSpend to adSpendUSD to match defined variables
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
@@ -786,6 +787,7 @@ const Inventory: React.FC = () => {
     const [searchTerm, setSearchTerm] = useState('');
     const [editingItem, setEditingItem] = useState<ReplenishmentItem | null>(null);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [syncingId, setSyncingId] = useState<string | null>(null);
 
     const exchangeRate = state.exchangeRate || 7.2;
 
@@ -913,6 +915,56 @@ const Inventory: React.FC = () => {
         }
         setEditingItem(null);
         showToast('商品策略已更新', 'success');
+    };
+
+    // --- 一键同步逻辑 ---
+    const handleSyncToTrackingMatrix = async (item: ReplenishmentItem) => {
+        const trackingNo = item.logistics?.trackingNo?.trim();
+        if (!trackingNo) {
+            showToast('未配置追踪号，无法同步', 'warning');
+            return;
+        }
+
+        setSyncingId(item.id);
+        await new Promise(resolve => setTimeout(resolve, 800)); // 模拟量子链路传输
+
+        const shipments = state.shipments || [];
+        const existing = shipments.find(s => s.trackingNo === trackingNo);
+
+        if (existing) {
+            const updated: Shipment = {
+                ...existing,
+                carrier: item.logistics?.carrier || existing.carrier,
+                productName: item.name,
+                destination: item.logistics?.targetWarehouse || existing.destination,
+                lastUpdate: `数据纠缠同步于: ${new Date().toLocaleTimeString()}`
+            };
+            dispatch({ type: 'UPDATE_SHIPMENT', payload: updated });
+            showToast(`已更新追踪矩阵中的单号: ${trackingNo}`, 'success');
+        } else {
+            const newNode: Shipment = {
+                id: `SH-AUTO-${Date.now()}`,
+                trackingNo: trackingNo,
+                carrier: item.logistics?.carrier || 'Manual Node',
+                status: '运输中',
+                productName: item.name,
+                destination: item.logistics?.targetWarehouse || '未指定',
+                shipDate: new Date().toISOString().split('T')[0],
+                lastUpdate: '从智能备货清单一键同步创建',
+                events: [
+                    { 
+                        date: new Date().toISOString().split('T')[0], 
+                        time: new Date().toLocaleTimeString(), 
+                        location: 'Sync Node', 
+                        description: '货件信息已从备货清单同步，开启实时监听。', 
+                        status: 'Normal' 
+                    }
+                ]
+            };
+            dispatch({ type: 'ADD_SHIPMENT', payload: newNode });
+            showToast(`已注册新物流节点: ${trackingNo}`, 'success');
+        }
+        setSyncingId(null);
     };
 
     const handleAddNew = () => {
@@ -1151,14 +1203,26 @@ const Inventory: React.FC = () => {
                                             </div>
                                         )}
 
-                                        <a 
-                                            href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[120px] font-mono"
-                                        >
-                                            {item.logistics?.trackingNo || 'N/A'}
-                                        </a>
+                                        <div className="flex items-center gap-2">
+                                            <a 
+                                                href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[100px] font-mono"
+                                            >
+                                                {item.logistics?.trackingNo || 'N/A'}
+                                            </a>
+                                            {item.logistics?.trackingNo && (
+                                                <button 
+                                                    onClick={() => handleSyncToTrackingMatrix(item)}
+                                                    disabled={syncingId === item.id}
+                                                    className={`p-1 rounded border transition-all ${syncingId === item.id ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 animate-spin' : 'bg-white/5 border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30'}`}
+                                                    title="同步至物流追踪矩阵"
+                                                >
+                                                    {syncingId === item.id ? <RefreshCw className="w-2.5 h-2.5" /> : <Zap className="w-2.5 h-2.5 fill-current" />}
+                                                </button>
+                                            )}
+                                        </div>
                                         <div className="text-[10px] text-slate-500 font-mono">
                                             计费: {item.totalWeight?.toFixed(1)}kg / {item.boxes}box
                                         </div>
