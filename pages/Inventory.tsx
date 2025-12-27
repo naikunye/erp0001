@@ -39,6 +39,7 @@ const getLiveStatusStyle = (status: string) => {
         case '运输中': return 'text-blue-400 bg-blue-500/10 border-blue-500/30 animate-pulse';
         case '异常': 
         case '延迟': return 'text-red-400 bg-red-500/10 border-red-500/30';
+        case '待同步': return 'text-slate-500 bg-slate-800/50 border-slate-700 dashed';
         default: return 'text-slate-400 bg-slate-800 border-slate-700';
     }
 };
@@ -237,7 +238,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
         setSkuTags(skuTags.filter(t => t !== tagToRemove));
     };
 
-    // --- 核心计算引擎 (修复版：确保总重量逻辑显性化) ---
     const manualBoxes = formData.boxCount || 0;
     const totalVolume = ((formData.dimensions?.l || 0) * (formData.dimensions?.w || 0) * (formData.dimensions?.h || 0) / 1000000) * manualBoxes;
 
@@ -249,13 +249,10 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const hasManualTotalWeight = formData.logistics?.billingWeight && formData.logistics.billingWeight > 0;
     
     if (hasManualTotalWeight) {
-        // 如果有手动输入的批次总重量，优先使用
         activeTotalBillingWeight = formData.logistics!.billingWeight!;
     } else if (formData.logistics?.unitBillingWeight && formData.logistics.unitBillingWeight > 0) {
-        // 如果有单品计费重，使用单品计费重 * 数量
         activeTotalBillingWeight = formData.logistics.unitBillingWeight * formData.stock;
     } else {
-        // 兜底：理论单重 * 数量
         activeTotalBillingWeight = autoUnitChargeableWeight * formData.stock;
     }
 
@@ -524,7 +521,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                            </div>
                        </div>
 
-                       {/* 修复后的头程物流板块 */}
                        <div className="col-span-7 bg-white/5 border border-white/5 rounded-xl p-5">
                            <div className="flex items-center gap-2 mb-4 text-slate-300 font-bold text-sm border-b border-white/5 pb-2">
                                <div className="w-6 h-6 rounded bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-mono">4</div>
@@ -556,7 +552,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                    </div>
                                </div>
                                
-                               {/* 核心修复：增加显性的总重量输入 */}
                                <div className="grid grid-cols-3 gap-4">
                                    <div>
                                        <label className="text-[10px] text-slate-500 block mb-1 font-bold">运费单价 (¥/KG)</label>
@@ -880,9 +875,11 @@ const Inventory: React.FC = () => {
             const unitProfit = priceUSD - totalUnitCost;
             const totalPotentialProfit = unitProfit * stock;
 
-            const matchingShipment = (state.shipments || []).find(s => 
-                p.logistics?.trackingNo && s.trackingNo === p.logistics.trackingNo
-            );
+            // 核心匹配算法优化：清洗空格，忽略大小写
+            const cleanTargetNo = p.logistics?.trackingNo?.trim().toUpperCase();
+            const matchingShipment = cleanTargetNo 
+                ? (state.shipments || []).find(s => s.trackingNo?.trim().toUpperCase() === cleanTargetNo)
+                : null;
 
             return {
                 ...p,
@@ -900,7 +897,7 @@ const Inventory: React.FC = () => {
                 margin: p.price > 0 ? (unitProfit / p.price) * 100 : 0,
                 totalWeight: activeTotalBillingWeight, 
                 boxes: p.boxCount || 0,
-                liveTrackingStatus: matchingShipment ? matchingShipment.status : null
+                liveTrackingStatus: matchingShipment ? matchingShipment.status : (cleanTargetNo ? '待同步' : null)
             } as ReplenishmentItem;
         });
     }, [state.products, state.orders, state.shipments, productStats, exchangeRate]);
@@ -916,7 +913,6 @@ const Inventory: React.FC = () => {
         showToast('商品策略已更新', 'success');
     };
 
-    // --- 一键同步逻辑 ---
     const handleSyncToTrackingMatrix = async (item: ReplenishmentItem) => {
         const trackingNo = item.logistics?.trackingNo?.trim();
         if (!trackingNo) {
@@ -925,10 +921,11 @@ const Inventory: React.FC = () => {
         }
 
         setSyncingId(item.id);
-        await new Promise(resolve => setTimeout(resolve, 800)); // 模拟量子链路传输
+        await new Promise(resolve => setTimeout(resolve, 800));
 
         const shipments = state.shipments || [];
-        const existing = shipments.find(s => s.trackingNo === trackingNo);
+        const cleanNo = trackingNo.toUpperCase();
+        const existing = shipments.find(s => s.trackingNo?.trim().toUpperCase() === cleanNo);
 
         if (existing) {
             const updated: Shipment = {
@@ -936,11 +933,11 @@ const Inventory: React.FC = () => {
                 carrier: item.logistics?.carrier || existing.carrier,
                 productName: item.name,
                 destination: item.logistics?.targetWarehouse || existing.destination,
-                notes: item.notes || existing.notes, // 同步备注信息
-                lastUpdate: `数据纠缠同步于: ${new Date().toLocaleTimeString()}`
+                notes: item.notes || existing.notes,
+                lastUpdate: `数据对齐同步于: ${new Date().toLocaleTimeString()}`
             };
             dispatch({ type: 'UPDATE_SHIPMENT', payload: updated });
-            showToast(`已更新追踪矩阵中的单号: ${trackingNo}`, 'success');
+            showToast(`已修正矩阵中的单号: ${trackingNo}`, 'success');
         } else {
             const newNode: Shipment = {
                 id: `SH-AUTO-${Date.now()}`,
@@ -950,20 +947,20 @@ const Inventory: React.FC = () => {
                 productName: item.name,
                 destination: item.logistics?.targetWarehouse || '未指定',
                 shipDate: new Date().toISOString().split('T')[0],
-                lastUpdate: '从智能备货清单一键同步创建',
-                notes: item.notes, // 同步备注信息
+                lastUpdate: '从备货清单一键注入',
+                notes: item.notes,
                 events: [
                     { 
                         date: new Date().toISOString().split('T')[0], 
                         time: new Date().toLocaleTimeString(), 
                         location: 'Sync Node', 
-                        description: '货件信息已从备货清单同步，开启实时监听。', 
+                        description: '货件协议已注入追踪矩阵，正在等待物理链路响应。', 
                         status: 'Normal' 
                     }
                 ]
             };
             dispatch({ type: 'ADD_SHIPMENT', payload: newNode });
-            showToast(`已注册新物流节点: ${trackingNo}`, 'success');
+            showToast(`已激活新追踪节点: ${trackingNo}`, 'success');
         }
         setSyncingId(null);
     };
@@ -1217,8 +1214,8 @@ const Inventory: React.FC = () => {
                                                 <button 
                                                     onClick={() => handleSyncToTrackingMatrix(item)}
                                                     disabled={syncingId === item.id}
-                                                    className={`p-1 rounded border transition-all ${syncingId === item.id ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 animate-spin' : 'bg-white/5 border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30'}`}
-                                                    title="同步至物流追踪矩阵"
+                                                    className={`p-1 rounded border transition-all ${syncingId === item.id ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 animate-spin' : 'bg-white/5 border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30'} ${item.liveTrackingStatus === '待同步' ? 'animate-pulse text-amber-500 border-amber-500/30' : ''}`}
+                                                    title={item.liveTrackingStatus === '待同步' ? "单号已填，点击闪电同步激活追踪" : "同步至物流追踪矩阵"}
                                                 >
                                                     {syncingId === item.id ? <RefreshCw className="w-2.5 h-2.5" /> : <Zap className="w-2.5 h-2.5 fill-current" />}
                                                 </button>
