@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
 import { createClient, SupabaseClient, RealtimeChannel } from '@supabase/supabase-js';
 import { 
@@ -54,7 +53,7 @@ const idb = {
     }
 };
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error' | 'restricted';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'restricted';
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 interface SupaConfig { url: string; anonKey: string; lastSync: string | null; payloadSize?: number; remoteUpdatedAt?: string; }
@@ -214,6 +213,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const isSyncingRef = useRef(false);
     const supaClientRef = useRef<SupabaseClient | null>(null);
     const realtimeChannelRef = useRef<RealtimeChannel | null>(null);
+    // Fix: Use 'any' instead of 'NodeJS.Timeout' to avoid namespace error in browser environment
+    const reconnectTimerRef = useRef<any>(null);
+    const retryCountRef = useRef(0);
 
     const bootSupa = async (url: string, key: string, isManual: boolean = false) => { 
         if (!url || !key) return; 
@@ -223,20 +225,28 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
 
         try { 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
-            // 使用自定义 fetch 增加超时处理
+            if (retryCountRef.current === 0) {
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
+            } else {
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'reconnecting' });
+            }
+
             const client = createClient(cleanUrl, key, {
                 auth: { persistSession: false },
-                realtime: { params: { events_per_second: 10 } }
+                realtime: { 
+                    params: { events_per_second: 10 },
+                    timeout: 20000 // 增加超时容忍
+                }
             });
             
-            // 立即通过一个简单的 RPC 或查询探测连通性
+            // 探测连通性
             const { error: pingError } = await client.from('backups').select('unique_id').limit(1);
             if (pingError) throw pingError;
 
             supaClientRef.current = client;
+            retryCountRef.current = 0; // 重置重试计数
             
-            // 🚀 核心：初始化长连接监听
+            // 初始化长连接监听
             if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
             
             realtimeChannelRef.current = client
@@ -248,39 +258,48 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     filter: 'unique_id=eq.GLOBAL_ERP_NODE' 
                 }, (payload) => {
                     const remoteTime = payload.new.updated_at;
-                    // 仅当远程更新时间晚于本地镜像，且当前未处于本设备发起的同步过程中
                     if (!isSyncingRef.current && remoteTime !== state.supaConfig.remoteUpdatedAt) {
                         pullFromCloud(true);
                     }
                 })
-                .subscribe((status) => {
+                .subscribe((status, err) => {
+                    console.log(`[CloudLink] Status: ${status}`);
                     if (status === 'SUBSCRIBED') {
                         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
                         if (isManual) showToast('量子实时协同链路已激活', 'success');
-                    } else if (status === 'CHANNEL_ERROR') {
-                        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'restricted' });
+                    } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+                        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'reconnecting' });
+                        scheduleReconnect(url, key);
                     }
                 });
 
             dispatch({ type: 'UNLOCK_SYNC' }); 
         } catch (e: any) { 
             console.error("[SupaBoot] Connection Failed:", e);
-            
-            let status: ConnectionStatus = 'error';
-            if (e.message?.includes('Failed to fetch')) status = 'restricted';
-            
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: status });
-            if (isManual) {
-                let msg = '连接失败：请检查网络或确认 SQL 已运行。';
-                if (e.message?.includes('backups')) msg = '数据库表缺失，请先在 SQL Editor 运行建表代码。';
-                showToast(msg, 'error');
+            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'restricted' });
+            scheduleReconnect(url, key);
+            if (isManual && retryCountRef.current === 1) {
+                showToast('初始连接受阻，系统已启动自动修复链路...', 'warning');
             }
         } 
     };
 
+    const scheduleReconnect = (url: string, key: string) => {
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        // 指数退避：1s, 2s, 4s, 8s, 16s... max 30s
+        const delay = Math.min(1000 * Math.pow(2, retryCountRef.current), 30000);
+        retryCountRef.current++;
+        
+        reconnectTimerRef.current = setTimeout(() => {
+            bootSupa(url, key, false);
+        }, delay);
+    };
+
     const disconnectSupa = () => { 
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
         if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
         supaClientRef.current = null;
+        retryCountRef.current = 0;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
         dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } }); 
         localStorage.removeItem(CONN_STATUS_KEY);
@@ -288,7 +307,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<{success: boolean, error?: string}> => { 
-        if (!supaClientRef.current) return { success: false, error: '未连接' };
+        if (!supaClientRef.current || state.connectionStatus !== 'connected') {
+            if (isForce) return { success: false, error: '链路未就绪，请等待自动重连' };
+            return { success: true };
+        }
+        
         if (!isForce && (!state.syncAllowed || state.syncLocked)) return { success: true };
         if (isSyncingRef.current) return { success: true }; 
         
@@ -329,6 +352,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[SupaSync] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
+            // 如果同步失败且是因为网络，触发重连逻辑
+            if (e.message?.includes('fetch')) {
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'reconnecting' });
+                scheduleReconnect(state.supaConfig.url, state.supaConfig.anonKey);
+            }
             return { success: false, error: e.message }; 
         } finally { 
             isSyncingRef.current = false; 
@@ -403,6 +431,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             dispatch({ type: 'INITIALIZED_SUCCESS' }); 
         }; 
         startup(); 
+        return () => {
+            if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        };
     }, []);
 
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });

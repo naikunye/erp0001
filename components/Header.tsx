@@ -76,17 +76,25 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   };
 
   const renderSaveStatus = () => {
+      if (state.connectionStatus === 'reconnecting') {
+          return (
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-600/20 border border-blue-500/50 rounded text-[9px] font-black text-blue-400 animate-pulse">
+                  <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 链路自动重连中...
+              </div>
+          );
+      }
+
       if (state.connectionStatus === 'restricted') {
           return (
               <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-600/20 border border-amber-500/50 rounded text-[9px] font-black text-amber-400">
-                  <SignalLow className="w-2.5 h-2.5" /> 连接受限 (检查 VPN/防火墙)
+                  <SignalLow className="w-2.5 h-2.5" /> 连接受限 (尝试自动修复)
               </div>
           );
       }
       
       if (state.connectionStatus === 'error') {
           return (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-red-600/20 border border-red-500/50 rounded text-[9px] font-black text-red-400 animate-pulse">
+              <div className="flex items-center gap-1.5 px-2 py-1 bg-red-600/20 border border-red-500/50 rounded text-[9px] font-black text-red-400">
                   <ShieldAlert className="w-2.5 h-2.5" /> 数据库协议异常
               </div>
           );
@@ -177,6 +185,11 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     </span>
                     <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">多机实时协同中</span>
                 </div>
+            ) : state.connectionStatus === 'reconnecting' ? (
+                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
+                    <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
+                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">链路自动修复</span>
+                </div>
             ) : (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
                     <WifiOff className="w-3 h-3 text-slate-500" />
@@ -189,7 +202,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
                 <button 
                     onClick={handlePull}
-                    disabled={isPulling}
+                    disabled={isPulling || state.connectionStatus === 'reconnecting'}
                     className={`p-2 rounded-lg transition-all hover:bg-white/10 ${isPulling ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`}
                     title="从云端手动同步"
                 >
@@ -197,7 +210,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                 </button>
                 <button 
                     onClick={handleCloudSync}
-                    disabled={isManualSyncing}
+                    disabled={isManualSyncing || state.connectionStatus === 'reconnecting'}
                     className={`p-2 rounded-lg transition-all hover:bg-white/10 ${
                         isManualSyncing ? 'text-indigo-400 animate-pulse' : 
                         state.saveStatus === 'dirty' ? 'text-amber-500 animate-bounce' : 
