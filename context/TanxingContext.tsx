@@ -1,6 +1,6 @@
 
 import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
-import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import PocketBase from 'pocketbase';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
     InboundShipment, Order, AuditLog, AutomationRule, AutomationLog, Supplier,
@@ -11,10 +11,10 @@ import {
     MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS, MOCK_SUPPLIERS, MOCK_INFLUENCERS
 } from '../constants';
 
-const DB_NAME = 'TANXING_IDB_V1';
+const DB_NAME = 'TANXING_IDB_V2';
 const STORE_NAME = 'STATE_STORE';
-const CONFIG_KEY = 'TANXING_SUPA_CONFIG_V1'; 
-const CONN_STATUS_KEY = 'TANXING_CONN_STATUS_SUPA';
+const CONFIG_KEY = 'TANXING_PB_CONFIG_V1'; 
+const CONN_STATUS_KEY = 'TANXING_CONN_STATUS_PB';
 export let SESSION_ID = Math.random().toString(36).substring(7);
 
 const idb = {
@@ -54,16 +54,16 @@ const idb = {
     }
 };
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error' | 'restricted';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
-interface SupaConfig { url: string; anonKey: string; lastSync: string | null; payloadSize?: number; remoteUpdatedAt?: string; }
+interface PBConfig { url: string; lastSync: string | null; payloadSize?: number; remoteUpdatedAt?: string; }
 
 interface AppState {
     theme: 'ios-glass' | 'cyber-neon' | 'midnight-dark';
     activePage: Page;
     navParams: { searchQuery?: string };
-    supaConfig: SupaConfig;
+    pbConfig: PBConfig;
     connectionStatus: ConnectionStatus;
     saveStatus: SaveStatus;
     exchangeRate: number;
@@ -99,7 +99,7 @@ type Action =
     | { type: 'ADD_PRODUCT'; payload: Product }
     | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
     | { type: 'LOAD_MOCK_DATA' }
-    | { type: 'SET_SUPA_CONFIG'; payload: Partial<SupaConfig> }
+    | { type: 'SET_PB_CONFIG'; payload: Partial<PBConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
     | { type: 'RESET_DATA' }
     | { type: 'INITIALIZED_SUCCESS' }
@@ -135,7 +135,7 @@ type Action =
 
 const emptyState: AppState = {
     theme: 'ios-glass', activePage: 'dashboard', navParams: {},
-    supaConfig: { url: '', anonKey: '', lastSync: null, payloadSize: 0, remoteUpdatedAt: '' },
+    pbConfig: { url: '', lastSync: null, payloadSize: 0, remoteUpdatedAt: '' },
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
     inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
@@ -168,7 +168,7 @@ const appReducer = (state: AppState, action: Action): AppState => {
         case 'HYDRATE_STATE': { const updated = { ...state, ...action.payload }; if (action.payload.syncLocked !== undefined) updated.syncLocked = action.payload.syncLocked; safeLocalSave(updated); return updated; }
         case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, influencers: MOCK_INFLUENCERS, automationRules: [{ id: 'R-001', name: '库存水位预警', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }], isInitialized: true, syncLocked: false, lastMutationTime: Date.now() };
         case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
-        case 'SET_SUPA_CONFIG': { const newConfig = { ...state.supaConfig, ...action.payload }; localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig)); return { ...state, supaConfig: newConfig }; }
+        case 'SET_PB_CONFIG': { const newConfig = { ...state.pbConfig, ...action.payload }; localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig)); return { ...state, pbConfig: newConfig }; }
         case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         case 'RESET_DATA': { idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false }; }
@@ -206,72 +206,58 @@ const appReducer = (state: AppState, action: Action): AppState => {
     }
 };
 
-interface TanxingContextType { state: AppState; dispatch: React.Dispatch<Action>; showToast: (message: string, type: Toast['type']) => void; syncToCloud: (isForce?: boolean) => Promise<{success: boolean, error?: string}>; pullFromCloud: (isSilent?: boolean) => Promise<boolean>; bootSupa: (url: string, key: string, isManual?: boolean) => Promise<void>; disconnectSupa: () => void; }
+interface TanxingContextType { 
+    state: AppState; 
+    dispatch: React.Dispatch<Action>; 
+    showToast: (message: string, type: Toast['type']) => void; 
+    syncToCloud: (isForce?: boolean) => Promise<{success: boolean, error?: string}>; 
+    pullFromCloud: (isSilent?: boolean) => Promise<boolean>; 
+    bootSupa: (url: string, key: string, isManual?: boolean) => Promise<void>; 
+    disconnectSupa: () => void; 
+}
+
 const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, emptyState);
     const isSyncingRef = useRef(false);
-    const supaClientRef = useRef<SupabaseClient | null>(null);
+    const pbRef = useRef<PocketBase | null>(null);
 
-    const bootSupa = async (url: string, key: string, isManual: boolean = false) => { 
-        if (!url || !key) return; 
+    const bootSupa = async (url: string, _unused: string, isManual: boolean = false) => { 
+        if (!url) return; 
         
         let cleanUrl = url.trim();
-        if (!cleanUrl.startsWith('http')) cleanUrl = `https://${cleanUrl}`;
-        if (cleanUrl.endsWith('/')) cleanUrl = cleanUrl.slice(0, -1);
+        if (!cleanUrl.startsWith('http')) cleanUrl = `http://${cleanUrl}`;
 
         try { 
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
-
-            const client = createClient(cleanUrl, key, {
-                auth: { persistSession: false },
-                // 彻底禁用 Realtime 握手，避免并发额度超限导致的握手挂起
-                realtime: { params: { events_per_second: 0 } },
-                global: { headers: { 'x-client-info': 'tanxing-erp-rest-only' } }
-            });
+            const pb = new PocketBase(cleanUrl);
+            pbRef.current = pb;
             
-            supaClientRef.current = client;
-            // 只要实例创建成功，即视为 connected 状态，允许手动推拉数据
+            // 简单的连通性测试
+            await pb.health.check();
+
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-
-            // 静默测试 REST 通信，不阻塞 UI
-            client.from('backups').select('unique_id').limit(1).then(({ error }) => {
-                if (error) {
-                    console.warn("[CloudLink] REST Probe Alert:", error);
-                    // 只有在手动接入时才报详细错误
-                    if (isManual) {
-                        if (error.message.includes('fetch')) {
-                            showToast('接入受限：请检查 VPN 是否开启了“全局模式”', 'warning');
-                        } else {
-                            showToast(`接入受限：${error.message}`, 'warning');
-                        }
-                    }
-                } else if (isManual) {
-                    showToast('量子链路已锁定（REST 模式）', 'success');
-                }
-            });
-
             dispatch({ type: 'UNLOCK_SYNC' }); 
+            if (isManual) showToast('私有云协议已握手成功', 'success');
         } catch (e: any) { 
-            console.error("[SupaBoot] Fatal Error:", e);
+            console.error("[PocketBoot] Fatal Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-            if (isManual) showToast(`配置错误: ${e.message}`, 'error');
+            if (isManual) showToast(`连接失败: ${e.message}`, 'error');
         } 
     };
 
     const disconnectSupa = () => { 
-        supaClientRef.current = null;
+        pbRef.current = null;
         dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
-        dispatch({ type: 'SET_SUPA_CONFIG', payload: { url: '', anonKey: '', lastSync: null } }); 
+        dispatch({ type: 'SET_PB_CONFIG', payload: { url: '', lastSync: null } }); 
         localStorage.removeItem(CONN_STATUS_KEY);
         localStorage.removeItem(CONFIG_KEY);
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<{success: boolean, error?: string}> => { 
-        // 核心改写：只要有 client 就执行，不被 connectionStatus 阻塞
-        if (!supaClientRef.current) {
-            if (isForce) return { success: false, error: '请先在设置中配置 Supabase URL' };
+        if (!pbRef.current) {
+            if (isForce) return { success: false, error: '未配置私有云网关' };
             return { success: true };
         }
         
@@ -292,51 +278,46 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const jsonPayload = JSON.stringify(payloadData); 
             const size = new Blob([jsonPayload]).size; 
             
-            const { data, error } = await supaClientRef.current
-                .from('backups')
-                .upsert({ 
-                    unique_id: 'GLOBAL_ERP_NODE', 
+            // PocketBase 逻辑：先查找，有则更新无则创建
+            let record;
+            try {
+                record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_ERP_NODE"');
+                await pbRef.current.collection('backups').update(record.id, {
                     payload: jsonPayload,
                     updated_at: new Date().toISOString()
-                })
-                .select('updated_at')
-                .single();
+                });
+            } catch (e) {
+                // 如果找不到记录，则创建
+                await pbRef.current.collection('backups').create({
+                    unique_id: 'GLOBAL_ERP_NODE',
+                    payload: jsonPayload
+                });
+            }
 
-            if (error) throw error;
-
-            dispatch({ type: 'SET_SUPA_CONFIG', payload: { 
+            dispatch({ type: 'SET_PB_CONFIG', payload: { 
                 lastSync: new Date().toLocaleTimeString(), 
-                payloadSize: size, 
-                remoteUpdatedAt: data.updated_at
+                payloadSize: size 
             } }); 
             dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
             setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 1200); 
             return { success: true }; 
         } catch (e: any) { 
-            console.error("[SupaSync] Error:", e);
+            console.error("[PocketSync] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
-            let msg = e.message || '未知连接错误';
-            if (msg.includes('Failed to fetch')) msg = '网络被拦截，请尝试开启 VPN “全局模式”';
-            return { success: false, error: msg }; 
+            return { success: false, error: e.message || '网关通信故障' }; 
         } finally { 
             isSyncingRef.current = false; 
         } 
     };
 
     const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => { 
-        if (!supaClientRef.current) return false; 
+        if (!pbRef.current) return false; 
         try { 
-            const { data, error } = await supaClientRef.current
-                .from('backups')
-                .select('*')
-                .eq('unique_id', 'GLOBAL_ERP_NODE')
-                .maybeSingle();
-                
-            if (error) throw error;
-            if (!data) return false;
+            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_ERP_NODE"');
+            if (!record || !record.payload) return false;
             
-            const payload = JSON.parse(data.payload); 
-            const size = new Blob([data.payload]).size; 
+            const payload = JSON.parse(record.payload); 
+            const size = new Blob([record.payload]).size; 
 
             dispatch({ type: 'HYDRATE_STATE', payload: { 
                 ...payload, 
@@ -344,24 +325,23 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 syncAllowed: false, 
                 saveStatus: 'idle', 
                 isInitialized: true, 
-                supaConfig: { 
-                    ...state.supaConfig, 
+                pbConfig: { 
+                    ...state.pbConfig, 
                     payloadSize: size, 
-                    remoteUpdatedAt: data.updated_at,
-                    lastSync: `手动拉取: ${new Date(data.updated_at).toLocaleTimeString()}` 
+                    lastSync: `已恢复: ${new Date(record.updated).toLocaleTimeString()}` 
                 } 
             } }); 
-            if (!isSilent) showToast('量子对齐：已从云端恢复最新镜像', 'success'); 
+            if (!isSilent) showToast('量子对齐完成：已同步最新云端镜像', 'success'); 
             return true; 
         } catch (e: any) { 
-            console.error("[SupaPull] Error:", e);
-            if (!isSilent) showToast('拉取失败：请确认 VPN 是否已开全局模式', 'error');
+            console.error("[PocketPull] Error:", e);
+            if (!isSilent) showToast('拉取镜像失败', 'error');
             return false; 
         } 
     };
 
     useEffect(() => { 
-        if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !supaClientRef.current) return; 
+        if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !pbRef.current) return; 
         const timer = setTimeout(() => syncToCloud(), 3000); 
         return () => clearTimeout(timer); 
     }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
@@ -377,9 +357,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (savedConfig) { 
                 try { 
                     const config = JSON.parse(savedConfig); 
-                    dispatch({ type: 'SET_SUPA_CONFIG', payload: config }); 
-                    if (config.url && config.anonKey) { 
-                        await bootSupa(config.url, config.anonKey, false); 
+                    dispatch({ type: 'SET_PB_CONFIG', payload: config }); 
+                    if (config.url) { 
+                        await bootSupa(config.url, '', false); 
                         await pullFromCloud(true);
                     } else {
                         dispatch({ type: 'UNLOCK_SYNC' }); 
