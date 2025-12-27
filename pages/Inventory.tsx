@@ -286,7 +286,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const adSpendUSD = formData.economics?.adCost || 0;
     const refundUSD = priceUSD * ((formData.economics?.refundRatePercent || 0) / 100);
     
-    // Fix: changed lastLeg to lastLegUSD and adSpend to adSpendUSD to match defined variables
     const totalUnitCostUSD = cogsUSD + freightUSD + platformFeeUSD + creatorFeeUSD + fixedFeeUSD + lastLegUSD + adSpendUSD + refundUSD;
     const estimatedProfitUSD = priceUSD - totalUnitCostUSD;
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
@@ -937,6 +936,7 @@ const Inventory: React.FC = () => {
                 carrier: item.logistics?.carrier || existing.carrier,
                 productName: item.name,
                 destination: item.logistics?.targetWarehouse || existing.destination,
+                notes: item.notes || existing.notes, // 同步备注信息
                 lastUpdate: `数据纠缠同步于: ${new Date().toLocaleTimeString()}`
             };
             dispatch({ type: 'UPDATE_SHIPMENT', payload: updated });
@@ -951,6 +951,7 @@ const Inventory: React.FC = () => {
                 destination: item.logistics?.targetWarehouse || '未指定',
                 shipDate: new Date().toISOString().split('T')[0],
                 lastUpdate: '从智能备货清单一键同步创建',
+                notes: item.notes, // 同步备注信息
                 events: [
                     { 
                         date: new Date().toISOString().split('T')[0], 
