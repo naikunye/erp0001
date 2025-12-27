@@ -239,14 +239,22 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 }
             });
             
+            // 核心修复：先挂载实例，确保 syncToCloud 逻辑能拿到 client，即使后续 Ping 失败
+            supaClientRef.current = client;
+
             // 探测连通性 (REST API)
             const { error: pingError } = await client.from('backups').select('unique_id').limit(1);
-            if (pingError) throw pingError;
-
-            // 只要 REST API 通了，我们就认为处于 connected 状态，允许手动同步
-            supaClientRef.current = client;
-            retryCountRef.current = 0;
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
+            
+            if (pingError) {
+                // 如果是表不存在或权限问题，依然标记为受限，但实例已挂载
+                console.warn("[CloudLink] REST Ping Warning:", pingError);
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'restricted' });
+                if (isManual) showToast(`配置受限: 请检查数据库表与 SQL 指令`, 'warning');
+            } else {
+                retryCountRef.current = 0;
+                dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
+                if (isManual) showToast('量子链路已锁定', 'success');
+            }
 
             // 在后台尝试初始化长连接监听 (不阻塞主要功能)
             if (realtimeChannelRef.current) realtimeChannelRef.current.unsubscribe();
@@ -264,17 +272,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         pullFromCloud(true);
                     }
                 })
-                .subscribe((status, err) => {
-                    console.log(`[CloudLink] Realtime Status: ${status}`);
-                    // 如果实时链路受限，仅在日志显示，不改变主连接状态为 restricted，除非是 REST 彻底断开
-                });
+                .subscribe();
 
             dispatch({ type: 'UNLOCK_SYNC' }); 
-            if (isManual) showToast('云端协议已就绪', 'success');
         } catch (e: any) { 
-            console.error("[SupaBoot] Connection Failed:", e);
+            console.error("[SupaBoot] Connection Fatal Error:", e);
             dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'restricted' });
-            scheduleReconnect(url, key);
+            scheduleReconnect(cleanUrl, key);
             if (isManual) {
                 showToast(`连接受限: ${e.message}`, 'error');
             }
@@ -303,8 +307,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const syncToCloud = async (isForce: boolean = false): Promise<{success: boolean, error?: string}> => { 
-        if (!supaClientRef.current || (state.connectionStatus !== 'connected' && state.connectionStatus !== 'restricted')) {
-            if (isForce) return { success: false, error: '链路未就绪，请等待自动重连' };
+        // 允许在 restricted 模式下尝试同步
+        if (!supaClientRef.current || (state.connectionStatus === 'disconnected' || state.connectionStatus === 'connecting')) {
+            if (isForce) return { success: false, error: '链路尚未建立，请稍后' };
             return { success: true };
         }
         
@@ -348,7 +353,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         } catch (e: any) { 
             console.error("[SupaSync] Error:", e);
             dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
-            return { success: false, error: e.message }; 
+            return { success: false, error: e.message || '网络连接被拦截 (CORS/VPN)' }; 
         } finally { 
             isSyncingRef.current = false; 
         } 
