@@ -19,7 +19,8 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handlePull = async () => {
-      if (state.connectionStatus !== 'connected') {
+      // 允许在 connected 或 restricted 下拉取
+      if (state.connectionStatus !== 'connected' && state.connectionStatus !== 'restricted') {
           showToast('尚未建立云端连接', 'warning');
           return;
       }
@@ -39,7 +40,8 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   };
 
   const handleCloudSync = async () => {
-      if (state.connectionStatus !== 'connected') {
+      // 允许在 connected 或 restricted 下同步
+      if (state.connectionStatus !== 'connected' && state.connectionStatus !== 'restricted') {
           showToast('云端配置未就绪', 'warning');
           dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } });
           return;
@@ -87,7 +89,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       if (state.connectionStatus === 'restricted') {
           return (
               <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-600/20 border border-amber-500/50 rounded text-[9px] font-black text-amber-400">
-                  <SignalLow className="w-2.5 h-2.5" /> 连接受限 (尝试自动修复)
+                  <SignalLow className="w-2.5 h-2.5" /> 连接受限 (WebSocket 波动)
               </div>
           );
       }
@@ -130,7 +132,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
               return (
                   <div className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[8px] font-bold transition-all ${state.connectionStatus === 'connected' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
                       <Radio className={`w-2 h-2 ${state.connectionStatus === 'connected' ? 'animate-pulse text-indigo-500' : 'text-slate-700'}`} /> 
-                      {state.connectionStatus === 'connected' ? 'WebSocket 链路开启' : '单机节点运行'}
+                      {state.connectionStatus === 'connected' ? '云端通信开启' : '单机节点运行'}
                   </div>
               );
       }
@@ -177,13 +179,13 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
         </div>
 
         <div className="hidden md:block">
-            {state.connectionStatus === 'connected' ? (
+            {(state.connectionStatus === 'connected' || state.connectionStatus === 'restricted') ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
                     <span className="relative flex h-2 w-2">
                         <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
                     </span>
-                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">多机实时协同中</span>
+                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">云端链路已就绪</span>
                 </div>
             ) : state.connectionStatus === 'reconnecting' ? (
                 <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
