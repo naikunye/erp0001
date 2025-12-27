@@ -16,6 +16,7 @@ const Settings: React.FC = () => {
   const [supaForm, setSupaForm] = useState({ url: '', anonKey: '' });
 
   const isConnected = state.connectionStatus === 'connected';
+  const isRestricted = state.connectionStatus === 'restricted';
   const isError = state.connectionStatus === 'error';
   const currentSize = state.supaConfig?.payloadSize || 0;
 
@@ -55,7 +56,7 @@ const Settings: React.FC = () => {
               showToast('连接成功：请点击右上角云图标上传初始数据', 'info');
           }
       } catch (e: any) {
-          showToast(e.message, 'error');
+          // bootSupa 会处理具体的报错提示
       } finally {
           setIsSaving(false);
       }
@@ -98,7 +99,6 @@ const Settings: React.FC = () => {
       reader.onload = (event) => {
           try {
               const data = JSON.parse(event.target?.result as string);
-              // 基础校验
               if (!data.products || !Array.isArray(data.products)) {
                   throw new Error("无效的探行数据格式");
               }
@@ -109,7 +109,7 @@ const Settings: React.FC = () => {
           }
       };
       reader.readAsText(file);
-      e.target.value = ''; // 重置 input
+      e.target.value = ''; 
   };
 
   const formatSize = (bytes: number) => {
@@ -195,17 +195,17 @@ const Settings: React.FC = () => {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                  <div className={`lg:col-span-2 border rounded-[2.5rem] p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30 shadow-[0_0_40px_rgba(16,185,129,0.1)]' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
-                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : isError ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
-                        {isConnected ? <ShieldCheck className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
+                  <div className={`lg:col-span-2 border rounded-[2.5rem] p-8 flex items-start gap-6 transition-all ${isConnected ? 'bg-emerald-500/5 border-emerald-500/30' : isRestricted ? 'bg-amber-500/5 border-amber-500/30' : isError ? 'bg-red-500/5 border-red-500/30' : 'bg-indigo-500/10 border-indigo-500/30'}`}>
+                      <div className={`p-4 rounded-2xl shrink-0 ${isConnected ? 'bg-emerald-500/20 text-emerald-400' : isRestricted ? 'bg-amber-500/20 text-amber-400' : isError ? 'bg-red-500/20 text-red-400' : 'bg-indigo-500/20 text-indigo-400'}`}>
+                        {isConnected ? <ShieldCheck className="w-8 h-8" /> : isRestricted ? <AlertTriangle className="w-8 h-8" /> : isError ? <ShieldAlert className="w-8 h-8" /> : <DatabaseZap className="w-8 h-8" />}
                       </div>
                       <div className="flex-1">
-                          <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : isError ? 'text-red-400' : 'text-indigo-300'}`}>
-                              {isConnected ? 'Supabase：神经链路稳固' : isError ? '数据库访问受限' : '云端同步协议'}
+                          <h4 className={`font-black text-sm uppercase tracking-wider ${isConnected ? 'text-emerald-400' : isRestricted ? 'text-amber-400' : isError ? 'text-red-400' : 'text-indigo-300'}`}>
+                              {isConnected ? 'Supabase：神经链路稳固' : isRestricted ? '同步模式：手动受限' : isError ? '数据库访问受限' : '云端同步协议'}
                           </h4>
                           <div className="mt-4 space-y-3">
                               <div className="flex items-center gap-3">
-                                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : isError ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}></div>
+                                  <div className={`w-3 h-3 rounded-full ${isConnected ? 'bg-emerald-500 shadow-[0_0_12px_#10b981]' : isRestricted ? 'bg-amber-500' : isError ? 'bg-red-500 animate-pulse' : 'bg-slate-700'}`}></div>
                                   <span className="text-xs font-bold text-white uppercase">状态: {state.connectionStatus.toUpperCase()}</span>
                               </div>
                               <div className="flex items-center gap-3">
@@ -214,10 +214,10 @@ const Settings: React.FC = () => {
                               </div>
                           </div>
                       </div>
-                      {(isConnected || isError) && (
+                      {(isConnected || isRestricted || isError) && (
                           <div className="flex flex-col gap-2">
                               <button onClick={handleFullReset} className="flex items-center gap-2 bg-red-500/10 px-4 py-2 rounded-xl text-red-400 font-black text-[10px] uppercase border border-red-500/20 hover:bg-red-500 hover:text-white transition-all">
-                                  断开连接
+                                  注销连接
                               </button>
                           </div>
                       )}
@@ -227,18 +227,18 @@ const Settings: React.FC = () => {
                           <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-2"><HardDrive className="w-4 h-4 text-indigo-400" /> 载荷尺寸</span>
                       </div>
                       <div className="text-2xl font-black text-white font-mono">{formatSize(currentSize)}</div>
-                      <p className="text-[9px] text-slate-600 mt-2 font-bold uppercase italic">Syncing via PostgreSQL JSONB Pipeline</p>
+                      <p className="text-[9px] text-slate-600 mt-2 font-bold uppercase italic">Syncing via PostgreSQL REST Pipeline</p>
                   </div>
               </div>
 
               <div className="ios-glass-panel p-10 space-y-10 rounded-[2.5rem] border-white/10">
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
                       <div className="space-y-6 relative">
-                          {isConnected && (
+                          {(isConnected || isRestricted) && (
                               <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px] z-10 flex flex-col items-center justify-center rounded-3xl">
                                   <Lock className="w-10 h-10 text-indigo-400 mb-4" />
                                   <p className="text-xs font-black text-indigo-200 uppercase tracking-widest">配置已锁定</p>
-                                  <button onClick={handleFullReset} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">重置配置</button>
+                                  <button onClick={handleFullReset} className="mt-4 px-6 py-2 bg-red-500/20 text-red-400 rounded-xl text-[10px] font-black uppercase border border-red-500/30">重置并解锁</button>
                               </div>
                           )}
                           <div className="space-y-1">
@@ -249,7 +249,7 @@ const Settings: React.FC = () => {
                               <label className="text-[10px] text-slate-500 font-bold uppercase ml-2">Anon Public Key</label>
                               <input type="password" value={supaForm.anonKey} onChange={e=>setSupaForm({...supaForm, anonKey: e.target.value})} className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-sm text-white font-mono outline-none" placeholder="eyJhbG..." />
                           </div>
-                          <button onClick={handleSaveConfig} disabled={isSaving || isConnected} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
+                          <button onClick={handleSaveConfig} disabled={isSaving || isConnected || isRestricted} className={`w-full py-5 rounded-2xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 ${isConnected ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30' : 'bg-gradient-to-r from-indigo-600 to-violet-600 text-white'}`}>
                               {isSaving ? <RefreshCw className="w-5 h-5 animate-spin" /> : <DatabaseZap className="w-5 h-5" />}
                               接入并测试连接
                           </button>
@@ -258,12 +258,12 @@ const Settings: React.FC = () => {
                       <div className="bg-white/2 border border-white/5 rounded-3xl p-8 flex flex-col justify-center">
                           <div className="flex items-center gap-4 mb-6">
                               <Info className="w-6 h-6 text-indigo-400" />
-                              <h5 className="text-white font-bold uppercase italic tracking-widest">同步排障指南</h5>
+                              <h5 className="text-white font-bold uppercase italic tracking-widest">额度超限与同步排障</h5>
                           </div>
                           <ul className="text-xs text-slate-500 space-y-4 leading-relaxed font-bold">
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>如果提示“Failed to fetch”，请检查网络环境。在国内建议关闭 VPN 的分流模式或切换至全局模式。</span></li>
-                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>确保数据库 **backups** 表已按照上方的 SQL 指令创建并开启了 **Allow All** 权限。</span></li>
-                              <li className="flex gap-3"><span className="text-emerald-400 font-bold">技巧</span><span>如果配置卡死，点击页面顶部的“Reset Cloud Protocol”彻底清除缓存后再重新输入。</span></li>
+                              <li className="flex gap-3"><span className="text-amber-500 font-bold">！</span><span>**额度预警：** Supabase 免费版有 200 个实时连接限制。如果超限，状态会显示为 **RESTRICTED**，此时“实时更新”将失效，但您仍可以点击右上角图标进行“手动同步”。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">01</span><span>如果提示“Failed to fetch”，说明网络物理不通。**请关闭 VPN 的分流功能或开启全局模式**，Supabase 服务在部分地区存在 DNS 污染。</span></li>
+                              <li className="flex gap-3"><span className="text-indigo-500 font-bold">02</span><span>请检查 **Anon Key** 是否正确，若 Key 错误会导致所有 REST 请求返回 403。</span></li>
                           </ul>
                       </div>
                   </div>
