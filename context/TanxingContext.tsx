@@ -134,11 +134,12 @@ function appReducer(state: AppState, action: Action): AppState {
 
     switch (action.type) {
         case 'BOOT': {
-            // 极重要：BOOT 时如果 state 已有页面，优先保留，除非缓存明确指出要跳页
+            // 绝不让 BOOT 覆盖当前活跃页面
+            const currentCachePage = localStorage.getItem(PAGE_CACHE_KEY) as Page;
             return { 
                 ...state, 
                 ...ensureArrays(action.payload), 
-                activePage: state.activePage || (action.payload.activePage as Page) || 'dashboard',
+                activePage: currentCachePage || state.activePage || 'dashboard',
                 isInitialized: true 
             };
         }
@@ -150,7 +151,7 @@ function appReducer(state: AppState, action: Action): AppState {
         }
         case 'SET_CONN': return { ...state, connectionStatus: action.payload };
         case 'UPDATE_DATA': {
-            // 修正跳转的核心：UPDATE_DATA 动作禁止修改 activePage
+            // 强制保留当前页面状态，防止因为数据更新（如连接失败后的重置）导致跳转
             const next = { 
                 ...state, 
                 ...ensureArrays(action.payload), 
@@ -162,11 +163,9 @@ function appReducer(state: AppState, action: Action): AppState {
         }
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
         default: {
-            // 对于所有业务数据的增删改，显式锁定 activePage，防止跳转
-            if (action.type.startsWith('ADD_') || action.type.startsWith('UPDATE_') || action.type.startsWith('DELETE_')) {
-                const key = action.type.split('_')[1].toLowerCase() + 's';
+            // 所有增删改查动作都锁死 activePage
+            if (action.type.includes('ADD_') || action.type.includes('UPDATE_') || action.type.includes('DELETE_')) {
                 const s = { ...state, activePage: state.activePage };
                 idb.set(s);
                 return s;
@@ -221,8 +220,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         
         const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
         
-        // 检测 https->http 冲突。
-        // 如果当前是 https，直接返回 false，但在 UI (Settings.tsx) 中展示修复面板
+        // 如果是在 HTTPS 环境尝试连 HTTP，标记 error 但不重置页面
         if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
             dispatch({ type: 'SET_CONN', payload: 'error' });
             return false; 
@@ -258,7 +256,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             else await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
             if (force) showToast('云端同步成功', 'success');
         } catch (e: any) {
-            if (force) showToast('同步失败', 'error');
+            if (force) showToast('同步链路故障', 'error');
         }
     };
 
@@ -272,7 +270,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (manual) showToast('已从云端拉取最新快照', 'success');
             }
         } catch (e: any) {
-            if (manual) showToast('获取失败：云端无记录', 'warning');
+            if (manual) showToast('获取失败', 'warning');
         }
     };
 
