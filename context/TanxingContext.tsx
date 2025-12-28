@@ -13,6 +13,7 @@ import {
 const DB_NAME = 'TANXING_V6_CORE';
 const STORE_NAME = 'GLOBAL_STATE';
 const CONFIG_KEY = 'PB_URL_NODE'; 
+const PAGE_CACHE_KEY = 'TX_ACTIVE_PAGE';
 export const SESSION_ID = 'TX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
 const idb = {
@@ -78,7 +79,8 @@ interface AppState {
 }
 
 const initialState: AppState = {
-    activePage: 'dashboard', pbUrl: '',
+    activePage: (localStorage.getItem(PAGE_CACHE_KEY) as Page) || 'dashboard', 
+    pbUrl: '',
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], transactions: [], customers: [], orders: [], shipments: [], 
     tasks: [], inboundShipments: [], suppliers: [], influencers: [], toasts: [],
@@ -131,7 +133,13 @@ function appReducer(state: AppState, action: Action): AppState {
     };
 
     const safeUpdate = (updates: Partial<AppState>): AppState => {
-        const next = { ...state, ...ensureArrays(updates), isInitialized: true };
+        // 核心加固：除非明确要导航，否则任何 BOOT 或数据更新都强制保留当前 activePage
+        const next = { 
+            ...state, 
+            ...ensureArrays(updates), 
+            activePage: state.activePage, // 强制锁定当前页面
+            isInitialized: true 
+        };
         idb.set(next);
         return next;
     };
@@ -139,8 +147,9 @@ function appReducer(state: AppState, action: Action): AppState {
     switch (action.type) {
         case 'BOOT': return safeUpdate(action.payload);
         case 'NAVIGATE': {
+            localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
             const nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
-            idb.set(nextState); // 导航时也持久化，确保刷新或重连后不跳页
+            idb.set(nextState);
             return nextState;
         }
         case 'SET_CONN': return { ...state, connectionStatus: action.payload };
@@ -184,7 +193,7 @@ const TanxingContext = createContext<{
     dispatch: React.Dispatch<Action>;
     syncToCloud: (force?: boolean) => Promise<void>;
     pullFromCloud: (manual?: boolean) => Promise<void>;
-    connectToPb: (url: string) => Promise<void>;
+    connectToPb: (url: string) => Promise<boolean>;
     showToast: (m: string, t: Toast['type']) => void;
 } | undefined>(undefined);
 
@@ -193,63 +202,59 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pbRef = useRef<PocketBase | null>(null);
     const healthCheckInterval = useRef<any>(null);
 
-    // 挂载时仅执行一次初始化
     useEffect(() => {
         const startup = async () => {
             const cached = await idb.get();
             const lastUrl = localStorage.getItem(CONFIG_KEY) || '';
+            const lastPage = localStorage.getItem(PAGE_CACHE_KEY) as Page;
             
             if (cached) {
-                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl } });
+                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl, activePage: lastPage || state.activePage } });
             } else {
                 dispatch({ 
                     type: 'BOOT', 
                     payload: { 
                         products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, 
                         customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, 
-                        orders: MOCK_ORDERS, pbUrl: lastUrl
+                        orders: MOCK_ORDERS, pbUrl: lastUrl,
+                        activePage: lastPage || state.activePage
                     } 
                 });
             }
             if (lastUrl) {
-                // 启动时自动尝试连接，但不阻塞 UI
-                connectToPb(lastUrl).catch(() => console.log("Init node offline."));
+                connectToPb(lastUrl).catch(() => {});
             }
         };
         startup();
     }, []);
 
-    // 独立的心跳检查 Effect
     useEffect(() => {
         if (!pbRef.current) return;
-
         const check = () => {
             pbRef.current?.health.check()
-                .then(() => { 
-                    if(state.connectionStatus !== 'connected') dispatch({type: 'SET_CONN', payload: 'connected'}); 
-                })
-                .catch(() => { 
-                    if(state.connectionStatus === 'connected') dispatch({type: 'SET_CONN', payload: 'error'}); 
-                });
+                .then(() => { if(state.connectionStatus !== 'connected') dispatch({type: 'SET_CONN', payload: 'connected'}); })
+                .catch(() => { if(state.connectionStatus === 'connected') dispatch({type: 'SET_CONN', payload: 'error'}); });
         };
-
         healthCheckInterval.current = setInterval(check, 30000);
         return () => clearInterval(healthCheckInterval.current);
-    }, [state.connectionStatus === 'connected']); // 仅当连接状态宏观改变时重置定时器
+    }, [state.connectionStatus === 'connected']);
 
-    const connectToPb = async (url: string) => {
-        if (!url) return;
+    // 修改为返回布尔值而非抛出错误，增加系统稳定性
+    const connectToPb = async (url: string): Promise<boolean> => {
+        if (!url) return false;
         dispatch({ type: 'SET_CONN', payload: 'connecting' });
-        try {
-            const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
-            const pb = new PocketBase(cleanUrl);
-            
-            if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
-                showToast('安全冲突：HTTPS 网页无法连接 HTTP 数据库。请尝试使用 HTTP 访问 ERP 或为数据库配置 SSL。', 'error');
-                dispatch({ type: 'SET_CONN', payload: 'error' });
-                return;
-            }
+        
+        const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
+        
+        if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
+            const errorMsg = '安全冲突：HTTPS 网页无法连接 HTTP 数据库。请在浏览器地址栏手动将 https 改为 http。';
+            showToast(errorMsg, 'error');
+            dispatch({ type: 'SET_CONN', payload: 'error' });
+            return false; 
+        }
 
+        try {
+            const pb = new PocketBase(cleanUrl);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout')), 5000));
             await Promise.race([pb.health.check(), timeoutPromise]);
             
@@ -257,14 +262,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             localStorage.setItem(CONFIG_KEY, cleanUrl);
             dispatch({ type: 'UPDATE_DATA', payload: { pbUrl: cleanUrl } });
             dispatch({ type: 'SET_CONN', payload: 'connected' });
+            return true;
         } catch (e: any) {
             dispatch({ type: 'SET_CONN', payload: 'error' });
-            if (e.message.includes('Failed to fetch')) {
-                showToast('连接失败：网络无法连通或 CORS 跨域被拦截。请检查 8090 端口和防火墙。', 'error');
-            } else {
-                showToast(`连接异常: ${e.message}`, 'error');
-            }
-            throw e;
+            const msg = e.message.includes('fetch') ? '网络拦截：CORS 跨域或防火墙阻断 8090 端口。' : e.message;
+            showToast(`链路建立失败: ${msg}`, 'error');
+            return false;
         }
     };
 
@@ -280,24 +283,12 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
                 inboundShipments: state.inboundShipments, automationRules: state.automationRules
             });
-            
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"').catch(() => null);
-            
-            if (record) {
-                await pbRef.current.collection('backups').update(record.id, { payload });
-            } else {
-                await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
-            }
+            if (record) await pbRef.current.collection('backups').update(record.id, { payload });
+            else await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
             if (force) showToast('云端同步成功', 'success');
         } catch (e: any) {
-            console.error("Sync Error", e);
-            if (e.status === 404 || e.status === 400) {
-                showToast('同步失败：请确认已在数据库创建 backups 集合', 'error');
-            } else if (e.status === 403) {
-                showToast('权限拒绝：请在 backups 集合中清空 API Rules 规则', 'error');
-            } else if (force) {
-                showToast('同步失败：链路不稳定', 'error');
-            }
+            if (force) showToast('同步链路异常', 'error');
         }
     };
 
@@ -305,17 +296,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         if (!pbRef.current) return;
         try {
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"');
-            if (record && record.payload) {
+            if (record?.payload) {
                 const data = JSON.parse(record.payload);
                 dispatch({ type: 'BOOT', payload: data });
                 if (manual) showToast('已从云端拉取最新快照', 'success');
             }
         } catch (e: any) {
-            if (manual) {
-                if (e.status === 404) showToast('获取失败：数据库 backups 表不存在', 'error');
-                else if (e.status === 403) showToast('获取失败：请检查 backups 表的 List 权限', 'error');
-                else showToast('云端暂无存档', 'warning');
-            }
+            if (manual) showToast('获取失败：云端暂无记录', 'warning');
         }
     };
 

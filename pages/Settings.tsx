@@ -4,7 +4,7 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Zap, ShieldCheck, DatabaseZap, Terminal, 
     Info, ShieldAlert, FileJson, Server, Layout, ExternalLink, Activity, ExternalLink as LinkIcon,
-    Lock, Unlock, CheckCircle2
+    Lock, Unlock, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -13,6 +13,8 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cloud' | 'data'>('cloud'); 
   const [pbInput, setPbInput] = useState(state.pbUrl || '');
   const [isTesting, setIsTesting] = useState(false);
+
+  const isHttps = window.location.protocol === 'https:';
 
   useEffect(() => {
     setPbInput(state.pbUrl);
@@ -23,11 +25,13 @@ const Settings: React.FC = () => {
       setIsTesting(true);
       try {
           const cleanUrl = pbInput.trim().replace(/\/$/, ""); 
-          await connectToPb(cleanUrl);
-          showToast('量子链路已激活', 'success');
+          const success = await connectToPb(cleanUrl);
+          // 只有真正建立连接（返回 true）后才会显示成功提示
+          if (success) {
+              showToast('量子链路已成功激活', 'success');
+          }
       } catch (e: any) {
-          console.error(e);
-          showToast('连接受阻：请确保已在 PocketBase 开启 API Rules 权限', 'error');
+          console.error("Critical error in UI connection flow:", e);
       } finally {
           setIsTesting(false);
       }
@@ -69,6 +73,16 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-6">
+              {isHttps && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-4 animate-pulse">
+                      <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
+                      <div className="text-xs text-amber-200 font-bold">
+                          检测到当前使用 <span className="underline">HTTPS</span> 访问。由于浏览器安全限制，您可能无法连接到 <span className="underline">HTTP</span> 数据库。
+                          建议：将地址栏开头的 https:// 手动改为 http:// 重新访问。
+                      </div>
+                  </div>
+              )}
+
               <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 space-y-8">
                   <div className="space-y-2">
                       <label className="text-[10px] text-slate-500 font-bold uppercase ml-2 tracking-widest flex justify-between">
