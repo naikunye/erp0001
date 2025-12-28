@@ -138,7 +138,11 @@ function appReducer(state: AppState, action: Action): AppState {
 
     switch (action.type) {
         case 'BOOT': return safeUpdate(action.payload);
-        case 'NAVIGATE': return { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
+        case 'NAVIGATE': {
+            const nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
+            idb.set(nextState); // 导航时也持久化，确保刷新或重连后不跳页
+            return nextState;
+        }
         case 'SET_CONN': return { ...state, connectionStatus: action.payload };
         case 'UPDATE_DATA': return safeUpdate({ ...action.payload, saveStatus: 'dirty' });
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
@@ -189,6 +193,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pbRef = useRef<PocketBase | null>(null);
     const healthCheckInterval = useRef<any>(null);
 
+    // 挂载时仅执行一次初始化
     useEffect(() => {
         const startup = async () => {
             const cached = await idb.get();
@@ -207,21 +212,30 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 });
             }
             if (lastUrl) {
+                // 启动时自动尝试连接，但不阻塞 UI
                 connectToPb(lastUrl).catch(() => console.log("Init node offline."));
             }
         };
         startup();
-        
-        healthCheckInterval.current = setInterval(() => {
-            if (pbRef.current) {
-                pbRef.current.health.check()
-                    .then(() => { if(state.connectionStatus !== 'connected') dispatch({type: 'SET_CONN', payload: 'connected'}); })
-                    .catch(() => { if(state.connectionStatus === 'connected') dispatch({type: 'SET_CONN', payload: 'error'}); });
-            }
-        }, 30000);
+    }, []);
 
+    // 独立的心跳检查 Effect
+    useEffect(() => {
+        if (!pbRef.current) return;
+
+        const check = () => {
+            pbRef.current?.health.check()
+                .then(() => { 
+                    if(state.connectionStatus !== 'connected') dispatch({type: 'SET_CONN', payload: 'connected'}); 
+                })
+                .catch(() => { 
+                    if(state.connectionStatus === 'connected') dispatch({type: 'SET_CONN', payload: 'error'}); 
+                });
+        };
+
+        healthCheckInterval.current = setInterval(check, 30000);
         return () => clearInterval(healthCheckInterval.current);
-    }, [state.connectionStatus]);
+    }, [state.connectionStatus === 'connected']); // 仅当连接状态宏观改变时重置定时器
 
     const connectToPb = async (url: string) => {
         if (!url) return;
@@ -230,7 +244,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
             const pb = new PocketBase(cleanUrl);
             
-            // 检查 HTTPS 页面连接 HTTP 服务器的问题 (Mixed Content)
             if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
                 showToast('安全冲突：HTTPS 网页无法连接 HTTP 数据库。请尝试使用 HTTP 访问 ERP 或为数据库配置 SSL。', 'error');
                 dispatch({ type: 'SET_CONN', payload: 'error' });
@@ -268,7 +281,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 inboundShipments: state.inboundShipments, automationRules: state.automationRules
             });
             
-            // 尝试获取现有记录
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"').catch(() => null);
             
             if (record) {
