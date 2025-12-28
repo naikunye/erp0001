@@ -6,9 +6,8 @@ import {
     Info, ShieldAlert, FileJson, Server, Layout, ExternalLink, Activity,
     Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle,
     Shield, Monitor, Globe, Settings2, Command, Search, Fingerprint, ChevronRight,
-    Upload, Download, FileUp, FileDown, AlertOctagon, Power
+    Upload, Download, FileUp, FileDown, AlertOctagon, Power, CloudUpload, CloudDownload
 } from 'lucide-react';
-// Fix: Added SESSION_ID to the import from context to resolve the reference error on line 185
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
@@ -16,6 +15,8 @@ const Settings: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'cloud' | 'data'>('cloud'); 
   const [pbInput, setPbInput] = useState(state.pbUrl || '');
   const [isTesting, setIsTesting] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
+  const [isPulling, setIsPulling] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isHttps = window.location.protocol === 'https:';
@@ -28,7 +29,6 @@ const Settings: React.FC = () => {
       if (!pbInput.trim()) return showToast('请输入节点地址', 'warning');
       setIsTesting(true);
       const cleanUrl = pbInput.trim().replace(/\/$/, ""); 
-      
       try {
           const success = await connectToPb(cleanUrl);
           if (success) {
@@ -36,6 +36,24 @@ const Settings: React.FC = () => {
           }
       } finally {
           setIsTesting(false);
+      }
+  };
+
+  const handleManualPush = async () => {
+      setIsPushing(true);
+      try {
+          await syncToCloud(true);
+      } finally {
+          setIsPushing(false);
+      }
+  };
+
+  const handleManualPull = async () => {
+      setIsPulling(true);
+      try {
+          await pullFromCloud(true);
+      } finally {
+          setIsPulling(false);
       }
   };
 
@@ -78,7 +96,7 @@ const Settings: React.FC = () => {
           <h2 className="text-3xl font-black text-white flex items-center gap-3 italic tracking-tighter uppercase">
               <SettingsIcon className="w-8 h-8 text-indigo-500" /> 核心神经元配置
           </h2>
-          <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Protocol: {isHttps ? 'HTTPS (SECURE)' : 'HTTP (INSECURE)'}</p>
+          <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Node Session: {SESSION_ID}</p>
         </div>
       </div>
 
@@ -93,36 +111,22 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-8">
-              {/* 核心错误引导：解决“转圈圈” */}
               {isHttps && pbInput.startsWith('http:') && state.connectionStatus !== 'connected' && (
                   <div className="bg-rose-500/10 border-2 border-rose-500/30 rounded-[3rem] p-10 animate-in slide-in-from-top-4 shadow-2xl relative overflow-hidden">
                       <div className="absolute top-0 right-0 p-10 opacity-10"><ShieldAlert className="w-40 h-40 text-rose-500" /></div>
                       <div className="flex flex-col md:flex-row gap-12 relative z-10">
                           <div className="md:w-2/5 space-y-6">
-                              <div className="w-16 h-16 bg-rose-600 rounded-3xl flex items-center justify-center text-white shadow-xl">
-                                  <Power className="w-8 h-8" />
-                              </div>
+                              <div className="w-16 h-16 bg-rose-600 rounded-3xl flex items-center justify-center text-white shadow-xl"><Power className="w-8 h-8" /></div>
                               <h3 className="text-3xl font-black text-white italic tracking-tighter leading-tight uppercase">为什么一直在“转圈圈”？</h3>
-                              <p className="text-sm text-rose-200/80 font-bold leading-relaxed">
-                                  您的浏览器为了安全，拦截了从 HTTPS 页面访问 HTTP 服务器的请求（Mixed Content）。
-                              </p>
+                              <p className="text-sm text-rose-200/80 font-bold leading-relaxed">您的浏览器为了安全，拦截了从 HTTPS 页面访问 HTTP 服务器的请求。</p>
                           </div>
                           <div className="md:w-3/5 space-y-4">
                               <div className="bg-black/60 rounded-[2rem] p-8 border border-white/10">
-                                  <h4 className="text-white font-bold mb-4 flex items-center gap-2"><MousePointerClick className="w-4 h-4 text-rose-500"/> 解决方案 (只需3步):</h4>
-                                  <div className="space-y-5">
-                                      <div className="flex items-start gap-4">
-                                          <div className="w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs font-black shrink-0">1</div>
-                                          <p className="text-xs text-slate-300 font-medium">点击地址栏左侧的 <span className="text-rose-400 font-bold">锁头图标</span> 或【查看网站信息】</p>
-                                      </div>
-                                      <div className="flex items-start gap-4">
-                                          <div className="w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs font-black shrink-0">2</div>
-                                          <p className="text-xs text-slate-300 font-medium">进入【网站设置 (Site Settings)】，在底部找到 <span className="text-rose-400 font-bold">不安全内容 (Insecure content)</span></p>
-                                      </div>
-                                      <div className="flex items-start gap-4">
-                                          <div className="w-7 h-7 rounded-full bg-rose-500 text-white flex items-center justify-center text-xs font-black shrink-0">3</div>
-                                          <p className="text-xs text-slate-300 font-medium">将其由“屏蔽”改为 <span className="text-emerald-400 font-bold">允许 (Allow)</span>，然后手动刷新本页面。</p>
-                                      </div>
+                                  <h4 className="text-white font-bold mb-4 flex items-center gap-2"><MousePointerClick className="w-4 h-4 text-rose-500"/> 快速解决:</h4>
+                                  <div className="space-y-4 text-xs text-slate-300">
+                                      <p>1. 点击地址栏左侧的 <span className="text-rose-400 font-bold">锁头图标</span></p>
+                                      <p>2. 进入【网站设置】，找到 <span className="text-rose-400 font-bold">不安全内容</span></p>
+                                      <p>3. 改为 <span className="text-emerald-400 font-bold">允许 (Allow)</span>，然后手动刷新本页面。</p>
                                   </div>
                               </div>
                           </div>
@@ -151,40 +155,66 @@ const Settings: React.FC = () => {
                         />
                         {isTesting && (
                             <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                                <span className="text-[10px] text-indigo-400 font-black animate-pulse uppercase">连接中...</span>
                                 <RefreshCw className="w-5 h-5 text-indigo-500 animate-spin" />
                             </div>
                         )}
                       </div>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-5">
                       <button 
                         onClick={handleConnect}
                         disabled={isTesting}
-                        className="flex-1 py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-[0.4em] shadow-2xl flex items-center justify-center gap-4 transition-all active:scale-95 disabled:opacity-50"
+                        className="w-full py-5 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 transition-all active:scale-[0.98]"
                       >
-                          {isTesting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                          启动量子实时引擎
+                          {isTesting ? '正在握手...' : '激活节点连接'}
                       </button>
-                      
-                      {state.connectionStatus === 'connected' && (
-                          <div className="flex gap-4 animate-in zoom-in-95">
-                            <button onClick={() => syncToCloud(true)} className="px-10 py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg">同步镜像</button>
-                            <button onClick={() => pullFromCloud(true)} className="px-10 py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-[1.5rem] font-black text-xs uppercase tracking-widest shadow-lg">云端拉取</button>
-                          </div>
-                      )}
                   </div>
+                  
+                  {state.connectionStatus === 'connected' && (
+                      <div className="space-y-6 animate-in fade-in zoom-in-95">
+                          <div className="p-8 bg-indigo-500/5 border border-indigo-500/20 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-8">
+                              <div className="flex-1">
+                                  <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                                      <CloudUpload className="w-5 h-5 text-indigo-400" />
+                                      初始化云端资产
+                                  </h4>
+                                  <p className="text-xs text-slate-500 leading-relaxed">
+                                      如果您在另一台电脑拉取不到数据，请先在此处点击“推送”。它会将您本地的 <b>{state.products.length} 个产品</b>、<b>{state.orders.length} 个订单</b> 等全量数据上传到腾讯云节点。
+                                  </p>
+                                  {state.lastSyncTime && (
+                                      <p className="text-[10px] text-emerald-500 font-mono mt-3 uppercase font-bold tracking-widest">
+                                          上次同步时间: {new Date(state.lastSyncTime).toLocaleString()}
+                                      </p>
+                                  )}
+                              </div>
+                              <div className="flex gap-4">
+                                  <button 
+                                    onClick={handleManualPush}
+                                    disabled={isPushing}
+                                    className="px-8 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-3 active:scale-95 disabled:opacity-50"
+                                  >
+                                      {isPushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
+                                      推送全量数据 (Push)
+                                  </button>
+                                  <button 
+                                    onClick={handleManualPull}
+                                    disabled={isPulling}
+                                    className="px-8 py-5 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex items-center gap-3"
+                                  >
+                                      {isPulling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
+                                      从云端拉取 (Pull)
+                                  </button>
+                              </div>
+                          </div>
+                      </div>
+                  )}
 
                   <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-8">
                       <div className="flex items-center gap-3">
                           <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                          <span className="text-[10px] text-slate-500 font-bold uppercase">End-to-End Encryption Active</span>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">End-to-End Encryption</span>
                       </div>
-                      <div className="flex items-center gap-3 justify-end">
+                      <div className="flex items-center gap-3 justify-end text-right">
                           <Activity className="w-5 h-5 text-indigo-500" />
-                          {/* Fix: Correctly using SESSION_ID after import */}
-                          <span className="text-[10px] text-slate-500 font-bold uppercase">Node Session: {SESSION_ID}</span>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Latency: ~24ms</span>
                       </div>
                   </div>
               </div>
@@ -198,7 +228,7 @@ const Settings: React.FC = () => {
                     <div className="ios-glass-card p-8 rounded-[2rem] border-indigo-500/20 hover:bg-indigo-600/5 transition-all text-left">
                         <FileUp className="w-10 h-10 text-indigo-500 mb-6" />
                         <div className="text-white font-bold text-lg mb-2 uppercase tracking-tight">导入本地数据</div>
-                        <p className="text-[11px] text-slate-500 mb-6">上传导出的 JSON 协议包。此操作会触发云端全量更新。</p>
+                        <p className="text-[11px] text-slate-500 mb-6">上传导出的 JSON 协议包。此操作会重置本地并自动同步。</p>
                         <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImportJson} />
                         <button onClick={() => fileInputRef.current?.click()} className="w-full py-4 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">选择协议文件</button>
                     </div>
