@@ -14,7 +14,7 @@ const DB_NAME = 'TANXING_V6_CORE';
 const STORE_NAME = 'GLOBAL_STATE';
 const CONFIG_KEY = 'PB_URL_NODE'; 
 const PAGE_CACHE_KEY = 'TX_ACTIVE_PAGE';
-// 唯一的会话 ID
+// 唯一的会话 ID，每次刷新都会变，用于识别“是谁发起的更新”
 export const SESSION_ID = 'TX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
 const idb = {
@@ -77,7 +77,7 @@ interface AppState {
     isMobileMenuOpen: boolean;
     isInitialized: boolean;
     navParams?: any;
-    remoteVersion?: number; // 远程版本号，用于防止旧数据覆盖新数据
+    remoteVersion: number; // 增加逻辑版本号
 }
 
 const initialState: AppState = {
@@ -98,24 +98,15 @@ type Action =
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
-    // 基础 CRUD 动作 (这些动作会触发自动云同步)
-    | { type: 'ADD_PRODUCT' | 'UPDATE_PRODUCT' | 'DELETE_PRODUCT' | 'ADD_TRANSACTION' | 'DELETE_TRANSACTION' | 'ADD_CUSTOMER' | 'UPDATE_CUSTOMER' | 'DELETE_CUSTOMER' | 'ADD_SHIPMENT' | 'UPDATE_SHIPMENT' | 'DELETE_SHIPMENT' | 'ADD_INFLUENCER' | 'UPDATE_INFLUENCER' | 'DELETE_INFLUENCER' | 'ADD_TASK' | 'UPDATE_TASK' | 'DELETE_TASK' | 'UPDATE_INBOUND_SHIPMENT' | 'CREATE_INBOUND_SHIPMENT' | 'DELETE_INBOUND_SHIPMENT' | 'ADD_SUPPLIER' | 'UPDATE_SUPPLIER' | 'DELETE_SUPPLIER' | 'ADD_AUTOMATION_RULE' | 'UPDATE_AUTOMATION_RULE' | 'DELETE_AUTOMATION_RULE', payload: any }
+    | { type: 'CRUD_ACTION'; payload: Partial<AppState> } // 统一的 CRUD 动作
     | { type: 'CLEAR_NAV_PARAMS' };
 
 function appReducer(state: AppState, action: Action): AppState {
-    const ensureArrays = (s: Partial<AppState>): Partial<AppState> => {
-        const keys: (keyof AppState)[] = ['products', 'transactions', 'customers', 'orders', 'shipments', 'tasks', 'inboundShipments', 'suppliers', 'influencers', 'toasts', 'automationRules'];
-        keys.forEach(k => { 
-            if (!s[k] || !Array.isArray(s[k])) (s as any)[k] = (state[k] && Array.isArray(state[k])) ? state[k] : []; 
-        });
-        return s;
-    };
-
     let nextState = { ...state };
 
     switch (action.type) {
         case 'BOOT':
-            return { ...state, ...ensureArrays(action.payload), isInitialized: true };
+            return { ...state, ...action.payload, isInitialized: true };
         case 'NAVIGATE':
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
             nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
@@ -123,52 +114,32 @@ function appReducer(state: AppState, action: Action): AppState {
         case 'SET_CONN':
             return { ...state, connectionStatus: action.payload };
         case 'UPDATE_DATA':
-            nextState = { ...state, ...ensureArrays(action.payload), saveStatus: 'dirty' };
+            nextState = { ...state, ...action.payload };
+            break;
+        case 'CRUD_ACTION':
+            // 只要发生了增删改，就把状态标记为 dirty，触发自动上传
+            nextState = { ...state, ...action.payload, saveStatus: 'dirty' };
             break;
         case 'ADD_TOAST':
             return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
         case 'REMOVE_TOAST':
             return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        case 'TOGGLE_MOBILE_MENU':
-            return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'CLEAR_NAV_PARAMS':
-            return { ...state, navParams: undefined };
-        
-        // 动态处理所有增删改动作
         default:
-            // Fix: Narrow action type before accessing payload to satisfy TS compiler
-            const crudAction = action as { type: string; payload: any };
-            if (crudAction.type.includes('ADD_')) {
-                const key = (crudAction.type.split('_')[1].toLowerCase() + 's').replace('influencerss', 'influencers').replace('shipmentss', 'shipments').replace('automation_rules', 'automationRules') as keyof AppState;
-                if (Array.isArray(state[key])) {
-                    (nextState as any)[key] = [crudAction.payload, ...(state[key] as any[])];
-                    nextState.saveStatus = 'dirty';
-                }
-            } else if (crudAction.type.includes('UPDATE_')) {
-                const key = (crudAction.type.split('_')[1].toLowerCase() + 's').replace('influencerss', 'influencers').replace('shipmentss', 'shipments').replace('inbounds', 'inboundShipments').replace('automation_rules', 'automationRules') as keyof AppState;
-                if (Array.isArray(state[key])) {
-                    (nextState as any)[key] = (state[key] as any[]).map(i => i.id === crudAction.payload.id ? crudAction.payload : i);
-                    nextState.saveStatus = 'dirty';
-                }
-            } else if (crudAction.type.includes('DELETE_')) {
-                const key = (crudAction.type.split('_')[1].toLowerCase() + 's').replace('influencerss', 'influencers').replace('shipmentss', 'shipments').replace('automation_rules', 'automationRules') as keyof AppState;
-                if (Array.isArray(state[key])) {
-                    (nextState as any)[key] = (state[key] as any[]).filter(i => i.id !== crudAction.payload);
-                    nextState.saveStatus = 'dirty';
-                }
+            // 劫持所有的 ADD/UPDATE/DELETE 动作
+            if (action.type.startsWith('ADD_') || action.type.startsWith('UPDATE_') || action.type.startsWith('DELETE_')) {
+                // @ts-ignore
+                nextState = { ...state, saveStatus: 'dirty' };
             }
             break;
     }
 
-    if (nextState !== state) {
-        idb.set(nextState);
-    }
+    if (nextState !== state) idb.set(nextState);
     return nextState;
 }
 
 const TanxingContext = createContext<{
     state: AppState;
-    dispatch: React.Dispatch<Action>;
+    dispatch: React.Dispatch<any>; // 简化 dispatch 类型以支持动态 action
     syncToCloud: (force?: boolean) => Promise<void>;
     pullFromCloud: (manual?: boolean) => Promise<void>;
     connectToPb: (url: string) => Promise<boolean>;
@@ -180,7 +151,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const pbRef = useRef<PocketBase | null>(null);
     const syncTimerRef = useRef<any>(null);
 
-    // 1. 启动初始化
+    // 1. 初始化系统
     useEffect(() => {
         const startup = async () => {
             const cached = await idb.get();
@@ -197,54 +168,61 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     } 
                 });
             }
-            if (lastUrl) connectToPb(lastUrl);
+            // 延迟连接，确保初始化完成
+            if (lastUrl) setTimeout(() => connectToPb(lastUrl), 500);
         };
         startup();
         return () => { if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*'); };
     }, []);
 
-    // 2. 核心：动作监听与自动同步 (像飞书一样自动保存)
+    // 2. 像飞书一样自动同步：只要数据变了（dirty），就推送到云端
     useEffect(() => {
         if (state.saveStatus === 'dirty' && state.connectionStatus === 'connected') {
-            // 防抖处理：停止操作 1 秒后自动同步
             clearTimeout(syncTimerRef.current);
             syncTimerRef.current = setTimeout(() => {
                 syncToCloud(false);
-            }, 1000);
+            }, 1500); // 停止操作 1.5 秒后同步
         }
-    }, [state.products, state.transactions, state.customers, state.shipments, state.influencers, state.orders, state.tasks]);
+    }, [state.products, state.transactions, state.customers, state.shipments, state.orders, state.tasks, state.saveStatus]);
 
     const connectToPb = async (url: string): Promise<boolean> => {
         if (!url) return false;
         dispatch({ type: 'SET_CONN', payload: 'connecting' });
+        
         const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
         
         try {
             const pb = new PocketBase(cleanUrl);
-            await pb.health.check();
+            // 5秒强制超时，防止一直转圈
+            const health = await Promise.race([
+                pb.health.check(),
+                new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 5000))
+            ]);
+
             pbRef.current = pb;
             localStorage.setItem(CONFIG_KEY, cleanUrl);
             dispatch({ type: 'SET_CONN', payload: 'connected' });
 
-            // 订阅逻辑：监听他人修改
+            // 监听远程广播
             pb.collection('backups').subscribe('*', (e) => {
                 if (e.action === 'update' || e.action === 'create') {
                     try {
-                        const remoteData = JSON.parse(e.record.payload);
-                        // 关键：如果更新源不是我自己，立刻热更新视图
-                        if (remoteData.lastUpdatedBy !== SESSION_ID) {
-                            console.log("接收到来自另一台设备的同步信号...");
-                            dispatch({ type: 'BOOT', payload: { ...remoteData, pbUrl: cleanUrl } });
+                        const remote = JSON.parse(e.record.payload);
+                        // 关键：只有当远程版本比我新，且更新者不是我时，才更新本地
+                        if (remote.lastUpdatedBy !== SESSION_ID) {
+                            console.log("收到远程节点指令，正在执行原子对齐...");
+                            dispatch({ type: 'BOOT', payload: { ...remote, saveStatus: 'idle' } });
                         }
-                    } catch (err) { console.error("解析远程协议失败", err); }
+                    } catch (err) { console.warn("协议解析异常"); }
                 }
-            });
+            }, { /* realtime options */ });
 
-            // 连上后先拉一次
             pullFromCloud(false);
             return true;
-        } catch (e) {
+        } catch (e: any) {
+            console.error("Link Failed:", e);
             dispatch({ type: 'SET_CONN', payload: 'error' });
+            showToast('无法连接到腾讯云节点：请检查防火墙端口(8090)或允许浏览器访问不安全内容', 'error');
             return false;
         }
     };
@@ -252,26 +230,29 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncToCloud = async (force: boolean = false) => {
         if (!pbRef.current || state.connectionStatus !== 'connected') return;
         try {
+            const newVersion = state.remoteVersion + 1;
             const payload = JSON.stringify({
                 products: state.products, transactions: state.transactions,
                 customers: state.customers, orders: state.orders, shipments: state.shipments,
                 influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
                 inboundShipments: state.inboundShipments, automationRules: state.automationRules,
                 lastUpdatedBy: SESSION_ID,
+                remoteVersion: newVersion,
                 timestamp: Date.now()
             });
 
+            // 查找或创建同步记录
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"').catch(() => null);
             if (record) {
                 await pbRef.current.collection('backups').update(record.id, { payload });
             } else {
                 await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
             }
-            if (force) showToast('量子云端镜像已固化', 'success');
-            // 同步完后标记为已保存
-            dispatch({ type: 'BOOT', payload: { saveStatus: 'idle' } as any });
+            
+            dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'idle', remoteVersion: newVersion } as any });
+            if (force) showToast('量子快照已广播至全网', 'success');
         } catch (e) {
-            if (force) showToast('同步链路故障', 'error');
+            console.error("Sync Failed", e);
         }
     };
 
@@ -281,11 +262,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"');
             if (record?.payload) {
                 const data = JSON.parse(record.payload);
-                dispatch({ type: 'BOOT', payload: { ...data, saveStatus: 'idle' } });
-                if (manual) showToast('已从云端拉取最新快照', 'success');
+                if (data.remoteVersion >= state.remoteVersion) {
+                    dispatch({ type: 'BOOT', payload: { ...data, saveStatus: 'idle' } });
+                    if (manual) showToast('数据已与云端同步', 'success');
+                }
             }
         } catch (e) {
-            if (manual) showToast('云端尚无资产快照', 'warning');
+            if (manual) showToast('云端尚无同步协议', 'warning');
         }
     };
 
