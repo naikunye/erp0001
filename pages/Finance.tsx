@@ -12,7 +12,7 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
   AreaChart, Area, PieChart as RePieChart, Pie, Cell
 } from 'recharts';
-import { useTanxing, SESSION_ID } from '../context/TanxingContext';
+import { useTanxing } from '../context/TanxingContext';
 import { Transaction, TransactionCategory, PaymentMethod, TransactionType } from '../types';
 import { GoogleGenAI } from "@google/genai";
 
@@ -236,7 +236,7 @@ const Finance: React.FC = () => {
                       </div>
                       <div className="space-y-2">
                           <div className="flex justify-between text-[10px] font-bold text-emerald-400 uppercase"><span>预测汇率 (USD/CNY)</span><span>{stressExchangeRate}</span></div>
-                          {/* Fix line 239: replace setExchangeRate with setStressExchangeRate to match state definition */}
+                          {/* Fixed: Line 239 - using setStressExchangeRate to match state definition */}
                           <input type="range" min="6.5" max="8.0" step="0.05" value={stressExchangeRate} onChange={e=>setStressExchangeRate(parseFloat(e.target.value))} className="w-48 h-1.5 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-emerald-500" />
                       </div>
                   </div>

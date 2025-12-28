@@ -1,74 +1,67 @@
 
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useRef, useState } from 'react';
 import PocketBase from 'pocketbase';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
-    InboundShipment, Order, AuditLog, AutomationRule, AutomationLog, Supplier,
-    StockJournalEntry, Influencer
+    InboundShipment, Order, AutomationRule, Supplier, Influencer
 } from '../types';
 import { 
     MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, 
-    MOCK_SHIPMENTS, MOCK_INBOUND_SHIPMENTS, MOCK_ORDERS, MOCK_SUPPLIERS, MOCK_INFLUENCERS
+    MOCK_SHIPMENTS, MOCK_ORDERS
 } from '../constants';
 
-const DB_NAME = 'TANXING_IDB_V2';
-const STORE_NAME = 'STATE_STORE';
-const CONFIG_KEY = 'TANXING_PB_CONFIG_V1'; 
-const CONN_STATUS_KEY = 'TANXING_CONN_STATUS_PB';
-export let SESSION_ID = Math.random().toString(36).substring(7);
+const DB_NAME = 'TANXING_V6_CORE';
+const STORE_NAME = 'GLOBAL_STATE';
+const CONFIG_KEY = 'PB_URL_NODE'; 
+export const SESSION_ID = 'TX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
 const idb = {
     db: null as IDBDatabase | null,
     async init() {
         if (this.db) return this.db;
         return new Promise<IDBDatabase>((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 1);
+            const request = indexedDB.open(DB_NAME, 5);
             request.onupgradeneeded = () => {
-                if (!request.result.objectStoreNames.contains(STORE_NAME)) request.result.createObjectStore(STORE_NAME);
+                if (!request.result.objectStoreNames.contains(STORE_NAME)) {
+                    request.result.createObjectStore(STORE_NAME);
+                }
             };
             request.onsuccess = () => { this.db = request.result; resolve(request.result); };
             request.onerror = () => reject(request.error);
         });
     },
-    async set(key: string, val: any) {
-        const db = await this.init();
-        return new Promise((resolve, reject) => {
+    async set(val: any) {
+        try {
+            const db = await this.init();
             const tx = db.transaction(STORE_NAME, 'readwrite');
-            tx.objectStore(STORE_NAME).put(val, key);
-            tx.oncomplete = () => resolve(true);
-            tx.onerror = () => reject(tx.error);
-        });
+            const store = tx.objectStore(STORE_NAME);
+            const cleanData = JSON.parse(JSON.stringify(val));
+            store.put(cleanData, 'LATEST');
+        } catch (e) { console.warn("IDB Cache Ignored", e); }
     },
-    async get(key: string) {
-        const db = await this.init();
-        return new Promise((resolve, reject) => {
-            const tx = db.transaction(STORE_NAME, 'readonly');
-            const req = tx.objectStore(STORE_NAME).get(key);
-            req.onsuccess = () => resolve(req.result);
-            req.onerror = () => reject(req.error);
-        });
-    },
-    async clear() {
-        const db = await this.init();
-        db.transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).clear();
+    async get() {
+        try {
+            const db = await this.init();
+            return new Promise((resolve) => {
+                const tx = db.transaction(STORE_NAME, 'readonly');
+                const req = tx.objectStore(STORE_NAME).get('LATEST');
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => resolve(null);
+            });
+        } catch (e) { return null; }
     }
 };
 
-export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'reconnecting' | 'error';
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
-interface PBConfig { url: string; lastSync: string | null; payloadSize?: number; remoteUpdatedAt?: string; }
-
 interface AppState {
-    theme: 'ios-glass' | 'cyber-neon' | 'midnight-dark';
     activePage: Page;
-    navParams: { searchQuery?: string };
-    pbConfig: PBConfig;
+    pbUrl: string;
     connectionStatus: ConnectionStatus;
     saveStatus: SaveStatus;
     exchangeRate: number;
     products: Product[];
-    stockJournal: StockJournalEntry[];
     transactions: Transaction[];
     customers: Customer[];
     orders: Order[];
@@ -76,306 +69,255 @@ interface AppState {
     tasks: Task[];
     inboundShipments: InboundShipment[];
     suppliers: Supplier[];
-    toasts: Toast[];
-    auditLogs: AuditLog[];
-    automationRules: AutomationRule[];
-    automationLogs: AutomationLog[];
-    isMobileMenuOpen: boolean;
-    isInitialized: boolean; 
-    syncAllowed: boolean; 
-    syncLocked: boolean; 
     influencers: Influencer[];
-    lastMutationTime: number; 
+    toasts: Toast[];
+    automationRules: AutomationRule[];
+    isMobileMenuOpen: boolean;
+    isInitialized: boolean;
+    navParams?: any;
 }
 
+const initialState: AppState = {
+    activePage: 'dashboard', pbUrl: '',
+    connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
+    products: [], transactions: [], customers: [], orders: [], shipments: [], 
+    tasks: [], inboundShipments: [], suppliers: [], influencers: [], toasts: [],
+    automationRules: [], isMobileMenuOpen: false, isInitialized: false
+};
+
 type Action =
-    | { type: 'SET_THEME'; payload: AppState['theme'] }
-    | { type: 'NAVIGATE'; payload: { page: Page; params?: { searchQuery?: string } } }
-    | { type: 'SET_CONNECTION_STATUS'; payload: ConnectionStatus }
-    | { type: 'SET_SAVE_STATUS'; payload: SaveStatus }
+    | { type: 'BOOT'; payload: Partial<AppState> }
+    | { type: 'NAVIGATE'; payload: { page: Page; params?: any } }
+    | { type: 'SET_CONN'; payload: ConnectionStatus }
+    | { type: 'UPDATE_DATA'; payload: Partial<AppState> }
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
     | { type: 'REMOVE_TOAST'; payload: string }
-    | { type: 'UPDATE_PRODUCT'; payload: Product }
-    | { type: 'ADD_PRODUCT'; payload: Product }
-    | { type: 'HYDRATE_STATE'; payload: Partial<AppState> }
-    | { type: 'LOAD_MOCK_DATA' }
-    | { type: 'SET_PB_CONFIG'; payload: Partial<PBConfig> }
     | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
-    | { type: 'RESET_DATA' }
-    | { type: 'INITIALIZED_SUCCESS' }
-    | { type: 'UNLOCK_SYNC' }
-    | { type: 'ADD_TRANSACTION'; payload: Transaction }
-    | { type: 'DELETE_TRANSACTION'; payload: string }
     | { type: 'ADD_SHIPMENT'; payload: Shipment }
     | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
     | { type: 'DELETE_SHIPMENT'; payload: string }
+    | { type: 'ADD_PRODUCT'; payload: Product }
+    | { type: 'UPDATE_PRODUCT'; payload: Product }
+    | { type: 'DELETE_PRODUCT'; payload: string }
+    | { type: 'ADD_TRANSACTION'; payload: Transaction }
+    | { type: 'DELETE_TRANSACTION'; payload: string }
     | { type: 'ADD_CUSTOMER'; payload: Customer }
     | { type: 'UPDATE_CUSTOMER'; payload: Customer }
     | { type: 'DELETE_CUSTOMER'; payload: string }
-    | { type: 'ADD_SUPPLIER'; payload: Supplier }
-    | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
-    | { type: 'DELETE_SUPPLIER'; payload: string }
-    | { type: 'ADD_TASK'; payload: Task }
-    | { type: 'UPDATE_TASK'; payload: Task }
-    | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'ADD_ORDER'; payload: Order }
-    | { type: 'UPDATE_ORDER_STATUS'; payload: { orderId: string, status: Order['status'] } }
-    | { type: 'DELETE_ORDER'; payload: string }
-    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
     | { type: 'ADD_INFLUENCER'; payload: Influencer }
     | { type: 'UPDATE_INFLUENCER'; payload: Influencer }
     | { type: 'DELETE_INFLUENCER'; payload: string }
+    | { type: 'ADD_TASK'; payload: Task }
+    | { type: 'UPDATE_TASK'; payload: Task }
+    | { type: 'DELETE_TASK'; payload: string }
+    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
+    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
+    | { type: 'ADD_SUPPLIER'; payload: Supplier }
+    | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
+    | { type: 'DELETE_SUPPLIER'; payload: string }
     | { type: 'ADD_AUTOMATION_RULE'; payload: AutomationRule }
     | { type: 'UPDATE_AUTOMATION_RULE'; payload: AutomationRule }
     | { type: 'DELETE_AUTOMATION_RULE'; payload: string }
-    | { type: 'CLEAR_NAV_PARAMS' }
-    | { type: 'DELETE_PRODUCT'; payload: string };
+    | { type: 'CLEAR_NAV_PARAMS' };
 
-const emptyState: AppState = {
-    theme: 'ios-glass', activePage: 'dashboard', navParams: {},
-    pbConfig: { url: '', lastSync: null, payloadSize: 0, remoteUpdatedAt: '' },
-    connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
-    products: [], stockJournal: [], transactions: [], customers: [], orders: [], shipments: [], tasks: [], 
-    inboundShipments: [], suppliers: [], toasts: [], auditLogs: [], 
-    automationRules: [], automationLogs: [],
-    isMobileMenuOpen: false, isInitialized: false, syncAllowed: false, syncLocked: true, influencers: [],
-    lastMutationTime: 0
-};
-
-const safeLocalSave = (state: AppState) => { idb.set('GLOBAL_STATE', state).catch(e => console.error('IDB Save Error:', e)); };
-
-const appReducer = (state: AppState, action: Action): AppState => {
-    const markDirty = (newState: Partial<AppState>): AppState => {
-        const updated = { 
-            ...state, 
-            ...newState, 
-            syncAllowed: true, 
-            saveStatus: 'dirty' as SaveStatus,
-            lastMutationTime: Date.now()
-        };
-        safeLocalSave(updated); 
-        return updated;
+function appReducer(state: AppState, action: Action): AppState {
+    const ensureArrays = (s: Partial<AppState>): Partial<AppState> => {
+        const keys: (keyof AppState)[] = ['products', 'transactions', 'customers', 'orders', 'shipments', 'tasks', 'inboundShipments', 'suppliers', 'influencers', 'toasts', 'automationRules'];
+        keys.forEach(k => { 
+            if (!s[k] || !Array.isArray(s[k])) (s as any)[k] = (state[k] && Array.isArray(state[k])) ? state[k] : []; 
+        });
+        return s;
     };
+
+    const safeUpdate = (updates: Partial<AppState>): AppState => {
+        const next = { ...state, ...ensureArrays(updates), isInitialized: true };
+        idb.set(next);
+        return next;
+    };
+
     switch (action.type) {
-        case 'SET_THEME': return { ...state, theme: action.payload };
-        case 'NAVIGATE': return { ...state, activePage: action.payload.page, navParams: action.payload.params || {} };
-        case 'SET_CONNECTION_STATUS': { localStorage.setItem(CONN_STATUS_KEY, action.payload); return { ...state, connectionStatus: action.payload }; }
-        case 'SET_SAVE_STATUS': return { ...state, saveStatus: action.payload };
-        case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Date.now().toString() }] };
+        case 'BOOT': return safeUpdate(action.payload);
+        case 'NAVIGATE': return { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
+        case 'SET_CONN': return { ...state, connectionStatus: action.payload };
+        case 'UPDATE_DATA': return safeUpdate({ ...action.payload, saveStatus: 'dirty' });
+        case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-        case 'HYDRATE_STATE': { const updated = { ...state, ...action.payload }; if (action.payload.syncLocked !== undefined) updated.syncLocked = action.payload.syncLocked; safeLocalSave(updated); return updated; }
-        case 'LOAD_MOCK_DATA': return { ...state, products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, inboundShipments: MOCK_INBOUND_SHIPMENTS, orders: MOCK_ORDERS, suppliers: MOCK_SUPPLIERS, influencers: MOCK_INFLUENCERS, automationRules: [{ id: 'R-001', name: '库存水位预警', trigger: 'low_stock_warning', action: 'create_task', status: 'active' }], isInitialized: true, syncLocked: false, lastMutationTime: Date.now() };
-        case 'UNLOCK_SYNC': return { ...state, syncLocked: false };
-        case 'SET_PB_CONFIG': { const newConfig = { ...state.pbConfig, ...action.payload }; localStorage.setItem(CONFIG_KEY, JSON.stringify(newConfig)); return { ...state, pbConfig: newConfig }; }
-        case 'INITIALIZED_SUCCESS': return { ...state, isInitialized: true };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'RESET_DATA': { idb.clear(); localStorage.clear(); return { ...emptyState, isInitialized: true, syncLocked: false }; }
-        case 'UPDATE_PRODUCT': return markDirty({ products: state.products.map(p => p.id === action.payload.id ? action.payload : p) });
-        case 'ADD_PRODUCT': return markDirty({ products: [action.payload, ...state.products] });
-        case 'ADD_TRANSACTION': return markDirty({ transactions: [action.payload, ...state.transactions] });
-        case 'DELETE_TRANSACTION': return markDirty({ transactions: state.transactions.filter(t => t.id !== action.payload) });
-        case 'ADD_SHIPMENT': return markDirty({ shipments: [action.payload, ...state.shipments] });
-        case 'UPDATE_SHIPMENT': return markDirty({ shipments: state.shipments.map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SHIPMENT': return markDirty({ shipments: state.shipments.filter(s => s.id !== action.payload) });
-        case 'ADD_CUSTOMER': return markDirty({ customers: [action.payload, ...state.customers] });
-        case 'UPDATE_CUSTOMER': return markDirty({ customers: state.customers.map(c => c.id === action.payload.id ? action.payload : c) });
-        case 'DELETE_CUSTOMER': return markDirty({ customers: state.customers.filter(c => c.id !== action.payload) });
-        case 'ADD_SUPPLIER': return markDirty({ suppliers: [action.payload, ...state.suppliers] });
-        case 'UPDATE_SUPPLIER': return markDirty({ suppliers: state.suppliers.map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SUPPLIER': return markDirty({ suppliers: state.suppliers.filter(s => s.id !== action.payload) });
-        case 'ADD_TASK': return markDirty({ tasks: [action.payload, ...state.tasks] });
-        case 'UPDATE_TASK': return markDirty({ tasks: state.tasks.map(t => t.id === action.payload.id ? action.payload : t) });
-        case 'DELETE_TASK': return markDirty({ tasks: state.tasks.filter(t => t.id !== action.payload) });
-        case 'ADD_ORDER': return markDirty({ orders: [action.payload, ...state.orders] });
-        case 'UPDATE_ORDER_STATUS': return markDirty({ orders: state.orders.map(o => o.id === action.payload.orderId ? { ...o, status: action.payload.status } : o) });
-        case 'DELETE_ORDER': return markDirty({ orders: state.orders.filter(o => o.id !== action.payload) });
-        case 'CREATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: [action.payload, ...state.inboundShipments] });
-        case 'UPDATE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.map(i => i.id === action.payload.id ? action.payload : i) });
-        case 'DELETE_INBOUND_SHIPMENT': return markDirty({ inboundShipments: state.inboundShipments.filter(i => i.id !== action.payload) });
-        case 'ADD_INFLUENCER': return markDirty({ influencers: [action.payload, ...(state.influencers || [])] });
-        case 'UPDATE_INFLUENCER': return markDirty({ influencers: (state.influencers || []).map(i => i.id === action.payload.id ? action.payload : i) });
-        case 'DELETE_INFLUENCER': return markDirty({ influencers: (state.influencers || []).filter(i => i.id !== action.payload) });
-        case 'ADD_AUTOMATION_RULE': return markDirty({ automationRules: [action.payload, ...(state.automationRules || [])] });
-        case 'UPDATE_AUTOMATION_RULE': return markDirty({ automationRules: (state.automationRules || []).map(r => r.id === action.payload.id ? action.payload : r) });
-        case 'DELETE_AUTOMATION_RULE': return markDirty({ automationRules: (state.automationRules || []).filter(r => r.id !== action.payload) });
-        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: {} };
-        case 'DELETE_PRODUCT': return markDirty({ products: state.products.filter(p => p.id !== action.payload) });
+        case 'ADD_PRODUCT': return safeUpdate({ products: [action.payload, ...(state.products || [])] });
+        case 'UPDATE_PRODUCT': return safeUpdate({ products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) });
+        case 'DELETE_PRODUCT': return safeUpdate({ products: (state.products || []).filter(p => p.id !== action.payload) });
+        case 'ADD_TRANSACTION': return safeUpdate({ transactions: [action.payload, ...(state.transactions || [])] });
+        case 'DELETE_TRANSACTION': return safeUpdate({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
+        case 'ADD_SHIPMENT': return safeUpdate({ shipments: [action.payload, ...(state.shipments || [])] });
+        case 'UPDATE_SHIPMENT': return safeUpdate({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'DELETE_SHIPMENT': return safeUpdate({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
+        case 'ADD_CUSTOMER': return safeUpdate({ customers: [action.payload, ...(state.customers || [])] });
+        case 'UPDATE_CUSTOMER': return safeUpdate({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
+        case 'DELETE_CUSTOMER': return safeUpdate({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
+        case 'ADD_INFLUENCER': return safeUpdate({ influencers: [action.payload, ...(state.influencers || [])] });
+        case 'UPDATE_INFLUENCER': return safeUpdate({ influencers: (state.influencers || []).map(i => i.id === action.payload.id ? action.payload : i) });
+        case 'DELETE_INFLUENCER': return safeUpdate({ influencers: (state.influencers || []).filter(i => i.id !== action.payload) });
+        case 'ADD_TASK': return safeUpdate({ tasks: [action.payload, ...(state.tasks || [])] });
+        case 'UPDATE_TASK': return safeUpdate({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
+        case 'DELETE_TASK': return safeUpdate({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
+        case 'CREATE_INBOUND_SHIPMENT': return safeUpdate({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
+        case 'UPDATE_INBOUND_SHIPMENT': return safeUpdate({ inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) });
+        case 'DELETE_INBOUND_SHIPMENT': return safeUpdate({ inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) });
+        case 'ADD_SUPPLIER': return safeUpdate({ suppliers: [action.payload, ...(state.suppliers || [])] });
+        case 'UPDATE_SUPPLIER': return safeUpdate({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
+        case 'DELETE_SUPPLIER': return safeUpdate({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
+        case 'ADD_AUTOMATION_RULE': return safeUpdate({ automationRules: [action.payload, ...(state.automationRules || [])] });
+        case 'UPDATE_AUTOMATION_RULE': return safeUpdate({ automationRules: (state.automationRules || []).map(r => r.id === action.payload.id ? action.payload : r) });
+        case 'DELETE_AUTOMATION_RULE': return safeUpdate({ automationRules: (state.automationRules || []).filter(r => r.id !== action.payload) });
+        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: undefined };
         default: return state;
     }
-};
-
-interface TanxingContextType { 
-    state: AppState; 
-    dispatch: React.Dispatch<Action>; 
-    showToast: (message: string, type: Toast['type']) => void; 
-    syncToCloud: (isForce?: boolean) => Promise<{success: boolean, error?: string}>; 
-    pullFromCloud: (isSilent?: boolean) => Promise<boolean>; 
-    bootSupa: (url: string, key: string, isManual?: boolean) => Promise<void>; 
-    disconnectSupa: () => void; 
 }
 
-const TanxingContext = createContext<TanxingContextType | undefined>(undefined);
+const TanxingContext = createContext<{
+    state: AppState;
+    dispatch: React.Dispatch<Action>;
+    syncToCloud: (force?: boolean) => Promise<void>;
+    pullFromCloud: (manual?: boolean) => Promise<void>;
+    connectToPb: (url: string) => Promise<void>;
+    showToast: (m: string, t: Toast['type']) => void;
+} | undefined>(undefined);
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const [state, dispatch] = useReducer(appReducer, emptyState);
-    const isSyncingRef = useRef(false);
+    const [state, dispatch] = useReducer(appReducer, initialState);
     const pbRef = useRef<PocketBase | null>(null);
+    const healthCheckInterval = useRef<any>(null);
 
-    const bootSupa = async (url: string, _unused: string, isManual: boolean = false) => { 
-        if (!url) return; 
-        
-        let cleanUrl = url.trim();
-        if (!cleanUrl.startsWith('http')) cleanUrl = `http://${cleanUrl}`;
-
-        try { 
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connecting' });
-            const pb = new PocketBase(cleanUrl);
-            pbRef.current = pb;
+    useEffect(() => {
+        const startup = async () => {
+            const cached = await idb.get();
+            const lastUrl = localStorage.getItem(CONFIG_KEY) || '';
             
-            // 简单的连通性测试
-            await pb.health.check();
-
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'connected' }); 
-            dispatch({ type: 'UNLOCK_SYNC' }); 
-            if (isManual) showToast('私有云协议已握手成功', 'success');
-        } catch (e: any) { 
-            console.error("[PocketBoot] Fatal Error:", e);
-            dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'error' });
-            if (isManual) showToast(`连接失败: ${e.message}`, 'error');
-        } 
-    };
-
-    const disconnectSupa = () => { 
-        pbRef.current = null;
-        dispatch({ type: 'SET_CONNECTION_STATUS', payload: 'disconnected' }); 
-        dispatch({ type: 'SET_PB_CONFIG', payload: { url: '', lastSync: null } }); 
-        localStorage.removeItem(CONN_STATUS_KEY);
-        localStorage.removeItem(CONFIG_KEY);
-    };
-
-    const syncToCloud = async (isForce: boolean = false): Promise<{success: boolean, error?: string}> => { 
-        if (!pbRef.current) {
-            if (isForce) return { success: false, error: '未配置私有云网关' };
-            return { success: true };
-        }
-        
-        if (!isForce && (!state.syncAllowed || state.syncLocked)) return { success: true };
-        if (isSyncingRef.current) return { success: true }; 
-        
-        isSyncingRef.current = true; 
-        dispatch({ type: 'SET_SAVE_STATUS', payload: 'saving' }); 
-
-        try { 
-            const payloadData = { 
-                products: state.products || [], orders: state.orders || [], shipments: state.shipments || [], 
-                transactions: state.transactions || [], customers: state.customers || [], 
-                influencers: state.influencers || [], suppliers: state.suppliers || [], 
-                tasks: state.tasks || [], inboundShipments: state.inboundShipments || [], 
-                automationRules: state.automationRules || []
-            }; 
-            const jsonPayload = JSON.stringify(payloadData); 
-            const size = new Blob([jsonPayload]).size; 
-            
-            // PocketBase 逻辑：先查找，有则更新无则创建
-            let record;
-            try {
-                record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_ERP_NODE"');
-                await pbRef.current.collection('backups').update(record.id, {
-                    payload: jsonPayload,
-                    updated_at: new Date().toISOString()
-                });
-            } catch (e) {
-                // 如果找不到记录，则创建
-                await pbRef.current.collection('backups').create({
-                    unique_id: 'GLOBAL_ERP_NODE',
-                    payload: jsonPayload
-                });
-            }
-
-            dispatch({ type: 'SET_PB_CONFIG', payload: { 
-                lastSync: new Date().toLocaleTimeString(), 
-                payloadSize: size 
-            } }); 
-            dispatch({ type: 'HYDRATE_STATE', payload: { syncAllowed: false, saveStatus: 'saved' } }); 
-            setTimeout(() => dispatch({ type: 'SET_SAVE_STATUS', payload: 'idle' }), 1200); 
-            return { success: true }; 
-        } catch (e: any) { 
-            console.error("[PocketSync] Error:", e);
-            dispatch({ type: 'SET_SAVE_STATUS', payload: 'error' }); 
-            return { success: false, error: e.message || '网关通信故障' }; 
-        } finally { 
-            isSyncingRef.current = false; 
-        } 
-    };
-
-    const pullFromCloud = async (isSilent: boolean = false): Promise<boolean> => { 
-        if (!pbRef.current) return false; 
-        try { 
-            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_ERP_NODE"');
-            if (!record || !record.payload) return false;
-            
-            const payload = JSON.parse(record.payload); 
-            const size = new Blob([record.payload]).size; 
-
-            dispatch({ type: 'HYDRATE_STATE', payload: { 
-                ...payload, 
-                syncLocked: false, 
-                syncAllowed: false, 
-                saveStatus: 'idle', 
-                isInitialized: true, 
-                pbConfig: { 
-                    ...state.pbConfig, 
-                    payloadSize: size, 
-                    lastSync: `已恢复: ${new Date(record.updated).toLocaleTimeString()}` 
-                } 
-            } }); 
-            if (!isSilent) showToast('量子对齐完成：已同步最新云端镜像', 'success'); 
-            return true; 
-        } catch (e: any) { 
-            console.error("[PocketPull] Error:", e);
-            if (!isSilent) showToast('拉取镜像失败', 'error');
-            return false; 
-        } 
-    };
-
-    useEffect(() => { 
-        if (!state.isInitialized || !state.syncAllowed || state.syncLocked || !pbRef.current) return; 
-        const timer = setTimeout(() => syncToCloud(), 3000); 
-        return () => clearTimeout(timer); 
-    }, [state.lastMutationTime, state.syncAllowed, state.syncLocked]);
-
-    useEffect(() => { 
-        const startup = async () => { 
-            try { 
-                const savedDb: any = await idb.get('GLOBAL_STATE'); 
-                if (savedDb) dispatch({ type: 'HYDRATE_STATE', payload: { ...savedDb, syncLocked: true } }); 
-            } catch(e) {} 
-            
-            const savedConfig = localStorage.getItem(CONFIG_KEY); 
-            if (savedConfig) { 
-                try { 
-                    const config = JSON.parse(savedConfig); 
-                    dispatch({ type: 'SET_PB_CONFIG', payload: config }); 
-                    if (config.url) { 
-                        await bootSupa(config.url, '', false); 
-                        await pullFromCloud(true);
-                    } else {
-                        dispatch({ type: 'UNLOCK_SYNC' }); 
-                    }
-                } catch (e) { dispatch({ type: 'UNLOCK_SYNC' }); } 
+            if (cached) {
+                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl } });
             } else {
-                dispatch({ type: 'LOAD_MOCK_DATA' }); 
+                dispatch({ 
+                    type: 'BOOT', 
+                    payload: { 
+                        products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, 
+                        customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, 
+                        orders: MOCK_ORDERS, pbUrl: lastUrl
+                    } 
+                });
             }
-            dispatch({ type: 'INITIALIZED_SUCCESS' }); 
-        }; 
-        startup(); 
-    }, []);
+            if (lastUrl) {
+                connectToPb(lastUrl).catch(() => console.log("Init node offline."));
+            }
+        };
+        startup();
+        
+        healthCheckInterval.current = setInterval(() => {
+            if (pbRef.current) {
+                pbRef.current.health.check()
+                    .then(() => { if(state.connectionStatus !== 'connected') dispatch({type: 'SET_CONN', payload: 'connected'}); })
+                    .catch(() => { if(state.connectionStatus === 'connected') dispatch({type: 'SET_CONN', payload: 'error'}); });
+            }
+        }, 30000);
+
+        return () => clearInterval(healthCheckInterval.current);
+    }, [state.connectionStatus]);
+
+    const connectToPb = async (url: string) => {
+        if (!url) return;
+        dispatch({ type: 'SET_CONN', payload: 'connecting' });
+        try {
+            const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
+            const pb = new PocketBase(cleanUrl);
+            
+            // 检查 HTTPS 页面连接 HTTP 服务器的问题 (Mixed Content)
+            if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
+                showToast('安全冲突：HTTPS 网页无法连接 HTTP 数据库。请尝试使用 HTTP 访问 ERP 或为数据库配置 SSL。', 'error');
+                dispatch({ type: 'SET_CONN', payload: 'error' });
+                return;
+            }
+
+            const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout')), 5000));
+            await Promise.race([pb.health.check(), timeoutPromise]);
+            
+            pbRef.current = pb;
+            localStorage.setItem(CONFIG_KEY, cleanUrl);
+            dispatch({ type: 'UPDATE_DATA', payload: { pbUrl: cleanUrl } });
+            dispatch({ type: 'SET_CONN', payload: 'connected' });
+        } catch (e: any) {
+            dispatch({ type: 'SET_CONN', payload: 'error' });
+            if (e.message.includes('Failed to fetch')) {
+                showToast('连接失败：网络无法连通或 CORS 跨域被拦截。请检查 8090 端口和防火墙。', 'error');
+            } else {
+                showToast(`连接异常: ${e.message}`, 'error');
+            }
+            throw e;
+        }
+    };
+
+    const syncToCloud = async (force: boolean = false) => {
+        if (!pbRef.current || state.connectionStatus !== 'connected') {
+            if (force) showToast('量子链路断开，无法同步', 'error');
+            return;
+        }
+        try {
+            const payload = JSON.stringify({
+                products: state.products, transactions: state.transactions,
+                customers: state.customers, orders: state.orders, shipments: state.shipments,
+                influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
+                inboundShipments: state.inboundShipments, automationRules: state.automationRules
+            });
+            
+            // 尝试获取现有记录
+            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"').catch(() => null);
+            
+            if (record) {
+                await pbRef.current.collection('backups').update(record.id, { payload });
+            } else {
+                await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
+            }
+            if (force) showToast('云端同步成功', 'success');
+        } catch (e: any) {
+            console.error("Sync Error", e);
+            if (e.status === 404 || e.status === 400) {
+                showToast('同步失败：请确认已在数据库创建 backups 集合', 'error');
+            } else if (e.status === 403) {
+                showToast('权限拒绝：请在 backups 集合中清空 API Rules 规则', 'error');
+            } else if (force) {
+                showToast('同步失败：链路不稳定', 'error');
+            }
+        }
+    };
+
+    const pullFromCloud = async (manual: boolean = false) => {
+        if (!pbRef.current) return;
+        try {
+            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"');
+            if (record && record.payload) {
+                const data = JSON.parse(record.payload);
+                dispatch({ type: 'BOOT', payload: data });
+                if (manual) showToast('已从云端拉取最新快照', 'success');
+            }
+        } catch (e: any) {
+            if (manual) {
+                if (e.status === 404) showToast('获取失败：数据库 backups 表不存在', 'error');
+                else if (e.status === 403) showToast('获取失败：请检查 backups 表的 List 权限', 'error');
+                else showToast('云端暂无存档', 'warning');
+            }
+        }
+    };
 
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
-    
-    return ( <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa, disconnectSupa }}> {children} </TanxingContext.Provider> );
+
+    return (
+        <TanxingContext.Provider value={{ state, dispatch, syncToCloud, pullFromCloud, connectToPb, showToast }}>
+            {children}
+        </TanxingContext.Provider>
+    );
 };
 
-export const useTanxing = () => { const context = useContext(TanxingContext); if (!context) throw new Error('useTanxing error'); return context; };
+export const useTanxing = () => {
+    const context = useContext(TanxingContext);
+    if (!context) throw new Error('useTanxing must be used within Provider');
+    return context;
+};

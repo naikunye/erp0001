@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Clock, Globe, Wifi, WifiOff, Loader2, AlertCircle, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload, SignalLow } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Globe, WifiOff, Loader2, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -9,8 +9,7 @@ interface HeaderProps {
 
 const Header: React.FC<HeaderProps> = ({ title }) => {
   const [now, setNow] = useState(new Date());
-  const { state, dispatch, showToast, syncToCloud, pullFromCloud, bootSupa } = useTanxing();
-  const [isManualSyncing, setIsManualSyncing] = useState(false);
+  const { state, dispatch, showToast, syncToCloud, pullFromCloud } = useTanxing();
   const [isPulling, setIsPulling] = useState(false);
 
   useEffect(() => {
@@ -19,47 +18,26 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
   }, []);
 
   const handlePull = async () => {
-      // 允许在 connected 或 restricted 下拉取
-      if (state.connectionStatus !== 'connected' && state.connectionStatus !== 'restricted') {
+      if (state.connectionStatus !== 'connected') {
           showToast('尚未建立云端连接', 'warning');
           return;
       }
       setIsPulling(true);
       try {
-          const success = await pullFromCloud(false);
-          if (success) {
-              showToast('数据已手动同步至最新状态', 'success');
-          } else {
-              showToast('云端暂无可更新镜像', 'info');
-          }
-      } catch (e: any) {
-          showToast(`拉取失败: ${e.message}`, 'error');
+          await pullFromCloud(false);
       } finally {
           setIsPulling(false);
       }
   };
 
-  const handleCloudSync = async () => {
-      // 允许在 connected 或 restricted 下同步
-      if (state.connectionStatus !== 'connected' && state.connectionStatus !== 'restricted') {
+  const handlePush = async () => {
+      if (state.connectionStatus !== 'connected') {
           showToast('云端配置未就绪', 'warning');
           dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } });
           return;
       }
-
-      setIsManualSyncing(true);
-      try {
-          const result = await syncToCloud(true);
-          if (result.success) {
-              showToast('云端镜像已强制更新', 'success');
-          } else {
-              showToast(`同步失败：${result.error}`, 'error');
-          }
-      } catch (e: any) {
-          showToast(`通信故障: ${e.message}`, 'error');
-      } finally {
-          setIsManualSyncing(false);
-      }
+      await syncToCloud(true);
+      showToast('云端镜像已强制覆盖', 'success');
   };
 
   const formatTime = (tz: string) => {
@@ -69,158 +47,49 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     }).format(now);
   };
 
-  const getUSDate = () => {
-    return new Intl.DateTimeFormat('zh-CN', {
-      timeZone: 'America/Los_Angeles',
-      year: 'numeric', month: 'long', day: 'numeric',
-      weekday: 'long'
-    }).format(now);
-  };
-
-  const renderSaveStatus = () => {
-      if (state.connectionStatus === 'reconnecting') {
-          return (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-blue-600/20 border border-blue-500/50 rounded text-[9px] font-black text-blue-400 animate-pulse">
-                  <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 链路自动重连中...
-              </div>
-          );
-      }
-
-      if (state.connectionStatus === 'restricted') {
-          return (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-600/20 border border-amber-500/50 rounded text-[9px] font-black text-amber-400">
-                  <SignalLow className="w-2.5 h-2.5" /> 连接受限 (WebSocket 波动)
-              </div>
-          );
-      }
-      
-      if (state.connectionStatus === 'error') {
-          return (
-              <div className="flex items-center gap-1.5 px-2 py-1 bg-red-600/20 border border-red-500/50 rounded text-[9px] font-black text-red-400">
-                  <ShieldAlert className="w-2.5 h-2.5" /> 数据库协议异常
-              </div>
-          );
-      }
-
-      switch(state.saveStatus) {
-          case 'saving':
-              return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-indigo-500/20 border border-indigo-500/30 rounded text-[9px] font-black text-indigo-400 animate-pulse">
-                      <RefreshCw className="w-2.5 h-2.5 animate-spin" /> 同步镜像中...
-                  </div>
-              );
-          case 'saved':
-              return (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1.5 px-2 py-1 bg-emerald-500/10 border border-emerald-500/20 rounded text-[9px] font-black text-emerald-400">
-                        <CheckCircle2 className="w-2.5 h-2.5" /> 云端同步就绪
-                    </div>
-                    {state.supaConfig.lastSync && (
-                        <span className="text-[8px] text-slate-600 font-mono font-bold uppercase tracking-tighter">
-                            {state.supaConfig.lastSync}
-                        </span>
-                    )}
-                  </div>
-              );
-          case 'dirty':
-              return (
-                  <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/20 border border-amber-500/40 rounded text-[9px] font-black text-amber-400">
-                      <Zap className="w-2.5 h-2.5 animate-bounce" /> 待协同更新
-                  </div>
-              );
-          default:
-              return (
-                  <div className={`flex items-center gap-1.5 px-2 py-1 border rounded text-[8px] font-bold transition-all ${state.connectionStatus === 'connected' ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-400' : 'bg-white/5 border-white/10 text-slate-500'}`}>
-                      <Radio className={`w-2 h-2 ${state.connectionStatus === 'connected' ? 'animate-pulse text-indigo-500' : 'text-slate-700'}`} /> 
-                      {state.connectionStatus === 'connected' ? '云端通信开启' : '单机节点运行'}
-                  </div>
-              );
-      }
-  };
-
   return (
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
       <div className="flex items-center gap-4">
-        <button className="lg:hidden p-2 text-white/60 hover:text-white" onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: true })}>
+        <button className="lg:hidden p-2 text-white/60 hover:text-white" onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU' })}>
             <Menu className="w-6 h-6" />
         </button>
         <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-white tracking-wide">{title}</h1>
-            <div className="mt-1">{renderSaveStatus()}</div>
+            <h1 className="text-xl font-bold text-white tracking-wide uppercase italic">{title}</h1>
+            <div className="flex items-center gap-2 mt-1">
+                <span className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></span>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">NODE://{SESSION_ID}</span>
+            </div>
         </div>
       </div>
 
       <div className="flex items-center space-x-6">
-        <div className="hidden xl:flex items-center gap-8 pr-8 border-r border-white/5">
+        <div className="hidden xl:flex items-center gap-6 pr-8 border-r border-white/5 font-mono">
             <div className="flex flex-col items-end">
-                <div className="flex items-center gap-1.5 text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">
-                    <Globe className="w-2.5 h-2.5" />
-                    系统日期 (美西 PT)
-                </div>
-                <div className="text-xs font-mono font-black text-white">{getUSDate()}</div>
+                <span className="text-[9px] text-indigo-400 font-bold uppercase">Los Angeles</span>
+                <span className="text-xs text-white">{formatTime('America/Los_Angeles')}</span>
             </div>
-            
-            <div className="flex items-center gap-6">
-                <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-slate-500 font-bold uppercase tracking-tighter">美东 ET</span>
-                    <span className="text-xs font-mono text-white/70">{formatTime('America/New_York')}</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-amber-500 font-bold uppercase tracking-tighter">美中 CT</span>
-                    <span className="text-xs font-mono text-amber-400/80">{formatTime('America/Chicago')}</span>
-                </div>
-                <div className="flex flex-col items-center">
-                    <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-tighter">美西 PT</span>
-                    <span className="text-xs font-mono text-indigo-100 bg-indigo-500/20 px-2 py-0.5 rounded border border-indigo-500/30 font-bold">
-                        {formatTime('America/Los_Angeles')}
-                    </span>
-                </div>
+            <div className="flex flex-col items-end border-l border-white/10 pl-6">
+                <span className="text-[9px] text-emerald-400 font-bold uppercase">Beijing</span>
+                <span className="text-xs text-white">{formatTime('Asia/Shanghai')}</span>
             </div>
-        </div>
-
-        <div className="hidden md:block">
-            {(state.connectionStatus === 'connected' || state.connectionStatus === 'restricted') ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
-                    <span className="relative flex h-2 w-2">
-                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                        <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                    </span>
-                    <span className="text-[10px] font-black text-emerald-400 uppercase tracking-tighter">云端链路已就绪</span>
-                </div>
-            ) : state.connectionStatus === 'reconnecting' ? (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded-full">
-                    <Loader2 className="w-3 h-3 text-blue-400 animate-spin" />
-                    <span className="text-[10px] font-black text-blue-400 uppercase tracking-tighter">链路自动修复</span>
-                </div>
-            ) : (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-slate-800 border border-white/5 rounded-full opacity-50">
-                    <WifiOff className="w-3 h-3 text-slate-500" />
-                    <span className="text-[10px] font-bold text-slate-500 uppercase tracking-tighter">离线工作模式</span>
-                </div>
-            )}
         </div>
 
         <div className="flex items-center space-x-4">
-            <div className="flex bg-white/5 p-1 rounded-xl border border-white/10">
+            <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
                 <button 
                     onClick={handlePull}
-                    disabled={isPulling || state.connectionStatus === 'reconnecting'}
-                    className={`p-2 rounded-lg transition-all hover:bg-white/10 ${isPulling ? 'text-indigo-400 animate-pulse' : 'text-slate-400'}`}
+                    disabled={isPulling}
+                    className={`p-2 rounded-lg transition-all hover:bg-white/10 ${isPulling ? 'text-indigo-400 animate-spin' : 'text-slate-400'}`}
                     title="从云端手动同步"
                 >
-                    {isPulling ? <RefreshCw className="w-4.5 h-4.5 animate-spin" /> : <CloudDownload className="w-4.5 h-4.5" />}
+                    <CloudDownload className="w-4.5 h-4.5" />
                 </button>
                 <button 
-                    onClick={handleCloudSync}
-                    disabled={isManualSyncing || state.connectionStatus === 'reconnecting'}
-                    className={`p-2 rounded-lg transition-all hover:bg-white/10 ${
-                        isManualSyncing ? 'text-indigo-400 animate-pulse' : 
-                        state.saveStatus === 'dirty' ? 'text-amber-500 animate-bounce' : 
-                        'text-slate-400'
-                    }`}
+                    onClick={handlePush}
+                    className={`p-2 rounded-lg transition-all hover:bg-white/10 ${state.saveStatus === 'dirty' ? 'text-amber-500 animate-bounce' : 'text-slate-400'}`}
                     title="强制全量推送到云端"
                 >
-                    {isManualSyncing ? <Loader2 className="w-4.5 h-4.5 animate-spin" /> : <Cloud className="w-4.5 h-4.5" />}
+                    <Cloud className="w-4.5 h-4.5" />
                 </button>
             </div>
             <div className="w-10 h-10 rounded-full bg-gradient-to-br from-slate-700 to-slate-800 border border-white/10 flex items-center justify-center text-white font-black text-xs shadow-inner">AD</div>
