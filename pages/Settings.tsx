@@ -4,7 +4,7 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Zap, ShieldCheck, DatabaseZap, Terminal, 
     Info, ShieldAlert, FileJson, Server, Layout, ExternalLink, Activity, ExternalLink as LinkIcon,
-    Lock, Unlock, CheckCircle2, AlertTriangle
+    Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -15,6 +15,7 @@ const Settings: React.FC = () => {
   const [isTesting, setIsTesting] = useState(false);
 
   const isHttps = window.location.protocol === 'https:';
+  const isVercel = window.location.hostname.includes('vercel.app');
 
   useEffect(() => {
     setPbInput(state.pbUrl);
@@ -23,15 +24,24 @@ const Settings: React.FC = () => {
   const handleConnect = async () => {
       if (!pbInput.trim()) return showToast('请输入节点地址', 'warning');
       setIsTesting(true);
+      
+      const cleanUrl = pbInput.trim().replace(/\/$/, ""); 
+      
+      // 前置检查 HTTPS 安全限制
+      if (isHttps && cleanUrl.startsWith('http:')) {
+          setIsTesting(false);
+          return; // 页面上已经有明显的警告 UI 了，不需要重复 Toast
+      }
+
       try {
-          const cleanUrl = pbInput.trim().replace(/\/$/, ""); 
           const success = await connectToPb(cleanUrl);
-          // 只有真正建立连接（返回 true）后才会显示成功提示
           if (success) {
               showToast('量子链路已成功激活', 'success');
+          } else {
+              showToast('连接失败：请检查数据库地址、端口和防火墙配置', 'error');
           }
       } catch (e: any) {
-          console.error("Critical error in UI connection flow:", e);
+          showToast('链路建立过程中发生系统级偏差', 'error');
       } finally {
           setIsTesting(false);
       }
@@ -73,12 +83,37 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-6">
-              {isHttps && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4 flex items-center gap-4 animate-pulse">
-                      <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
-                      <div className="text-xs text-amber-200 font-bold">
-                          检测到当前使用 <span className="underline">HTTPS</span> 访问。由于浏览器安全限制，您可能无法连接到 <span className="underline">HTTP</span> 数据库。
-                          建议：将地址栏开头的 https:// 手动改为 http:// 重新访问。
+              {isHttps && pbInput.startsWith('http:') && (
+                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-[2rem] p-8 animate-in slide-in-from-top-4">
+                      <div className="flex items-start gap-6">
+                          <div className="p-4 bg-rose-500/20 rounded-2xl text-rose-500 shadow-lg shadow-rose-950/40">
+                             <ShieldAlert className="w-8 h-8" />
+                          </div>
+                          <div className="space-y-4 flex-1">
+                              <h3 className="text-xl font-black text-rose-400 uppercase italic tracking-tighter">混合内容被浏览器拦截 (Mixed Content Blocked)</h3>
+                              <p className="text-sm text-slate-400 leading-relaxed font-medium">
+                                  您当前通过 <span className="text-white font-bold underline">HTTPS</span> 访问 ERP，而数据库地址是 <span className="text-white font-bold underline">HTTP</span>。浏览器安全策略强制禁止这种连接。
+                              </p>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
+                                  <div className="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-3">
+                                      <div className="flex items-center gap-2 text-xs font-black text-indigo-400 uppercase tracking-widest">
+                                          <MousePointerClick className="w-4 h-4" /> 如何看到 https？
+                                      </div>
+                                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                                          现代浏览器默认隐藏了协议。请<strong>双击</strong>浏览器顶部的地址栏，你会看到完整的 <code className="text-white">https://erp0001.vercel.app</code>。
+                                      </p>
+                                  </div>
+                                  <div className="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-3">
+                                      <div className="flex items-center gap-2 text-xs font-black text-rose-400 uppercase tracking-widest">
+                                          <AlertTriangle className="w-4 h-4" /> Vercel 限制说明
+                                      </div>
+                                      <p className="text-[11px] text-slate-500 leading-relaxed">
+                                          由于您使用 Vercel 托管，系统不允许切换到 HTTP。<strong>建议：</strong>为您的数据库 IP 配置 SSL 证书，或在本地运行此程序。
+                                      </p>
+                                  </div>
+                              </div>
+                          </div>
                       </div>
                   </div>
               )}
@@ -95,7 +130,7 @@ const Settings: React.FC = () => {
                             type="text" 
                             value={pbInput}
                             onChange={e => setPbInput(e.target.value)}
-                            className="w-full bg-black/60 border border-white/10 rounded-2xl p-5 pl-12 text-sm text-white font-mono outline-none focus:border-indigo-500 shadow-inner" 
+                            className={`w-full bg-black/60 border rounded-2xl p-5 pl-12 text-sm text-white font-mono outline-none transition-all shadow-inner ${isHttps && pbInput.startsWith('http:') ? 'border-rose-500/50' : 'border-white/10 focus:border-indigo-500'}`} 
                             placeholder="http://119.28.72.106:8090" 
                         />
                       </div>
@@ -105,7 +140,7 @@ const Settings: React.FC = () => {
                       <button 
                         onClick={handleConnect}
                         disabled={isTesting}
-                        className="flex-1 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 disabled:opacity-50 transition-all active:scale-95 shadow-indigo-900/40"
+                        className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 disabled:opacity-50 transition-all active:scale-95 ${isHttps && pbInput.startsWith('http:') ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/40'}`}
                       >
                           {isTesting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
                           建立神经链路
@@ -120,11 +155,11 @@ const Settings: React.FC = () => {
                   </div>
                   
                   <div className="bg-indigo-600/5 border border-white/5 rounded-3xl p-8">
-                      <h4 className="text-white text-sm font-bold mb-6 flex items-center gap-2"><ShieldAlert className="w-5 h-5 text-indigo-400"/> 数据库权限配置检查（API Rules）</h4>
+                      <h4 className="text-white text-sm font-bold mb-6 flex items-center gap-2"><HelpCircle className="w-5 h-5 text-indigo-400"/> 快速连接指南</h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
                         <div className="space-y-4">
                             <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-                                为了让 ERP 能够读写数据，请在 PocketBase 管理后台的 <code className="text-indigo-400">backups</code> 集合中，将 **API Rules** 选项卡内的所有规则解锁。
+                                正常情况下，请在 PocketBase 管理后台的 <code className="text-indigo-400">backups</code> 集合中开放所有 API 读写权限。
                             </p>
                             <div className="bg-black/60 rounded-2xl border border-white/5 p-4 space-y-3">
                                 {[

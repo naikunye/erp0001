@@ -132,20 +132,18 @@ function appReducer(state: AppState, action: Action): AppState {
         return s;
     };
 
-    const safeUpdate = (updates: Partial<AppState>): AppState => {
-        // 核心加固：除非明确要导航，否则任何 BOOT 或数据更新都强制保留当前 activePage
-        const next = { 
-            ...state, 
-            ...ensureArrays(updates), 
-            activePage: state.activePage, // 强制锁定当前页面
-            isInitialized: true 
-        };
-        idb.set(next);
-        return next;
-    };
-
     switch (action.type) {
-        case 'BOOT': return safeUpdate(action.payload);
+        case 'BOOT': {
+            // 初始化引导：允许 payload 设置 activePage
+            const next = { 
+                ...state, 
+                ...ensureArrays(action.payload), 
+                activePage: action.payload.activePage || state.activePage,
+                isInitialized: true 
+            };
+            idb.set(next);
+            return next;
+        }
         case 'NAVIGATE': {
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
             const nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
@@ -153,36 +151,47 @@ function appReducer(state: AppState, action: Action): AppState {
             return nextState;
         }
         case 'SET_CONN': return { ...state, connectionStatus: action.payload };
-        case 'UPDATE_DATA': return safeUpdate({ ...action.payload, saveStatus: 'dirty' });
+        case 'UPDATE_DATA': {
+            // 普通数据更新：强制锁定当前 activePage
+            const next = { 
+                ...state, 
+                ...ensureArrays(action.payload), 
+                activePage: state.activePage,
+                saveStatus: 'dirty' as SaveStatus
+            };
+            idb.set(next);
+            return next;
+        }
+        // ... 其余动作保持逻辑一致，均确保不改变 activePage
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'ADD_PRODUCT': return safeUpdate({ products: [action.payload, ...(state.products || [])] });
-        case 'UPDATE_PRODUCT': return safeUpdate({ products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) });
-        case 'DELETE_PRODUCT': return safeUpdate({ products: (state.products || []).filter(p => p.id !== action.payload) });
-        case 'ADD_TRANSACTION': return safeUpdate({ transactions: [action.payload, ...(state.transactions || [])] });
-        case 'DELETE_TRANSACTION': return safeUpdate({ transactions: (state.transactions || []).filter(t => t.id !== action.payload) });
-        case 'ADD_SHIPMENT': return safeUpdate({ shipments: [action.payload, ...(state.shipments || [])] });
-        case 'UPDATE_SHIPMENT': return safeUpdate({ shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SHIPMENT': return safeUpdate({ shipments: (state.shipments || []).filter(s => s.id !== action.payload) });
-        case 'ADD_CUSTOMER': return safeUpdate({ customers: [action.payload, ...(state.customers || [])] });
-        case 'UPDATE_CUSTOMER': return safeUpdate({ customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) });
-        case 'DELETE_CUSTOMER': return safeUpdate({ customers: (state.customers || []).filter(c => c.id !== action.payload) });
-        case 'ADD_INFLUENCER': return safeUpdate({ influencers: [action.payload, ...(state.influencers || [])] });
-        case 'UPDATE_INFLUENCER': return safeUpdate({ influencers: (state.influencers || []).map(i => i.id === action.payload.id ? action.payload : i) });
-        case 'DELETE_INFLUENCER': return safeUpdate({ influencers: (state.influencers || []).filter(i => i.id !== action.payload) });
-        case 'ADD_TASK': return safeUpdate({ tasks: [action.payload, ...(state.tasks || [])] });
-        case 'UPDATE_TASK': return safeUpdate({ tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) });
-        case 'DELETE_TASK': return safeUpdate({ tasks: (state.tasks || []).filter(t => t.id !== action.payload) });
-        case 'CREATE_INBOUND_SHIPMENT': return safeUpdate({ inboundShipments: [action.payload, ...(state.inboundShipments || [])] });
-        case 'UPDATE_INBOUND_SHIPMENT': return safeUpdate({ inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) });
-        case 'DELETE_INBOUND_SHIPMENT': return safeUpdate({ inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) });
-        case 'ADD_SUPPLIER': return safeUpdate({ suppliers: [action.payload, ...(state.suppliers || [])] });
-        case 'UPDATE_SUPPLIER': return safeUpdate({ suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) });
-        case 'DELETE_SUPPLIER': return safeUpdate({ suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) });
-        case 'ADD_AUTOMATION_RULE': return safeUpdate({ automationRules: [action.payload, ...(state.automationRules || [])] });
-        case 'UPDATE_AUTOMATION_RULE': return safeUpdate({ automationRules: (state.automationRules || []).map(r => r.id === action.payload.id ? action.payload : r) });
-        case 'DELETE_AUTOMATION_RULE': return safeUpdate({ automationRules: (state.automationRules || []).filter(r => r.id !== action.payload) });
+        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...(state.products || [])] };
+        case 'UPDATE_PRODUCT': return { ...state, products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) };
+        case 'DELETE_PRODUCT': return { ...state, products: (state.products || []).filter(p => p.id !== action.payload) };
+        case 'ADD_TRANSACTION': return { ...state, transactions: [action.payload, ...(state.transactions || [])] };
+        case 'DELETE_TRANSACTION': return { ...state, transactions: (state.transactions || []).filter(t => t.id !== action.payload) };
+        case 'ADD_SHIPMENT': return { ...state, shipments: [action.payload, ...(state.shipments || [])] };
+        case 'UPDATE_SHIPMENT': return { ...state, shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) };
+        case 'DELETE_SHIPMENT': return { ...state, shipments: (state.shipments || []).filter(s => s.id !== action.payload) };
+        case 'ADD_CUSTOMER': return { ...state, customers: [action.payload, ...(state.customers || [])] };
+        case 'UPDATE_CUSTOMER': return { ...state, customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) };
+        case 'DELETE_CUSTOMER': return { ...state, customers: (state.customers || []).filter(c => c.id !== action.payload) };
+        case 'ADD_INFLUENCER': return { ...state, influencers: [action.payload, ...(state.influencers || [])] };
+        case 'UPDATE_INFLUENCER': return { ...state, influencers: (state.influencers || []).map(i => i.id === action.payload.id ? action.payload : i) };
+        case 'DELETE_INFLUENCER': return { ...state, influencers: (state.influencers || []).filter(i => i.id !== action.payload) };
+        case 'ADD_TASK': return { ...state, tasks: [action.payload, ...(state.tasks || [])] };
+        case 'UPDATE_TASK': return { ...state, tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) };
+        case 'DELETE_TASK': return { ...state, tasks: (state.tasks || []).filter(t => t.id !== action.payload) };
+        case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...(state.inboundShipments || [])] };
+        case 'UPDATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) };
+        case 'DELETE_INBOUND_SHIPMENT': return { ...state, inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) };
+        case 'ADD_SUPPLIER': return { ...state, suppliers: [action.payload, ...(state.suppliers || [])] };
+        case 'UPDATE_SUPPLIER': return { ...state, suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) };
+        case 'DELETE_SUPPLIER': return { ...state, suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) };
+        case 'ADD_AUTOMATION_RULE': return { ...state, automationRules: [action.payload, ...(state.automationRules || [])] };
+        case 'UPDATE_AUTOMATION_RULE': return { ...state, automationRules: (state.automationRules || []).map(r => r.id === action.payload.id ? action.payload : r) };
+        case 'DELETE_AUTOMATION_RULE': return { ...state, automationRules: (state.automationRules || []).filter(r => r.id !== action.payload) };
         case 'CLEAR_NAV_PARAMS': return { ...state, navParams: undefined };
         default: return state;
     }
@@ -209,7 +218,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const lastPage = localStorage.getItem(PAGE_CACHE_KEY) as Page;
             
             if (cached) {
-                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl, activePage: lastPage || state.activePage } });
+                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl, activePage: lastPage || (cached as any).activePage } });
             } else {
                 dispatch({ 
                     type: 'BOOT', 
@@ -217,7 +226,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, 
                         customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, 
                         orders: MOCK_ORDERS, pbUrl: lastUrl,
-                        activePage: lastPage || state.activePage
+                        activePage: lastPage || 'dashboard'
                     } 
                 });
             }
@@ -239,7 +248,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         return () => clearInterval(healthCheckInterval.current);
     }, [state.connectionStatus === 'connected']);
 
-    // 修改为返回布尔值而非抛出错误，增加系统稳定性
     const connectToPb = async (url: string): Promise<boolean> => {
         if (!url) return false;
         dispatch({ type: 'SET_CONN', payload: 'connecting' });
@@ -247,10 +255,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
         
         if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
-            const errorMsg = '安全冲突：HTTPS 网页无法连接 HTTP 数据库。请在浏览器地址栏手动将 https 改为 http。';
-            showToast(errorMsg, 'error');
             dispatch({ type: 'SET_CONN', payload: 'error' });
-            return false; 
+            return false; // 不在这里弹 Toast，交由 Settings.tsx 统一处理
         }
 
         try {
@@ -265,8 +271,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return true;
         } catch (e: any) {
             dispatch({ type: 'SET_CONN', payload: 'error' });
-            const msg = e.message.includes('fetch') ? '网络拦截：CORS 跨域或防火墙阻断 8090 端口。' : e.message;
-            showToast(`链路建立失败: ${msg}`, 'error');
             return false;
         }
     };
@@ -298,7 +302,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"');
             if (record?.payload) {
                 const data = JSON.parse(record.payload);
-                dispatch({ type: 'BOOT', payload: data });
+                dispatch({ type: 'BOOT', payload: { ...data, activePage: state.activePage } });
                 if (manual) showToast('已从云端拉取最新快照', 'success');
             }
         } catch (e: any) {
