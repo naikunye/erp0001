@@ -21,7 +21,7 @@ const idb = {
     async init() {
         if (this.db) return this.db;
         return new Promise<IDBDatabase>((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 5);
+            const request = indexedDB.open(DB_NAME, 6); // 升级版本号强制重置
             request.onupgradeneeded = () => {
                 if (!request.result.objectStoreNames.contains(STORE_NAME)) {
                     request.result.createObjectStore(STORE_NAME);
@@ -134,7 +134,6 @@ function appReducer(state: AppState, action: Action): AppState {
 
     switch (action.type) {
         case 'BOOT': {
-            // 绝不让 BOOT 覆盖当前活跃页面
             const currentCachePage = localStorage.getItem(PAGE_CACHE_KEY) as Page;
             return { 
                 ...state, 
@@ -151,7 +150,6 @@ function appReducer(state: AppState, action: Action): AppState {
         }
         case 'SET_CONN': return { ...state, connectionStatus: action.payload };
         case 'UPDATE_DATA': {
-            // 强制保留当前页面状态，防止因为数据更新（如连接失败后的重置）导致跳转
             const next = { 
                 ...state, 
                 ...ensureArrays(action.payload), 
@@ -164,7 +162,6 @@ function appReducer(state: AppState, action: Action): AppState {
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         default: {
-            // 所有增删改查动作都锁死 activePage
             if (action.type.includes('ADD_') || action.type.includes('UPDATE_') || action.type.includes('DELETE_')) {
                 const s = { ...state, activePage: state.activePage };
                 idb.set(s);
@@ -220,15 +217,14 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         
         const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
         
-        // 如果是在 HTTPS 环境尝试连 HTTP，标记 error 但不重置页面
-        if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
-            dispatch({ type: 'SET_CONN', payload: 'error' });
-            return false; 
-        }
+        // 【核心修复】移除 window.location.protocol === 'https:' 的强制拦截逻辑。
+        // 现在直接交给 PocketBase 处理。如果浏览器允许了 Insecure content，这里就能通。
 
         try {
             const pb = new PocketBase(cleanUrl);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout')), 5000));
+            
+            // 尝试健康检查
             await Promise.race([pb.health.check(), timeoutPromise]);
             
             pbRef.current = pb;
@@ -237,6 +233,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             dispatch({ type: 'SET_CONN', payload: 'connected' });
             return true;
         } catch (e: any) {
+            console.error("Link Failed:", e);
             dispatch({ type: 'SET_CONN', payload: 'error' });
             return false;
         }
