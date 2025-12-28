@@ -14,6 +14,7 @@ const DB_NAME = 'TANXING_V6_CORE';
 const STORE_NAME = 'GLOBAL_STATE';
 const CONFIG_KEY = 'PB_URL_NODE'; 
 const PAGE_CACHE_KEY = 'TX_ACTIVE_PAGE';
+// 唯一的会话 ID，用于识别是谁更新了数据
 export const SESSION_ID = 'TX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
 const idb = {
@@ -21,7 +22,7 @@ const idb = {
     async init() {
         if (this.db) return this.db;
         return new Promise<IDBDatabase>((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 6); // 升级版本号强制重置
+            const request = indexedDB.open(DB_NAME, 6);
             request.onupgradeneeded = () => {
                 if (!request.result.objectStoreNames.contains(STORE_NAME)) {
                     request.result.createObjectStore(STORE_NAME);
@@ -76,6 +77,7 @@ interface AppState {
     isMobileMenuOpen: boolean;
     isInitialized: boolean;
     navParams?: any;
+    lastUpdatedBy?: string; // 记录最后一次是谁更新的
 }
 
 const initialState: AppState = {
@@ -163,6 +165,7 @@ function appReducer(state: AppState, action: Action): AppState {
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         default: {
             if (action.type.includes('ADD_') || action.type.includes('UPDATE_') || action.type.includes('DELETE_')) {
+                // 处理具体的 CRUD 操作，确保不丢失 activePage
                 const s = { ...state, activePage: state.activePage };
                 idb.set(s);
                 return s;
@@ -185,6 +188,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const [state, dispatch] = useReducer(appReducer, initialState);
     const pbRef = useRef<PocketBase | null>(null);
 
+    // 启动初始化逻辑
     useEffect(() => {
         const startup = async () => {
             const cached = await idb.get();
@@ -209,28 +213,48 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             }
         };
         startup();
+
+        // 组件销毁时取消订阅
+        return () => {
+            if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*');
+        };
     }, []);
 
+    // 核心功能：建立连接并开启实时监听
     const connectToPb = async (url: string): Promise<boolean> => {
         if (!url) return false;
         dispatch({ type: 'SET_CONN', payload: 'connecting' });
         
         const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
-        
-        // 【核心修复】移除 window.location.protocol === 'https:' 的强制拦截逻辑。
-        // 现在直接交给 PocketBase 处理。如果浏览器允许了 Insecure content，这里就能通。
 
         try {
             const pb = new PocketBase(cleanUrl);
             const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Connect Timeout')), 5000));
             
-            // 尝试健康检查
             await Promise.race([pb.health.check(), timeoutPromise]);
             
             pbRef.current = pb;
             localStorage.setItem(CONFIG_KEY, cleanUrl);
             dispatch({ type: 'UPDATE_DATA', payload: { pbUrl: cleanUrl } });
             dispatch({ type: 'SET_CONN', payload: 'connected' });
+
+            // --- 实时订阅核心：一旦连上，就开始听 ---
+            pb.collection('backups').subscribe('*', (e) => {
+                if (e.action === 'update' || e.action === 'create') {
+                    const record = e.record;
+                    const remotePayload = JSON.parse(record.payload);
+                    
+                    // 只有当这条数据的 sessionId 不是我自己时，才强制拉取（防止无限循环）
+                    if (remotePayload.lastUpdatedBy !== SESSION_ID) {
+                        console.log("检测到远程同步信号，正在对齐网格...");
+                        dispatch({ type: 'BOOT', payload: { ...remotePayload, activePage: state.activePage } });
+                    }
+                }
+            });
+
+            // 连上后立刻拉取一次最新数据，确保开机同步
+            pullFromCloud(false);
+
             return true;
         } catch (e: any) {
             console.error("Link Failed:", e);
@@ -239,6 +263,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         }
     };
 
+    // 核心功能：推送到云端（带上会话 ID）
     const syncToCloud = async (force: boolean = false) => {
         if (!pbRef.current || state.connectionStatus !== 'connected') return;
         try {
@@ -246,17 +271,23 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 products: state.products, transactions: state.transactions,
                 customers: state.customers, orders: state.orders, shipments: state.shipments,
                 influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
-                inboundShipments: state.inboundShipments, automationRules: state.automationRules
+                inboundShipments: state.inboundShipments, automationRules: state.automationRules,
+                lastUpdatedBy: SESSION_ID // 盖上戳，告诉别人是我更新的
             });
+
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"').catch(() => null);
-            if (record) await pbRef.current.collection('backups').update(record.id, { payload });
-            else await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
-            if (force) showToast('云端同步成功', 'success');
+            if (record) {
+                await pbRef.current.collection('backups').update(record.id, { payload });
+            } else {
+                await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
+            }
+            if (force) showToast('量子云端镜像已固化', 'success');
         } catch (e: any) {
             if (force) showToast('同步链路故障', 'error');
         }
     };
 
+    // 核心功能：主动从云端拉取
     const pullFromCloud = async (manual: boolean = false) => {
         if (!pbRef.current) return;
         try {
@@ -267,7 +298,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (manual) showToast('已从云端拉取最新快照', 'success');
             }
         } catch (e: any) {
-            if (manual) showToast('获取失败', 'warning');
+            if (manual) showToast('获取失败：云端尚无资产快照', 'warning');
         }
     };
 
