@@ -134,15 +134,13 @@ function appReducer(state: AppState, action: Action): AppState {
 
     switch (action.type) {
         case 'BOOT': {
-            // 初始化引导：允许 payload 设置 activePage
-            const next = { 
+            // 极重要：BOOT 时如果 state 已有页面，优先保留，除非缓存明确指出要跳页
+            return { 
                 ...state, 
                 ...ensureArrays(action.payload), 
-                activePage: action.payload.activePage || state.activePage,
+                activePage: state.activePage || (action.payload.activePage as Page) || 'dashboard',
                 isInitialized: true 
             };
-            idb.set(next);
-            return next;
         }
         case 'NAVIGATE': {
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
@@ -152,7 +150,7 @@ function appReducer(state: AppState, action: Action): AppState {
         }
         case 'SET_CONN': return { ...state, connectionStatus: action.payload };
         case 'UPDATE_DATA': {
-            // 普通数据更新：强制锁定当前 activePage
+            // 修正跳转的核心：UPDATE_DATA 动作禁止修改 activePage
             const next = { 
                 ...state, 
                 ...ensureArrays(action.payload), 
@@ -162,38 +160,19 @@ function appReducer(state: AppState, action: Action): AppState {
             idb.set(next);
             return next;
         }
-        // ... 其余动作保持逻辑一致，均确保不改变 activePage
         case 'ADD_TOAST': return { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
         case 'REMOVE_TOAST': return { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
         case 'TOGGLE_MOBILE_MENU': return { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-        case 'ADD_PRODUCT': return { ...state, products: [action.payload, ...(state.products || [])] };
-        case 'UPDATE_PRODUCT': return { ...state, products: (state.products || []).map(p => p.id === action.payload.id ? action.payload : p) };
-        case 'DELETE_PRODUCT': return { ...state, products: (state.products || []).filter(p => p.id !== action.payload) };
-        case 'ADD_TRANSACTION': return { ...state, transactions: [action.payload, ...(state.transactions || [])] };
-        case 'DELETE_TRANSACTION': return { ...state, transactions: (state.transactions || []).filter(t => t.id !== action.payload) };
-        case 'ADD_SHIPMENT': return { ...state, shipments: [action.payload, ...(state.shipments || [])] };
-        case 'UPDATE_SHIPMENT': return { ...state, shipments: (state.shipments || []).map(s => s.id === action.payload.id ? action.payload : s) };
-        case 'DELETE_SHIPMENT': return { ...state, shipments: (state.shipments || []).filter(s => s.id !== action.payload) };
-        case 'ADD_CUSTOMER': return { ...state, customers: [action.payload, ...(state.customers || [])] };
-        case 'UPDATE_CUSTOMER': return { ...state, customers: (state.customers || []).map(c => c.id === action.payload.id ? action.payload : c) };
-        case 'DELETE_CUSTOMER': return { ...state, customers: (state.customers || []).filter(c => c.id !== action.payload) };
-        case 'ADD_INFLUENCER': return { ...state, influencers: [action.payload, ...(state.influencers || [])] };
-        case 'UPDATE_INFLUENCER': return { ...state, influencers: (state.influencers || []).map(i => i.id === action.payload.id ? action.payload : i) };
-        case 'DELETE_INFLUENCER': return { ...state, influencers: (state.influencers || []).filter(i => i.id !== action.payload) };
-        case 'ADD_TASK': return { ...state, tasks: [action.payload, ...(state.tasks || [])] };
-        case 'UPDATE_TASK': return { ...state, tasks: (state.tasks || []).map(t => t.id === action.payload.id ? action.payload : t) };
-        case 'DELETE_TASK': return { ...state, tasks: (state.tasks || []).filter(t => t.id !== action.payload) };
-        case 'CREATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: [action.payload, ...(state.inboundShipments || [])] };
-        case 'UPDATE_INBOUND_SHIPMENT': return { ...state, inboundShipments: (state.inboundShipments || []).map(i => i.id === action.payload.id ? action.payload : i) };
-        case 'DELETE_INBOUND_SHIPMENT': return { ...state, inboundShipments: (state.inboundShipments || []).filter(i => i.id !== action.payload) };
-        case 'ADD_SUPPLIER': return { ...state, suppliers: [action.payload, ...(state.suppliers || [])] };
-        case 'UPDATE_SUPPLIER': return { ...state, suppliers: (state.suppliers || []).map(s => s.id === action.payload.id ? action.payload : s) };
-        case 'DELETE_SUPPLIER': return { ...state, suppliers: (state.suppliers || []).filter(s => s.id !== action.payload) };
-        case 'ADD_AUTOMATION_RULE': return { ...state, automationRules: [action.payload, ...(state.automationRules || [])] };
-        case 'UPDATE_AUTOMATION_RULE': return { ...state, automationRules: (state.automationRules || []).map(r => r.id === action.payload.id ? action.payload : r) };
-        case 'DELETE_AUTOMATION_RULE': return { ...state, automationRules: (state.automationRules || []).filter(r => r.id !== action.payload) };
-        case 'CLEAR_NAV_PARAMS': return { ...state, navParams: undefined };
-        default: return state;
+        default: {
+            // 对于所有业务数据的增删改，显式锁定 activePage，防止跳转
+            if (action.type.startsWith('ADD_') || action.type.startsWith('UPDATE_') || action.type.startsWith('DELETE_')) {
+                const key = action.type.split('_')[1].toLowerCase() + 's';
+                const s = { ...state, activePage: state.activePage };
+                idb.set(s);
+                return s;
+            }
+            return state;
+        }
     }
 }
 
@@ -209,7 +188,6 @@ const TanxingContext = createContext<{
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, initialState);
     const pbRef = useRef<PocketBase | null>(null);
-    const healthCheckInterval = useRef<any>(null);
 
     useEffect(() => {
         const startup = async () => {
@@ -237,26 +215,17 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         startup();
     }, []);
 
-    useEffect(() => {
-        if (!pbRef.current) return;
-        const check = () => {
-            pbRef.current?.health.check()
-                .then(() => { if(state.connectionStatus !== 'connected') dispatch({type: 'SET_CONN', payload: 'connected'}); })
-                .catch(() => { if(state.connectionStatus === 'connected') dispatch({type: 'SET_CONN', payload: 'error'}); });
-        };
-        healthCheckInterval.current = setInterval(check, 30000);
-        return () => clearInterval(healthCheckInterval.current);
-    }, [state.connectionStatus === 'connected']);
-
     const connectToPb = async (url: string): Promise<boolean> => {
         if (!url) return false;
         dispatch({ type: 'SET_CONN', payload: 'connecting' });
         
         const cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
         
+        // 检测 https->http 冲突。
+        // 如果当前是 https，直接返回 false，但在 UI (Settings.tsx) 中展示修复面板
         if (window.location.protocol === 'https:' && cleanUrl.startsWith('http:')) {
             dispatch({ type: 'SET_CONN', payload: 'error' });
-            return false; // 不在这里弹 Toast，交由 Settings.tsx 统一处理
+            return false; 
         }
 
         try {
@@ -276,10 +245,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const syncToCloud = async (force: boolean = false) => {
-        if (!pbRef.current || state.connectionStatus !== 'connected') {
-            if (force) showToast('量子链路断开，无法同步', 'error');
-            return;
-        }
+        if (!pbRef.current || state.connectionStatus !== 'connected') return;
         try {
             const payload = JSON.stringify({
                 products: state.products, transactions: state.transactions,
@@ -292,7 +258,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             else await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
             if (force) showToast('云端同步成功', 'success');
         } catch (e: any) {
-            if (force) showToast('同步链路异常', 'error');
+            if (force) showToast('同步失败', 'error');
         }
     };
 
@@ -306,7 +272,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 if (manual) showToast('已从云端拉取最新快照', 'success');
             }
         } catch (e: any) {
-            if (manual) showToast('获取失败：云端暂无记录', 'warning');
+            if (manual) showToast('获取失败：云端无记录', 'warning');
         }
     };
 

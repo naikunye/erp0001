@@ -4,7 +4,8 @@ import {
     Settings as SettingsIcon, Database, Cloud, 
     RefreshCw, Zap, ShieldCheck, DatabaseZap, Terminal, 
     Info, ShieldAlert, FileJson, Server, Layout, ExternalLink, Activity, ExternalLink as LinkIcon,
-    Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle
+    Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle,
+    Shield, Monitor, Globe, Settings2, Command
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 
@@ -15,7 +16,6 @@ const Settings: React.FC = () => {
   const [isTesting, setIsTesting] = useState(false);
 
   const isHttps = window.location.protocol === 'https:';
-  const isVercel = window.location.hostname.includes('vercel.app');
 
   useEffect(() => {
     setPbInput(state.pbUrl);
@@ -24,52 +24,34 @@ const Settings: React.FC = () => {
   const handleConnect = async () => {
       if (!pbInput.trim()) return showToast('请输入节点地址', 'warning');
       setIsTesting(true);
-      
       const cleanUrl = pbInput.trim().replace(/\/$/, ""); 
       
-      // 前置检查 HTTPS 安全限制
-      if (isHttps && cleanUrl.startsWith('http:')) {
-          setIsTesting(false);
-          return; // 页面上已经有明显的警告 UI 了，不需要重复 Toast
-      }
-
       try {
           const success = await connectToPb(cleanUrl);
           if (success) {
               showToast('量子链路已成功激活', 'success');
           } else {
-              showToast('连接失败：请检查数据库地址、端口和防火墙配置', 'error');
+              // 失败逻辑由 Context 触发或 UI 提示面板展示
+              if (!isHttps || !cleanUrl.startsWith('http:')) {
+                  showToast('连接失败：请检查地址或网络', 'error');
+              }
           }
       } catch (e: any) {
-          showToast('链路建立过程中发生系统级偏差', 'error');
+          showToast('连接发生异常', 'error');
       } finally {
           setIsTesting(false);
       }
   };
 
-  const openAdminPanel = () => {
-      if (!pbInput) return;
-      const baseUrl = pbInput.endsWith('/') ? pbInput : `${pbInput}/`;
-      window.open(`${baseUrl}_/`, '_blank');
-  };
-
   return (
-    <div className="space-y-8 max-w-5xl mx-auto pb-10 animate-in fade-in duration-500">
+    <div className="space-y-8 max-w-5xl mx-auto pb-20 animate-in fade-in duration-500">
       <div className="flex justify-between items-end">
         <div>
           <h2 className="text-3xl font-black text-white flex items-center gap-3 italic tracking-tighter">
               <SettingsIcon className="w-8 h-8 text-indigo-500" /> 系统中枢配置
           </h2>
-          <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Quantum system configuration module</p>
+          <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Deployment Protocol: {isHttps ? 'HTTPS (ENCRYPTED)' : 'HTTP (INSECURE)'}</p>
         </div>
-        {state.pbUrl && (
-            <button 
-                onClick={openAdminPanel}
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black text-indigo-400 uppercase flex items-center gap-2 transition-all"
-            >
-                <Database className="w-3.5 h-3.5" /> 数据库管理后台 <LinkIcon className="w-3 h-3"/>
-            </button>
-        )}
       </div>
 
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
@@ -82,35 +64,50 @@ const Settings: React.FC = () => {
       </div>
 
       {activeTab === 'cloud' && (
-          <div className="space-y-6">
+          <div className="space-y-8">
+              {/* 核心修复方案面板：当检测到 Vercel HTTPS 冲突时显示 */}
               {isHttps && pbInput.startsWith('http:') && (
-                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-[2rem] p-8 animate-in slide-in-from-top-4">
-                      <div className="flex items-start gap-6">
-                          <div className="p-4 bg-rose-500/20 rounded-2xl text-rose-500 shadow-lg shadow-rose-950/40">
-                             <ShieldAlert className="w-8 h-8" />
-                          </div>
-                          <div className="space-y-4 flex-1">
-                              <h3 className="text-xl font-black text-rose-400 uppercase italic tracking-tighter">混合内容被浏览器拦截 (Mixed Content Blocked)</h3>
-                              <p className="text-sm text-slate-400 leading-relaxed font-medium">
-                                  您当前通过 <span className="text-white font-bold underline">HTTPS</span> 访问 ERP，而数据库地址是 <span className="text-white font-bold underline">HTTP</span>。浏览器安全策略强制禁止这种连接。
+                  <div className="bg-indigo-600/10 border-2 border-indigo-500/30 rounded-[2.5rem] p-10 animate-in slide-in-from-top-4 shadow-[0_0_50px_rgba(79,70,229,0.1)]">
+                      <div className="flex flex-col md:flex-row gap-10">
+                          <div className="md:w-1/3 space-y-6">
+                              <div className="w-16 h-16 bg-indigo-600 rounded-3xl flex items-center justify-center text-white shadow-xl shadow-indigo-900/40">
+                                  <ShieldAlert className="w-8 h-8" />
+                              </div>
+                              <h3 className="text-2xl font-black text-white italic tracking-tighter uppercase leading-tight">Vercel 部署<br/>强制安全限制修复</h3>
+                              <p className="text-xs text-indigo-200/70 font-bold leading-relaxed">
+                                  您在 Vercel 上运行 (HTTPS)，浏览器为了保护隐私，默认禁止连接到您的 HTTP 数据库。这被称为“混合内容拦截”。
                               </p>
-                              
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-6">
-                                  <div className="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-3">
-                                      <div className="flex items-center gap-2 text-xs font-black text-indigo-400 uppercase tracking-widest">
-                                          <MousePointerClick className="w-4 h-4" /> 如何看到 https？
+                          </div>
+                          
+                          <div className="md:w-2/3 grid grid-cols-1 gap-4">
+                              <div className="bg-black/60 rounded-[2rem] p-6 border border-white/10 relative group overflow-hidden">
+                                  <div className="absolute top-0 right-0 p-4 opacity-10 group-hover:rotate-12 transition-transform"><Command className="w-20 h-20 text-white"/></div>
+                                  <div className="flex items-start gap-4">
+                                      <div className="w-8 h-8 rounded-full bg-emerald-500 text-white flex items-center justify-center font-black shrink-0">1</div>
+                                      <div>
+                                          <h4 className="text-emerald-400 font-black text-sm uppercase mb-2">手动开启浏览器白名单 (推荐)</h4>
+                                          <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+                                              点击浏览器地址栏左侧的 <span className="inline-flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded border border-white/10 text-white font-bold"><Settings2 className="w-3 h-3"/> 设置/调整图标</span> 或 <span className="inline-flex items-center gap-1 bg-white/10 px-1.5 py-0.5 rounded border border-white/10 text-white font-bold"><Lock className="w-3 h-3"/> 锁头图标</span>，选择 **[网站设置] (Site Settings)**。
+                                          </p>
+                                          <p className="text-[11px] text-slate-300 leading-relaxed mt-3 font-medium">
+                                              在打开的页面中找到 **[不安全内容] (Insecure content)**，将右侧的选项改为 **[允许] (Allow)**。
+                                          </p>
+                                          <div className="mt-4 flex items-center gap-2 text-indigo-400 text-[10px] font-black uppercase tracking-widest animate-pulse">
+                                              <RefreshCw className="w-3 h-3"/> 修改后刷新页面即可建立连接
+                                          </div>
                                       </div>
-                                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                                          现代浏览器默认隐藏了协议。请<strong>双击</strong>浏览器顶部的地址栏，你会看到完整的 <code className="text-white">https://erp0001.vercel.app</code>。
-                                      </p>
                                   </div>
-                                  <div className="bg-black/40 p-5 rounded-2xl border border-white/5 space-y-3">
-                                      <div className="flex items-center gap-2 text-xs font-black text-rose-400 uppercase tracking-widest">
-                                          <AlertTriangle className="w-4 h-4" /> Vercel 限制说明
+                              </div>
+                              
+                              <div className="bg-black/40 rounded-[2rem] p-6 border border-white/5 opacity-80">
+                                  <div className="flex items-start gap-4">
+                                      <div className="w-8 h-8 rounded-full bg-slate-700 text-white flex items-center justify-center font-black shrink-0">2</div>
+                                      <div>
+                                          <h4 className="text-slate-400 font-black text-sm uppercase mb-2">部署正式域名 SSL (生产环境方案)</h4>
+                                          <p className="text-[11px] text-slate-500 leading-relaxed">
+                                              如果您打算长期使用，建议购买域名并为数据库配置 SSL 证书（由 http 改为 https）。
+                                          </p>
                                       </div>
-                                      <p className="text-[11px] text-slate-500 leading-relaxed">
-                                          由于您使用 Vercel 托管，系统不允许切换到 HTTP。<strong>建议：</strong>为您的数据库 IP 配置 SSL 证书，或在本地运行此程序。
-                                      </p>
                                   </div>
                               </div>
                           </div>
@@ -118,19 +115,23 @@ const Settings: React.FC = () => {
                   </div>
               )}
 
-              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 space-y-8">
+              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 space-y-8 bg-[#0a0a0c]">
                   <div className="space-y-2">
                       <label className="text-[10px] text-slate-500 font-bold uppercase ml-2 tracking-widest flex justify-between">
                           <span>Private Cloud Node (接入点地址)</span>
-                          <span className={`${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-indigo-400'}`}>STATUS: {state.connectionStatus.toUpperCase()}</span>
+                          <span className={`font-black ${state.connectionStatus === 'connected' ? 'text-emerald-400' : 'text-indigo-400'}`}>
+                             STATUS: {state.connectionStatus.toUpperCase()}
+                          </span>
                       </label>
                       <div className="relative group">
-                        <div className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-500 transition-colors"><Activity className="w-5 h-5"/></div>
+                        <div className={`absolute left-5 top-1/2 -translate-y-1/2 transition-colors ${state.connectionStatus === 'connected' ? 'text-emerald-500' : 'text-slate-500'}`}>
+                           <Database className="w-5 h-5"/>
+                        </div>
                         <input 
                             type="text" 
                             value={pbInput}
                             onChange={e => setPbInput(e.target.value)}
-                            className={`w-full bg-black/60 border rounded-2xl p-5 pl-12 text-sm text-white font-mono outline-none transition-all shadow-inner ${isHttps && pbInput.startsWith('http:') ? 'border-rose-500/50' : 'border-white/10 focus:border-indigo-500'}`} 
+                            className={`w-full bg-black/60 border rounded-3xl p-6 pl-14 text-sm text-white font-mono outline-none transition-all ${isHttps && pbInput.startsWith('http:') ? 'border-indigo-500/50 focus:border-indigo-500 ring-2 ring-indigo-500/10' : 'border-white/10 focus:border-indigo-500'}`} 
                             placeholder="http://119.28.72.106:8090" 
                         />
                       </div>
@@ -140,81 +141,71 @@ const Settings: React.FC = () => {
                       <button 
                         onClick={handleConnect}
                         disabled={isTesting}
-                        className={`flex-1 py-5 rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 disabled:opacity-50 transition-all active:scale-95 ${isHttps && pbInput.startsWith('http:') ? 'bg-slate-800 text-slate-500 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/40'}`}
+                        className="flex-1 py-6 bg-indigo-600 hover:bg-indigo-500 text-white rounded-3xl font-black text-xs uppercase tracking-[0.3em] shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 shadow-indigo-900/40 disabled:opacity-50"
                       >
                           {isTesting ? <RefreshCw className="w-5 h-5 animate-spin" /> : <Zap className="w-5 h-5" />}
-                          建立神经链路
+                          建立量子神经链路
                       </button>
                       
                       {state.connectionStatus === 'connected' && (
-                          <div className="flex gap-4">
-                            <button onClick={() => syncToCloud(true)} className="px-8 py-5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">同步镜像</button>
-                            <button onClick={() => pullFromCloud(true)} className="px-8 py-5 bg-blue-600 hover:bg-blue-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-lg">从云端恢复</button>
+                          <div className="flex gap-4 animate-in zoom-in-95 duration-300">
+                            <button onClick={() => syncToCloud(true)} className="px-10 py-6 bg-emerald-600 hover:bg-emerald-500 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95">同步镜像</button>
+                            <button onClick={() => pullFromCloud(true)} className="px-10 py-6 bg-blue-600 hover:bg-blue-500 text-white rounded-3xl font-black text-xs uppercase tracking-widest shadow-lg transition-all active:scale-95">从云端恢复</button>
                           </div>
                       )}
                   </div>
-                  
-                  <div className="bg-indigo-600/5 border border-white/5 rounded-3xl p-8">
-                      <h4 className="text-white text-sm font-bold mb-6 flex items-center gap-2"><HelpCircle className="w-5 h-5 text-indigo-400"/> 快速连接指南</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                        <div className="space-y-4">
-                            <p className="text-[11px] text-slate-400 leading-relaxed font-medium">
-                                正常情况下，请在 PocketBase 管理后台的 <code className="text-indigo-400">backups</code> 集合中开放所有 API 读写权限。
-                            </p>
-                            <div className="bg-black/60 rounded-2xl border border-white/5 p-4 space-y-3">
-                                {[
-                                    { label: 'List/Search', status: 'Anyone' },
-                                    { label: 'View', status: 'Anyone' },
-                                    { label: 'Create', status: 'Anyone' },
-                                    { label: 'Update', status: 'Anyone' }
-                                ].map((item, idx) => (
-                                    <div key={idx} className="flex justify-between items-center text-[10px]">
-                                        <span className="text-slate-500 font-mono">{item.label}</span>
-                                        <div className="flex items-center gap-2 text-emerald-400 font-bold">
-                                            <Unlock className="w-3 h-3"/> {item.status}
-                                        </div>
-                                    </div>
-                                ))}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div className="ios-glass-panel p-8 rounded-[2.5rem] border-white/5 space-y-6">
+                    <h4 className="text-white text-sm font-black flex items-center gap-3 uppercase italic"><Shield className="w-5 h-5 text-indigo-400"/> 数据库准入审计</h4>
+                    <p className="text-[11px] text-slate-400 leading-relaxed font-bold">
+                        请确保 PocketBase 的 <code className="text-indigo-400">backups</code> 集合已开放 API Rules 为 Everyone 权限。
+                    </p>
+                    <div className="bg-black/60 rounded-2xl border border-white/5 p-5 space-y-3">
+                        {['List/Search', 'View', 'Create', 'Update'].map((it) => (
+                            <div key={it} className="flex justify-between items-center text-[9px] font-black uppercase tracking-widest">
+                                <span className="text-slate-600">{it}</span>
+                                <div className="text-emerald-400 flex items-center gap-2"><Unlock className="w-3 h-3"/> Anyone</div>
                             </div>
-                        </div>
-                        <div className="flex flex-col justify-center gap-4">
-                            <div className="flex items-start gap-4">
-                                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-bold">1</div>
-                                <p className="text-[11px] text-slate-300">点击规则右侧的 **挂锁图标** 使其变色/消失</p>
-                            </div>
-                            <div className="flex items-start gap-4">
-                                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-bold">2</div>
-                                <p className="text-[11px] text-slate-300">确保输入框变为空白（显示为 Everyone/null）</p>
-                            </div>
-                            <div className="flex items-start gap-4">
-                                <div className="w-8 h-8 rounded-full bg-indigo-500/20 text-indigo-400 flex items-center justify-center shrink-0 font-bold">3</div>
-                                <p className="text-[11px] text-slate-300">点击下方的 **Save changes** 按钮保存生效</p>
-                            </div>
-                        </div>
-                      </div>
-                  </div>
+                        ))}
+                    </div>
+                 </div>
+
+                 <div className="ios-glass-panel p-8 rounded-[2.5rem] border-white/5 flex flex-col justify-center items-center text-center space-y-4">
+                    <Monitor className="w-12 h-12 text-slate-700" />
+                    <h4 className="text-white text-sm font-black uppercase italic">本地脱域模式 (Local Only)</h4>
+                    <p className="text-[11px] text-slate-500 leading-relaxed font-bold">
+                        如果您无法绕过 HTTPS 限制，系统仍会自动启用高级 IndexedDB。您的所有数据将离线存储在当前浏览器，永不丢失，直到您清除浏览器缓存。
+                    </p>
+                 </div>
               </div>
           </div>
       )}
 
       {activeTab === 'data' && (
-          <div className="ios-glass-card p-10 rounded-[2.5rem] border-white/5 space-y-6">
-              <div className="flex items-center gap-6 mb-4">
-                <div className="p-4 bg-blue-600/10 rounded-2xl text-blue-500"><Layout className="w-8 h-8" /></div>
+          <div className="ios-glass-card p-10 rounded-[3.5rem] border-white/5 space-y-10 bg-black/40">
+              <div className="flex items-center gap-8">
+                <div className="p-6 bg-blue-600/10 rounded-[2rem] text-blue-500 shadow-2xl border border-blue-500/20"><Layout className="w-10 h-10" /></div>
                 <div>
-                    <h4 className="text-white font-black text-xl uppercase italic tracking-wider">本地离线节点管理</h4>
-                    <p className="text-xs text-slate-500 font-bold mt-1">Local Browser Database (IndexedDB)</p>
+                    <h4 className="text-white font-black text-2xl uppercase italic tracking-widest leading-none">本地离线节点管理</h4>
+                    <p className="text-[10px] text-slate-500 font-black mt-2 uppercase tracking-[0.4em]">Local Grid Protocol: ACTIVE</p>
                 </div>
               </div>
-              <p className="text-sm text-slate-400 leading-relaxed font-medium bg-white/2 p-6 rounded-2xl border border-white/5">
-                  即使不使用云端后端，探行 ERP 也会通过高级 IndexedDB 协议在您的浏览器中加密存储。
-              </p>
-              <div className="pt-6 flex gap-4">
-                <button className="px-8 py-4 bg-white/5 border border-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-white/10 transition-all">
-                    <FileJson className="w-5 h-5 text-amber-500"/> 生成离线资产报告 (JSON)
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <button className="ios-glass-card p-8 rounded-[2rem] border-white/10 hover:bg-white/5 transition-all text-left group">
+                    <FileJson className="w-8 h-8 text-amber-500 mb-4 group-hover:scale-110 transition-transform" />
+                    <div className="text-white font-bold text-sm mb-1">导出加密快照 (JSON)</div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">生成一份完整的本地数据包，可用于在其他浏览器手动恢复。</p>
                 </button>
-                <button onClick={() => { if(confirm('警告：此操作将清空本地所有缓存数据，是否继续？')) { localStorage.clear(); window.location.reload(); } }} className="px-8 py-4 bg-red-950/20 border border-red-500/20 text-red-400 rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-3 hover:bg-red-500 hover:text-white transition-all">
-                    <DatabaseZap className="w-5 h-5"/> 紧急重置本地网格
+                <button 
+                  onClick={() => { if(confirm('警告：此操作将清空本地所有缓存数据，是否继续？')) { localStorage.clear(); window.location.reload(); } }}
+                  className="ios-glass-card p-8 rounded-[2rem] border-red-500/10 hover:bg-red-500/5 transition-all text-left group"
+                >
+                    <DatabaseZap className="w-8 h-8 text-red-500 mb-4 group-hover:scale-110 transition-transform" />
+                    <div className="text-red-400 font-bold text-sm mb-1">紧急重置本地网格</div>
+                    <p className="text-[10px] text-slate-500 leading-relaxed">清除所有本地缓存并强制重新初始化系统内核。</p>
                 </button>
               </div>
           </div>
