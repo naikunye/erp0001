@@ -1,3 +1,4 @@
+
 export interface Influencer {
   id: string;
   name: string;
@@ -30,7 +31,6 @@ export interface ProposedAction { id: string; type: 'inventory_update' | 'task_c
 export type ProductStatus = 'active' | 'draft' | 'archived' | 'out_of_stock' | 'low_stock';
 export type ProductLifecycle = 'New' | 'Growing' | 'Stable' | 'Clearance';
 
-// Added InventoryBreakdown interface for Product type
 export interface InventoryBreakdown {
   warehouseId: string;
   quantity: number;
@@ -38,7 +38,6 @@ export interface InventoryBreakdown {
   inbound: number;
 }
 
-// Added inventoryBreakdown, supplierId, and supplierContact to Product interface to fix assignment errors
 export interface Product { 
   id: string; 
   name: string; 
@@ -72,7 +71,7 @@ export interface Product {
 
 export interface InboundShipmentItem { productId: string; sku: string; name: string; quantity: number; boxes: number; unitPrice: number; rowTotalWeight: number; freightRate: number; }
 export interface ReplenishmentItem extends Product { dailyBurnRate: number; daysRemaining: number; safetyStock: number; reorderPoint: number; totalInvestment: number; freightCost: number; goodsCost: number; revenue30d: number; growth: number; profit: number; totalPotentialProfit: number; margin: number; totalWeight: number; boxes: number; liveTrackingStatus?: string | null; }
-export interface AutomationRule { id: string; name: string; trigger: 'logistics_exception' | 'low_stock_warning' | 'high_refund_rate' | 'new_vip_order'; action: 'create_task' | 'generate_ai_copy' | 'notify_admin'; status: 'active' | 'paused'; lastTriggered?: string; }
+export interface AutomationRule { id: string; name: string; trigger: 'logistics_exception' | 'low_stock_warning' | 'high_refund_rate' | 'new_vip_order'; action: 'create_task' | 'generate_ai_copy' | 'notify_admin' | 'generate_ai_task'; status: 'active' | 'paused'; lastTriggered?: string; }
 export interface AutomationLog { id: string; timestamp: string; ruleName: string; details: string; status: 'success' | 'failed'; }
 export interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning' | 'info'; }
 export type TransactionType = 'income' | 'expense';

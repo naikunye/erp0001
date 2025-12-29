@@ -6,7 +6,8 @@ import {
     Info, ShieldAlert, FileJson, Server, Layout, ExternalLink, Activity,
     Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle,
     Shield, Monitor, Globe, Settings2, Command, Search, Fingerprint, ChevronRight,
-    Upload, Download, FileUp, FileDown, AlertOctagon, Power, CloudUpload, CloudDownload
+    Upload, Download, FileUp, FileDown, AlertOctagon, Power, CloudUpload, CloudDownload,
+    Wifi, WifiOff, Fingerprint as ScanIcon
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
@@ -32,7 +33,7 @@ const Settings: React.FC = () => {
       try {
           const success = await connectToPb(cleanUrl);
           if (success) {
-              showToast('实时链路已激活', 'success');
+              showToast('量子链路握手成功', 'success');
           }
       } finally {
           setIsTesting(false);
@@ -40,11 +41,13 @@ const Settings: React.FC = () => {
   };
 
   const handleManualPush = async () => {
-      setIsPushing(true);
-      try {
-          await syncToCloud(true);
-      } finally {
-          setIsPushing(false);
+      if(confirm('推送将使用当前屏幕上的数据【覆盖】云端旧数据，另一台电脑也将同步被覆盖。是否确认？')) {
+          setIsPushing(true);
+          try {
+              await syncToCloud(true);
+          } finally {
+              setIsPushing(false);
+          }
       }
   };
 
@@ -82,7 +85,7 @@ const Settings: React.FC = () => {
               const json = JSON.parse(event.target?.result as string);
               if (confirm('警告：导入将重置当前所有数据并自动同步至云端，是否继续？')) {
                   dispatch({ type: 'BOOT', payload: { ...json, remoteVersion: Date.now() } });
-                  showToast('数据已成功注入，正在同步至云端...', 'success');
+                  showToast('数据已注入，正在广播...', 'success');
               }
           } catch (err) { showToast('文件解析失败', 'error'); }
       };
@@ -96,7 +99,7 @@ const Settings: React.FC = () => {
           <h2 className="text-3xl font-black text-white flex items-center gap-3 italic tracking-tighter uppercase">
               <SettingsIcon className="w-8 h-8 text-indigo-500" /> 核心神经元配置
           </h2>
-          <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Node Session: {SESSION_ID}</p>
+          <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Node Session: <span className="text-indigo-400">{SESSION_ID}</span></p>
         </div>
       </div>
 
@@ -111,36 +114,27 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-8">
-              {isHttps && pbInput.startsWith('http:') && state.connectionStatus !== 'connected' && (
-                  <div className="bg-rose-500/10 border-2 border-rose-500/30 rounded-[3rem] p-10 animate-in slide-in-from-top-4 shadow-2xl relative overflow-hidden">
-                      <div className="absolute top-0 right-0 p-10 opacity-10"><ShieldAlert className="w-40 h-40 text-rose-500" /></div>
-                      <div className="flex flex-col md:flex-row gap-12 relative z-10">
-                          <div className="md:w-2/5 space-y-6">
-                              <div className="w-16 h-16 bg-rose-600 rounded-3xl flex items-center justify-center text-white shadow-xl"><Power className="w-8 h-8" /></div>
-                              <h3 className="text-3xl font-black text-white italic tracking-tighter leading-tight uppercase">为什么一直在“转圈圈”？</h3>
-                              <p className="text-sm text-rose-200/80 font-bold leading-relaxed">您的浏览器为了安全，拦截了从 HTTPS 页面访问 HTTP 服务器的请求。</p>
-                          </div>
-                          <div className="md:w-3/5 space-y-4">
-                              <div className="bg-black/60 rounded-[2rem] p-8 border border-white/10">
-                                  <h4 className="text-white font-bold mb-4 flex items-center gap-2"><MousePointerClick className="w-4 h-4 text-rose-500"/> 快速解决:</h4>
-                                  <div className="space-y-4 text-xs text-slate-300">
-                                      <p>1. 点击地址栏左侧的 <span className="text-rose-400 font-bold">锁头图标</span></p>
-                                      <p>2. 进入【网站设置】，找到 <span className="text-rose-400 font-bold">不安全内容</span></p>
-                                      <p>3. 改为 <span className="text-emerald-400 font-bold">允许 (Allow)</span>，然后手动刷新本页面。</p>
-                                  </div>
-                              </div>
-                          </div>
+              {/* 核心诊断：HTTPS 混合内容警告 */}
+              {isHttps && pbInput.startsWith('http:') && (
+                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 flex items-start gap-4">
+                      <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
+                      <div className="text-xs space-y-2">
+                          <p className="text-amber-200 font-bold uppercase tracking-widest">警告：检测到不安全的连接请求 (Mixed Content)</p>
+                          <p className="text-slate-400">由于本程序运行在 HTTPS，而您的节点是 HTTP。如果无法同步，请点击地址栏左侧的“锁头”图标 -> 【网站设置】 -> 在底部找到【不安全内容】 -> 选择【允许】。然后刷新页面。</p>
                       </div>
                   </div>
               )}
 
-              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 space-y-10 bg-[#0a0a0c] shadow-xl relative">
+              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 space-y-10 bg-[#0a0a0c] shadow-xl relative overflow-hidden">
                   <div className="space-y-4">
                       <div className="flex justify-between items-center px-2">
-                          <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em]">Tencent Cloud PocketBase Node (IP:8090)</label>
-                          <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
-                             {state.connectionStatus.toUpperCase()}
-                          </span>
+                          <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.3em]">PocketBase Node Provider</label>
+                          <div className="flex items-center gap-2">
+                            {state.connectionStatus === 'connected' ? <Wifi className="w-3 h-3 text-emerald-500"/> : <WifiOff className="w-3 h-3 text-rose-500"/>}
+                            <span className={`text-[10px] font-black px-3 py-1 rounded-full border ${state.connectionStatus === 'connected' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-rose-500/10 text-rose-400 border-rose-500/30'}`}>
+                                {state.connectionStatus.toUpperCase()}
+                            </span>
+                          </div>
                       </div>
                       <div className="relative group">
                         <div className={`absolute left-6 top-1/2 -translate-y-1/2 transition-all ${state.connectionStatus === 'connected' ? 'text-emerald-500 scale-110' : 'text-slate-600'}`}>
@@ -151,7 +145,7 @@ const Settings: React.FC = () => {
                             value={pbInput}
                             onChange={e => setPbInput(e.target.value)}
                             className="w-full bg-black/60 border border-white/10 rounded-[1.5rem] p-6 pl-16 text-sm text-white font-mono outline-none transition-all focus:border-indigo-500" 
-                            placeholder="http://您的服务器IP:8090" 
+                            placeholder="http://IP:8090" 
                         />
                         {isTesting && (
                             <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-3">
@@ -170,51 +164,78 @@ const Settings: React.FC = () => {
                   
                   {state.connectionStatus === 'connected' && (
                       <div className="space-y-6 animate-in fade-in zoom-in-95">
-                          <div className="p-8 bg-indigo-500/5 border border-indigo-500/20 rounded-[2rem] flex flex-col md:flex-row items-center justify-between gap-8">
-                              <div className="flex-1">
-                                  <h4 className="text-white font-bold mb-2 flex items-center gap-2">
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                              <div className="p-8 bg-indigo-500/5 border border-indigo-500/20 rounded-[2rem] space-y-4">
+                                  <div className="flex items-center gap-3">
                                       <CloudUpload className="w-5 h-5 text-indigo-400" />
-                                      初始化云端资产
-                                  </h4>
-                                  <p className="text-xs text-slate-500 leading-relaxed">
-                                      如果您在另一台电脑拉取不到数据，请先在此处点击“推送”。它会将您本地的 <b>{state.products.length} 个产品</b>、<b>{state.orders.length} 个订单</b> 等全量数据上传到腾讯云节点。
+                                      <h4 className="text-white font-bold uppercase text-sm">推送主控节点 (Broadcaster)</h4>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                                      将本地数据作为“真相源”广播到云端。这会覆盖所有在线电脑的数据。通常用于初始化系统或完成大规模离线编辑后同步。
                                   </p>
-                                  {state.lastSyncTime && (
-                                      <p className="text-[10px] text-emerald-500 font-mono mt-3 uppercase font-bold tracking-widest">
-                                          上次同步时间: {new Date(state.lastSyncTime).toLocaleString()}
-                                      </p>
-                                  )}
-                              </div>
-                              <div className="flex gap-4">
                                   <button 
                                     onClick={handleManualPush}
                                     disabled={isPushing}
-                                    className="px-8 py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center gap-3 active:scale-95 disabled:opacity-50"
+                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
                                   >
-                                      {isPushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudUpload className="w-4 h-4" />}
-                                      推送全量数据 (Push)
+                                      {isPushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
+                                      执行广播推送 (Push)
                                   </button>
+                              </div>
+
+                              <div className="p-8 bg-emerald-500/5 border border-emerald-500/20 rounded-[2rem] space-y-4">
+                                  <div className="flex items-center gap-3">
+                                      <CloudDownload className="w-5 h-5 text-emerald-400" />
+                                      <h4 className="text-white font-bold uppercase text-sm">强制云端对齐 (Subscriber)</h4>
+                                  </div>
+                                  <p className="text-[10px] text-slate-500 leading-relaxed">
+                                      如果您的电脑没有自动同步，请点击此按钮手动从云端抓取最新资产快照。这会清除您本地未同步的临时修改。
+                                  </p>
                                   <button 
                                     onClick={handleManualPull}
                                     disabled={isPulling}
-                                    className="px-8 py-5 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-2xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex items-center gap-3"
+                                    className="w-full py-4 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
                                   >
-                                      {isPulling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <CloudDownload className="w-4 h-4" />}
-                                      从云端拉取 (Pull)
+                                      {isPulling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                                      从云端抓取 (Pull)
                                   </button>
                               </div>
+                          </div>
+
+                          <div className="bg-black/60 rounded-[1.5rem] border border-white/5 p-6 space-y-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <ScanIcon className="w-4 h-4 text-slate-500" />
+                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">节点诊断详情</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Cloud ID</span>
+                                        <span className="text-xs text-white font-mono truncate">{state.cloudRecordId || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Asset Version</span>
+                                        <span className="text-xs text-white font-mono">v{state.remoteVersion}</span>
+                                    </div>
+                                    <div className="flex flex-col col-span-2">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Last Heartbeat</span>
+                                        <span className="text-xs text-slate-400 font-mono italic">{state.lastSyncTime ? new Date(state.lastSyncTime).toLocaleString() : 'NEVER'}</span>
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-white/5">
+                                    <p className="text-[9px] text-slate-600 leading-relaxed font-bold italic">提示：如果两台电脑显示的 Cloud ID 相同且 Version 不同，点击“从云端抓取”即可对齐。</p>
+                                </div>
                           </div>
                       </div>
                   )}
 
                   <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-8">
-                      <div className="flex items-center gap-3">
-                          <ShieldCheck className="w-5 h-5 text-emerald-500" />
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">End-to-End Encryption</span>
+                      <div className="flex items-center gap-3 text-emerald-500">
+                          <ShieldCheck className="w-5 h-5" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest">End-to-End Encryption</span>
                       </div>
                       <div className="flex items-center gap-3 justify-end text-right">
                           <Activity className="w-5 h-5 text-indigo-500" />
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">Latency: ~24ms</span>
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">LATENCY: ~20MS</span>
                       </div>
                   </div>
               </div>
