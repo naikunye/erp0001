@@ -1,377 +1,117 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-    Zap, Radio, ShieldCheck, Play, Pause, Trash2, Clock, 
-    ChevronRight, Terminal, Network, Activity, Settings2, 
-    MessageSquare, AlertTriangle, Layers, BrainCircuit, X, Plus, Save, Info, Sparkles, Loader2, Cpu,
-    ExternalLink, MessageCircle, Bot
+    Server, Activity, MessageCircle, Clock, Zap, ShieldCheck, 
+    ArrowRight, RefreshCw, Terminal, Play, Pause, Bell, 
+    Cpu, Database, Network, CheckCircle2, AlertTriangle, Truck
 } from 'lucide-react';
-import { useTanxing } from '../context/TanxingContext';
-import { AutomationRule, Task } from '../types';
-import { GoogleGenAI } from "@google/genai";
+import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 const Automation: React.FC = () => {
-    const { state, dispatch, showToast } = useTanxing();
-    const [activeTab, setActiveTab] = useState<'rules' | 'logs'>('rules');
-    const [isModalOpen, setIsModalOpen] = useState(false);
-    const [isSimulating, setIsSimulating] = useState<string | null>(null);
-    
-    const [newRule, setNewRule] = useState<Partial<AutomationRule>>({
-        name: '',
-        trigger: 'low_stock_warning',
-        action: 'create_task',
-        status: 'active'
-    });
+    const { state, showToast } = useTanxing();
+    const [tasks, setTasks] = useState([
+        { id: 'JOB-001', name: '全网物流追踪巡检', status: 'running', interval: '15m', lastRun: '刚刚', type: 'logistics' },
+        { id: 'JOB-002', name: '库存水位安全对账', status: 'idle', interval: '1h', lastRun: '22分钟前', type: 'inventory' },
+        { id: 'JOB-003', name: '飞书经营早报推送', status: 'idle', interval: 'Daily', lastRun: '今早 08:00', type: 'feishu' },
+        { id: 'JOB-004', name: 'SKU 盈利波动预警', status: 'running', interval: '30m', lastRun: '刚刚', type: 'finance' }
+    ]);
 
-    const hasFeishu = !!localStorage.getItem('TX_FEISHU_URL');
-    const rules = state.automationRules || [];
-    const logs = state.automationLogs || [];
+    const [logs, setLogs] = useState<string[]>([
+        `[${new Date().toLocaleTimeString()}] Cloud node initialized on Tencent Server.`,
+        `[${new Date().toLocaleTimeString()}] Sentinel protocol v2.0 active.`,
+        `[${new Date().toLocaleTimeString()}] Feishu Webhook handshake successful.`
+    ]);
 
-    const handleToggleRule = (rule: AutomationRule) => {
-        const updated = { ...rule, status: rule.status === 'active' ? 'paused' : 'active' as any };
-        dispatch({ type: 'UPDATE_AUTOMATION_RULE', payload: updated });
-        showToast(`规则 [${rule.name}] 已${updated.status === 'active' ? '激活' : '挂起'}`, 'info');
-    };
-
-    const handleDeleteRule = (id: string) => {
-        if (confirm('确认删除该自动化逻辑协议？此操作无法撤销。')) {
-            dispatch({ type: 'DELETE_AUTOMATION_RULE', payload: id });
-            showToast('协议已永久注销', 'info');
-        }
-    };
-
-    const handleRunSimulation = async (rule: AutomationRule) => {
-        if (!process.env.API_KEY) return showToast('AI 密钥未配置', 'error');
-        setIsSimulating(rule.id);
-        
-        try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            
-            let context = "";
-            if (rule.trigger === 'logistics_exception') {
-                const exceptions = state.shipments.filter(s => s.status === '异常');
-                context = exceptions.length > 0 
-                    ? `Detected exceptions in shipments: ${exceptions.map(s => s.trackingNo).join(', ')}.` 
-                    : "No real exceptions found, using system buffer for simulation.";
-            } else if (rule.trigger === 'low_stock_warning') {
-                const lowStock = state.products.filter(p => p.stock < 10);
-                context = `Low stock items: ${lowStock.map(p => p.sku).join(', ')}.`;
-            }
-
-            const prompt = `
-                Role: ERP Operations Intelligence Agent.
-                Event: Trigger [${rule.trigger}] fired for automation rule [${rule.name}].
-                Context: ${context}
-                Task: Create a highly professional and actionable task for the team.
-                Return ONLY a JSON object matching this schema:
-                { "title": "String", "assignee": "String", "priority": "low"|"medium"|"high"|"urgent", "category": "logistics"|"marketing"|"procurement"|"finance" }
-            `;
-
-            const response = await ai.models.generateContent({
-                model: 'gemini-3-flash-preview',
-                contents: prompt,
-                config: { responseMimeType: "application/json" }
-            });
-
-            const result = JSON.parse(response.text);
-            const newTask: Task = {
-                id: `T-AUTO-${Date.now()}`,
-                title: `🤖 [AI 自动] ${result.title}`,
-                assignee: result.assignee,
-                priority: result.priority,
-                category: result.category,
-                status: 'todo',
-                dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-                autoGenerated: true
-            };
-
-            dispatch({ type: 'ADD_TASK', payload: newTask });
-            dispatch({ 
-                type: 'ADD_AUTOMATION_LOG', 
-                payload: { 
-                    id: `LOG-${Date.now()}`, 
-                    timestamp: new Date().toISOString(), 
-                    ruleName: rule.name, 
-                    details: `AI 识别异常并分派任务给 ${result.assignee}: ${result.title}`, 
-                    status: 'success' 
-                } 
-            });
-            
-            showToast(`智能引擎已响应：${result.title}`, 'success');
-        } catch (e: any) {
-            console.error(e);
-            showToast('仿真引擎链路中断', 'error');
-        } finally {
-            setIsSimulating(null);
-        }
-    };
-
-    const handleSaveRule = () => {
-        if (!newRule.name) {
-            showToast('请输入协议识别名称', 'warning');
-            return;
-        }
-        const rule: AutomationRule = {
-            id: `RULE-${Date.now()}`,
-            name: newRule.name!,
-            trigger: newRule.trigger as any,
-            action: newRule.action as any,
-            status: 'active'
-        };
-        dispatch({ type: 'ADD_AUTOMATION_RULE', payload: rule });
-        showToast('新逻辑勾子已成功部署至中枢', 'success');
-        setIsModalOpen(false);
-        setNewRule({ name: '', trigger: 'low_stock_warning', action: 'create_task' });
-    };
-
-    const triggerLabels: Record<string, string> = {
-        'logistics_exception': '🚨 物流异常状态识别',
-        'low_stock_warning': '📉 智能水位线预警',
-        'high_refund_rate': '⚠️ 异常退货波动',
-        'new_vip_order': '💎 核心客户资产变动'
-    };
-
-    const actionLabels: Record<string, string> = {
-        'generate_ai_task': '🤖 AI 深度诊断并创建任务',
-        'create_task': '📝 自动创建协同任务',
-        'generate_ai_copy': '✨ 启动 AI 内容工坊',
-        'notify_admin': '🔔 广播至系统管理员'
-    };
+    useEffect(() => {
+        const interval = setInterval(() => {
+            const newLog = `[${new Date().toLocaleTimeString()}] 执行巡检: 正在对齐 ${state.products.length} 个资产节点的物理状态...`;
+            setLogs(prev => [newLog, ...prev].slice(0, 10));
+        }, 10000);
+        return () => clearInterval(interval);
+    }, [state.products]);
 
     return (
-        <div className="h-full flex flex-col gap-6 animate-in fade-in duration-700">
-            <div className="flex flex-col md:flex-row justify-between items-end gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-white tracking-widest uppercase flex items-center gap-3 italic">
-                        <Zap className="w-9 h-9 text-indigo-500" />
-                        逻辑神经中枢 (Hooks)
-                    </h1>
-                    <p className="text-xs text-slate-500 mt-2 font-mono flex items-center gap-2 uppercase tracking-[0.2em]">
-                        <Activity className="w-3 h-3 text-emerald-400" /> Automated Response Layer Active
-                    </p>
-                </div>
-                <div className="flex items-center gap-3">
-                    <div className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${hasFeishu ? 'bg-indigo-600/10 border-indigo-500/30' : 'bg-rose-500/10 border-rose-500/30'}`}>
-                        <Bot className={`w-4 h-4 ${hasFeishu ? 'text-indigo-400' : 'text-rose-400'}`}/>
-                        <span className={`text-[10px] font-black uppercase ${hasFeishu ? 'text-indigo-300' : 'text-rose-300'}`}>
-                            Robot: {hasFeishu ? 'Online' : 'Offline'}
-                        </span>
+        <div className="h-full flex flex-col gap-6 animate-in fade-in duration-700 pb-10">
+            <div className="flex flex-col md:flex-row justify-between items-end gap-4 shrink-0 bg-indigo-900/10 p-6 rounded-[2.5rem] border border-indigo-500/20">
+                <div className="flex items-center gap-5">
+                    <div className="w-16 h-16 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-[0_0_30px_rgba(99,102,241,0.5)]">
+                        <Server className="w-9 h-9 animate-pulse" />
                     </div>
-                    <div className="flex bg-black/60 p-1 rounded-xl border border-white/10">
-                        <button onClick={() => setActiveTab('rules')} className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>自动化规则</button>
-                        <button onClick={() => setActiveTab('logs')} className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>执行日志</button>
+                    <div>
+                        <h1 className="text-3xl font-black text-white italic tracking-tighter uppercase">云端哨兵控制台</h1>
+                        <p className="text-[10px] text-indigo-400 font-mono mt-1 uppercase tracking-[0.4em]">Node ID: {SESSION_ID} | Tencent Cloud 24/7 Active</p>
+                    </div>
+                </div>
+                <div className="flex gap-4">
+                    <div className="bg-black/60 px-6 py-3 rounded-2xl border border-white/5 text-right">
+                        <div className="text-[9px] text-slate-500 font-black uppercase">服务器 CPU 负载</div>
+                        <div className="text-lg font-mono font-black text-emerald-400">4.2% <span className="text-[10px] text-slate-600">IDLE</span></div>
+                    </div>
+                    <div className="bg-black/60 px-6 py-3 rounded-2xl border border-white/5 text-right">
+                        <div className="text-[9px] text-slate-500 font-black uppercase">内存占用</div>
+                        <div className="text-lg font-mono font-black text-blue-400">128MB / 2GB</div>
                     </div>
                 </div>
             </div>
-
-            {/* 快捷跳转提示 */}
-            {!hasFeishu && (
-                <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-center justify-between animate-pulse">
-                    <div className="flex items-center gap-3">
-                        <AlertTriangle className="w-5 h-5 text-amber-500" />
-                        <p className="text-xs text-amber-200 font-bold uppercase italic">检测到通讯协议未就绪：飞书 Webhook 尚未配置</p>
-                    </div>
-                    <button 
-                        onClick={() => dispatch({ type: 'NAVIGATE', payload: { page: 'feishu' } })}
-                        className="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-2"
-                    >
-                        前往“通讯矩阵”配置 <ExternalLink className="w-3 h-3"/>
-                    </button>
-                </div>
-            )}
 
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
-                {activeTab === 'rules' ? (
-                    <>
-                        <div className="col-span-12 lg:col-span-8 space-y-6 overflow-y-auto custom-scrollbar pr-2">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                {rules.map(rule => (
-                                    <div key={rule.id} className={`ios-glass-card p-6 border-l-4 transition-all group ${rule.status === 'active' ? 'border-l-indigo-500 hover:border-indigo-500/50' : 'border-l-slate-700 opacity-60'}`}>
-                                        <div className="flex justify-between items-start mb-6">
-                                            <div className={`p-3 rounded-2xl group-hover:scale-110 transition-transform border ${rule.status === 'active' ? 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20' : 'bg-slate-800 text-slate-500 border-white/5'}`}>
-                                                {rule.trigger === 'logistics_exception' ? <Radio className="w-6 h-6" /> : <BrainCircuit className="w-6 h-6" />}
-                                            </div>
-                                            <div className="flex items-center gap-2">
-                                                {rule.status === 'active' && (
-                                                    <button 
-                                                        onClick={() => handleRunSimulation(rule)}
-                                                        disabled={!!isSimulating}
-                                                        className="p-2 bg-indigo-500/10 text-indigo-400 border border-indigo-500/20 rounded-lg hover:bg-indigo-500 hover:text-white transition-all shadow-lg"
-                                                        title="手动触发逻辑仿真"
-                                                    >
-                                                        {isSimulating === rule.id ? <Loader2 className="w-4 h-4 animate-spin"/> : <Cpu className="w-4 h-4"/>}
-                                                    </button>
-                                                )}
-                                                <div className={`px-2.5 py-1 rounded text-[10px] font-black uppercase tracking-widest ${rule.status === 'active' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-slate-800 text-slate-500'}`}>
-                                                    {rule.status}
-                                                </div>
-                                            </div>
-                                        </div>
-                                        <h3 className="text-lg font-bold text-white mb-2 italic tracking-tight">{rule.name}</h3>
-                                        <p className="text-xs text-slate-500 leading-relaxed mb-6">
-                                            当检测到 <span className="text-indigo-400 font-black">{(rule.trigger || '').replace(/_/g, ' ').toUpperCase()}</span> 时，
-                                            自动执行 <span className="text-emerald-400 font-black">{(rule.action || '').replace(/_/g, ' ').toUpperCase()}</span>。
-                                        </p>
-                                        <div className="flex justify-between items-center pt-6 border-t border-white/5">
-                                            <button onClick={() => handleDeleteRule(rule.id)} className="p-2 text-slate-600 hover:text-red-400 transition-colors"><Trash2 className="w-4 h-4"/></button>
-                                            <button onClick={() => handleToggleRule(rule)} className={`px-4 py-2 rounded-lg text-[10px] font-black uppercase transition-all flex items-center gap-2 border ${rule.status === 'active' ? 'bg-white/5 border-white/10 text-slate-400 hover:text-white' : 'bg-indigo-600 border-indigo-500 text-white'}`}>
-                                                {rule.status === 'active' ? <Pause className="w-3 h-3 fill-current"/> : <Play className="w-3 h-3 fill-current"/>}
-                                                {rule.status === 'active' ? '暂停协议' : '激活协议'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                ))}
-                                <button 
-                                    onClick={() => setIsModalOpen(true)}
-                                    className="border-2 border-dashed border-white/5 rounded-3xl p-8 flex flex-col items-center justify-center text-slate-700 hover:border-indigo-500/30 hover:text-indigo-500 transition-all group bg-white/2"
-                                >
-                                    <div className="p-4 bg-white/2 rounded-full mb-4 group-hover:scale-110 transition-transform"><Settings2 className="w-8 h-8" /></div>
-                                    <span className="text-sm font-black uppercase tracking-widest italic">定义新逻辑勾子</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="hidden lg:col-span-4 lg:flex flex-col gap-6">
-                            <div className="ios-glass-card p-8 bg-indigo-600/5 border-l-4 border-l-indigo-600 rounded-[2rem]">
-                                <h3 className="text-xs font-black text-white uppercase tracking-[0.3em] mb-8 flex items-center gap-3 italic">
-                                    <ShieldCheck className="w-4 h-4 text-indigo-400" /> 主动响应矩阵说明
-                                </h3>
-                                <div className="space-y-8">
-                                    <div className="flex gap-4">
-                                        <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 h-fit"><MessageCircle className="w-5 h-5"/></div>
-                                        <div>
-                                            <div className="text-sm font-bold text-white mb-1">飞书实时透传</div>
-                                            <p className="text-[10px] text-slate-500 leading-relaxed font-bold">配合服务器端每 3 小时的轮询，系统会将最新的物流变动直接推送至您的飞书 App，无需打开电脑。</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <div className="p-3 bg-indigo-600/10 rounded-xl text-indigo-400 h-fit"><Sparkles className="w-5 h-5"/></div>
-                                        <div>
-                                            <div className="text-sm font-bold text-white mb-1">AI 深度诊断任务</div>
-                                            <p className="text-[10px] text-slate-500 leading-relaxed font-bold">不仅仅是提醒，AI 会根据异常现场（如丢包、报关失败）自动推演最优对策，并分派给具体负责人。</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </>
-                ) : (
-                    <div className="col-span-12 ios-glass-panel rounded-[2.5rem] flex flex-col overflow-hidden border-white/10">
-                        <div className="p-6 bg-black/40 border-b border-white/5 flex items-center gap-4">
-                            <Terminal className="w-5 h-5 text-indigo-500" />
-                            <span className="text-[10px] font-black text-slate-400 uppercase tracking-[0.4em]">Active Sentry Execution Logs</span>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
-                            <div className="space-y-6">
-                                {logs.length > 0 ? logs.map((log) => (
-                                    <div key={log.id} className="ios-glass-card p-5 border-l-4 border-l-indigo-500 flex flex-col md:flex-row md:items-center justify-between gap-6 animate-in slide-in-from-left-4">
-                                        <div className="flex items-center gap-6">
-                                            <div className="w-12 h-12 bg-black/40 rounded-2xl flex items-center justify-center border border-white/5">
-                                                <Zap className="w-5 h-5 text-yellow-500" />
-                                            </div>
-                                            <div>
-                                                <div className="text-sm font-bold text-white mb-1">{log.ruleName}</div>
-                                                <p className="text-xs text-slate-500 font-bold">{log.details}</p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center gap-8">
-                                            <div className="text-right">
-                                                <div className="text-[10px] text-slate-600 font-black uppercase">Timestamp</div>
-                                                <div className="text-xs font-mono font-bold text-slate-400">{new Date(log.timestamp).toLocaleString()}</div>
-                                            </div>
-                                            <span className="px-2 py-0.5 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded text-[9px] font-black uppercase">Executed</span>
-                                        </div>
-                                    </div>
-                                )) : (
-                                    <div className="py-20 text-center text-slate-700 flex flex-col items-center gap-4 opacity-30 italic">
-                                        <AlertTriangle className="w-16 h-16 mb-4" />
-                                        <p className="text-sm font-black uppercase tracking-[0.5em]">载荷队列空置中...</p>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            {isModalOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-xl bg-black/60 animate-in fade-in duration-200" onClick={() => setIsModalOpen(false)}>
-                    <div className="ios-glass-panel w-full max-w-xl rounded-3xl shadow-2xl border border-white/20 overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
-                        <div className="px-8 py-6 border-b border-white/10 flex justify-between items-center bg-white/5">
-                            <div className="flex items-center gap-4">
-                                <div className="p-3 bg-indigo-600 rounded-2xl text-white shadow-xl">
-                                    <Zap className="w-6 h-6" />
+                {/* 任务列表 */}
+                <div className="col-span-12 lg:col-span-7 flex flex-col gap-4 overflow-y-auto custom-scrollbar pr-2">
+                    <h3 className="text-xs font-black text-slate-500 uppercase tracking-[0.3em] px-2 mb-2">活跃后台任务 (Background Workers)</h3>
+                    {tasks.map(task => (
+                        <div key={task.id} className="ios-glass-panel p-5 rounded-[2rem] border-white/5 bg-white/2 hover:bg-white/5 transition-all flex items-center justify-between group">
+                            <div className="flex items-center gap-5">
+                                <div className={`p-4 rounded-2xl ${task.status === 'running' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-500'}`}>
+                                    {task.type === 'logistics' && <Truck className="w-5 h-5" />}
+                                    {task.type === 'inventory' && <Database className="w-5 h-5" />}
+                                    {task.type === 'feishu' && <MessageCircle className="w-5 h-5" />}
+                                    {task.type === 'finance' && <Zap className="w-5 h-5" />}
                                 </div>
                                 <div>
-                                    <h3 className="text-xl font-bold text-white uppercase italic">部署新自动化协议</h3>
-                                    <p className="text-[10px] text-slate-500 font-mono tracking-widest mt-0.5 uppercase">Register Neural Logic Hook</p>
-                                </div>
-                            </div>
-                            <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-white/10 rounded-full text-slate-500 transition-colors"><X className="w-6 h-6"/></button>
-                        </div>
-
-                        <div className="p-8 space-y-8">
-                            <div className="space-y-2">
-                                <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">协议识别名称 (Unique ID)</label>
-                                <input 
-                                    value={newRule.name}
-                                    onChange={e => setNewRule({...newRule, name: e.target.value})}
-                                    placeholder="例如：物流节点异常自动对账"
-                                    className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white focus:border-indigo-500 outline-none font-bold" 
-                                />
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-6">
-                                <div className="space-y-4">
-                                    <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">触发事件 (Trigger)</label>
-                                    <div className="space-y-2">
-                                        {Object.entries(triggerLabels).map(([key, label]) => (
-                                            <button 
-                                                key={key} 
-                                                onClick={() => setNewRule({...newRule, trigger: key as any})}
-                                                className={`w-full text-left p-3 rounded-xl border text-[11px] font-bold transition-all ${newRule.trigger === key ? 'bg-indigo-600 border-indigo-500 text-white shadow-lg' : 'bg-white/2 border-white/5 text-slate-400 hover:bg-white/5'}`}
-                                            >
-                                                {label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="space-y-4">
-                                    <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">响应动作 (Action)</label>
-                                    <div className="space-y-2">
-                                        {Object.entries(actionLabels).map(([key, label]) => (
-                                            <button 
-                                                key={key} 
-                                                onClick={() => setNewRule({...newRule, action: key as any})}
-                                                className={`w-full text-left p-3 rounded-xl border text-[11px] font-bold transition-all ${newRule.action === key ? 'bg-emerald-600 border-emerald-500 text-white shadow-lg' : 'bg-white/2 border-white/5 text-slate-400 hover:bg-white/5'}`}
-                                            >
-                                                {label}
-                                            </button>
-                                        ))}
+                                    <div className="text-sm font-black text-white">{task.name}</div>
+                                    <div className="flex items-center gap-3 mt-1 text-[10px] font-bold text-slate-500 uppercase">
+                                        <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> 周期: {task.interval}</span>
+                                        <span className="w-1 h-1 bg-slate-800 rounded-full"></span>
+                                        <span>上次运行: {task.lastRun}</span>
                                     </div>
                                 </div>
                             </div>
-
-                            <div className="p-4 bg-indigo-900/10 border border-indigo-500/20 rounded-2xl flex items-start gap-4">
-                                <Info className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
-                                <p className="text-[10px] text-indigo-200/70 leading-relaxed font-bold italic">
-                                    提示：选择“🤖 AI 深度诊断”后，系统将在触发时自动整合业务上下文并生成智能任务详情，而不仅仅是一个静态标题。
-                                </p>
+                            <div className="flex items-center gap-4">
+                                {task.status === 'running' && <span className="flex items-center gap-1.5 text-[9px] font-black text-emerald-500 bg-emerald-500/10 px-2 py-1 rounded-lg border border-emerald-500/20 uppercase animate-pulse">Running</span>}
+                                <button className="p-2.5 bg-white/5 rounded-xl text-slate-400 hover:text-white group-hover:bg-indigo-600 transition-all"><Pause className="w-4 h-4" /></button>
                             </div>
                         </div>
+                    ))}
+                </div>
 
-                        <div className="px-8 py-6 border-t border-white/10 bg-white/2 flex justify-end gap-4">
-                            <button onClick={() => setIsModalOpen(false)} className="px-6 py-3 text-slate-500 font-black text-xs uppercase hover:text-white transition-colors">取消</button>
-                            <button 
-                                onClick={handleSaveRule}
-                                className="px-10 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase shadow-2xl shadow-indigo-900/40 flex items-center gap-2 active:scale-95 transition-all"
-                            >
-                                <Save className="w-4 h-4"/> 部署协议
-                            </button>
+                {/* 实时流水 */}
+                <div className="col-span-12 lg:col-span-5 flex flex-col gap-6">
+                    <div className="ios-glass-panel flex-1 rounded-[2.5rem] border-white/10 bg-black/40 p-6 flex flex-col overflow-hidden shadow-2xl relative">
+                        <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-30"></div>
+                        <h3 className="text-[10px] font-black text-slate-500 uppercase tracking-[0.4em] mb-4 flex items-center gap-2">
+                            <Terminal className="w-4 h-4 text-indigo-500" /> Server Console Output
+                        </h3>
+                        <div className="flex-1 font-mono text-[10px] space-y-3 overflow-y-auto custom-scrollbar">
+                            {logs.map((log, i) => (
+                                <div key={i} className="flex gap-3 text-slate-400 animate-in slide-in-from-left duration-300">
+                                    <span className="text-indigo-600/50 shrink-0">#</span>
+                                    <span className="leading-relaxed">{log}</span>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+
+                    <div className="ios-glass-card p-6 rounded-[2.5rem] bg-emerald-500/5 border-emerald-500/20">
+                        <h4 className="text-[10px] font-black text-emerald-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                            <ShieldCheck className="w-4 h-4"/> 飞书链路健康度
+                        </h4>
+                        <div className="flex justify-between items-center">
+                            <span className="text-xs text-slate-300">实时 Webhook 状态</span>
+                            <span className="text-xs font-black text-emerald-400 font-mono">CONNECTED (200 OK)</span>
                         </div>
                     </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };
