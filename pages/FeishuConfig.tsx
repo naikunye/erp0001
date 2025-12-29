@@ -1,98 +1,68 @@
 
 import React, { useState } from 'react';
 import { 
-    MessageCircle, RefreshCw, Radio, Bell, 
-    Sparkles, Truck, Loader2, Key, CheckCircle2, AlertCircle, Zap, ShieldCheck, 
-    Send, Bot, Settings2, Cpu, BarChart3, ShieldAlert
+    MessageCircle, RefreshCw, Send, Truck, 
+    Loader2, Zap, ShieldCheck, ListChecks,
+    ClipboardList, ExternalLink, Key, CheckCircle2
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { sendMessageToBot } from '../utils/feishu';
 
 const FeishuConfig: React.FC = () => {
-    const { state, showToast, performOperationalAudit } = useTanxing();
+    const { state, showToast, pushTrackingToFeishu } = useTanxing();
     const [feishuUrl, setFeishuUrl] = useState(localStorage.getItem('TX_FEISHU_URL') || '');
     const [isTesting, setIsTesting] = useState(false);
-    const [isAuditing, setIsAuditing] = useState(false);
+    const [isPushing, setIsPushing] = useState(false);
 
     const handleSave = () => {
         localStorage.setItem('TX_FEISHU_URL', feishuUrl);
-        showToast('飞书通讯协议已在云端固化', 'success');
+        showToast('飞书 Webhook 节点已固化', 'success');
     };
 
-    const triggerAudit = async () => {
+    const handlePushTracking = async () => {
         if (!feishuUrl) return showToast('请先配置 Webhook 地址', 'warning');
-        setIsAuditing(true);
+        setIsPushing(true);
         try {
-            await performOperationalAudit(true);
+            await pushTrackingToFeishu(true);
         } finally {
-            setIsAuditing(false);
-        }
-    };
-
-    const getAiStudio = () => {
-        try {
-            let win = window as any;
-            while (win) {
-                if (win.aistudio) return win.aistudio;
-                if (win === win.parent) break;
-                win = win.parent;
-            }
-        } catch (e) {}
-        return (globalThis as any).aistudio;
-    };
-
-    const handleAuth = async () => {
-        const aistudio = getAiStudio();
-        if (aistudio) {
-            await aistudio.openSelectKey();
-            showToast('正在激活量子授权窗口...', 'info');
-        } else {
-            showToast('当前预览环境不支持动态授权', 'error');
+            setIsPushing(false);
         }
     };
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
-            <div className="flex justify-between items-end">
-                <div>
-                    <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase flex items-center gap-4">
-                        <MessageCircle className="w-10 h-10 text-indigo-500" />
-                        飞书通讯矩阵 (MESSAGING MATRIX)
-                    </h2>
-                    <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.3em]">
-                        <Zap className="w-3 h-3 text-emerald-400 inline mr-2"/> ERP Command Center Integration
-                    </p>
-                </div>
-                <button 
-                    onClick={handleAuth}
-                    className="px-6 py-2.5 bg-white/5 border border-white/10 hover:bg-white/10 text-slate-400 hover:text-white rounded-2xl text-[10px] font-black uppercase tracking-widest flex items-center gap-2 transition-all active:scale-95"
-                >
-                    <Key className="w-4 h-4"/> 重新授权 AI 链路
-                </button>
+            <div>
+                <h2 className="text-3xl font-black text-white italic tracking-tighter uppercase flex items-center gap-4">
+                    <MessageCircle className="w-10 h-10 text-indigo-500" />
+                    飞书通讯矩阵 (MESSAGING MATRIX)
+                </h2>
+                <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.3em]">
+                    <Zap className="w-3 h-3 text-emerald-400 inline mr-2"/> Feishu Bot Integration Center
+                </p>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
                 <div className="lg:col-span-7 space-y-8">
                     <div className="ios-glass-panel p-8 rounded-[3rem] border-white/10 bg-black/40 space-y-8 shadow-2xl relative overflow-hidden">
                         <div className="space-y-6">
-                            {/* Webhook 配置区块 */}
+                            {/* Webhook 配置 */}
                             <div>
-                                <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-4 block">机器人 Webhook URL (接收端节点)</label>
+                                <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-4 block">机器人 Webhook URL</label>
                                 <input 
                                     type="text" 
                                     value={feishuUrl}
                                     onChange={e => setFeishuUrl(e.target.value)}
                                     className="w-full bg-black/80 border border-white/10 rounded-2xl p-6 text-sm text-white font-mono outline-none focus:border-indigo-500 transition-all"
-                                    placeholder="https://open.feishu.cn/..."
+                                    placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
                                 />
                                 <div className="mt-4 flex gap-4">
                                     <button 
                                         onClick={async () => {
                                             setIsTesting(true);
-                                            const res = await sendMessageToBot(feishuUrl, '连接测试', '探行 ERP 数字化中枢连接成功，准备接收指挥官简报。');
+                                            const res = await sendMessageToBot(feishuUrl, '连接测试', '探行 ERP 通讯测试：单号同步链路已就绪。');
                                             setIsTesting(false);
                                             if (res.success) showToast('心跳测试成功', 'success');
-                                            else showToast('发送失败', 'error');
+                                            else showToast('发送失败，请检查 URL', 'error');
                                         }}
                                         disabled={isTesting}
                                         className="px-6 py-3 bg-white/5 hover:bg-white/10 border border-white/10 text-white rounded-xl font-black text-[10px] uppercase transition-all flex items-center gap-2"
@@ -103,31 +73,31 @@ const FeishuConfig: React.FC = () => {
                                         onClick={handleSave}
                                         className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-[10px] uppercase shadow-xl transition-all"
                                     >
-                                        保存中枢配置
+                                        保存配置
                                     </button>
                                 </div>
                             </div>
 
-                            {/* 经营现状审计 - 核心按钮 */}
-                            <div className="bg-gradient-to-br from-indigo-500/10 to-transparent border border-indigo-500/20 rounded-3xl p-8 flex flex-col gap-6">
+                            {/* 物流单号推送核心卡片 */}
+                            <div className="bg-gradient-to-br from-blue-500/10 to-transparent border border-blue-500/20 rounded-[2rem] p-8 flex flex-col gap-6">
                                 <div className="flex items-start gap-5">
-                                    <div className="p-4 bg-indigo-600/20 rounded-2xl">
-                                        <BarChart3 className="w-10 h-10 text-indigo-400" />
+                                    <div className="p-4 bg-blue-600/20 rounded-2xl">
+                                        <Truck className="w-10 h-10 text-blue-400" />
                                     </div>
                                     <div>
-                                        <div className="text-lg font-black text-white italic uppercase tracking-tight">AI 经营现状审计</div>
+                                        <div className="text-lg font-black text-white italic uppercase tracking-tight">物流单号镜像同步</div>
                                         <p className="text-xs text-slate-400 mt-1 leading-relaxed">
-                                            扫描范围：<span className="text-indigo-400 font-black">全量 SKU 库存 | 财务历史流水 | 运营协作任务</span>
+                                            此操作将提取“物流追踪”模块中所有<span className="text-blue-400 font-black">正在运输中</span>的货件名称与 UPS/DHL 单号，并发送清单至飞书。
                                         </p>
                                     </div>
                                 </div>
                                 <button 
-                                    onClick={triggerAudit}
-                                    disabled={isAuditing}
-                                    className={`w-full py-5 border rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-3 transition-all ${isAuditing ? 'bg-indigo-600/10 border-indigo-500/20 text-indigo-300' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-2xl shadow-indigo-900/40 active:scale-[0.98]'}`}
+                                    onClick={handlePushTracking}
+                                    disabled={isPushing}
+                                    className={`w-full py-5 border rounded-2xl text-xs font-black uppercase flex items-center justify-center gap-3 transition-all ${isPushing ? 'bg-blue-600/10 border-blue-500/20 text-blue-300' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-2xl shadow-blue-900/40 active:scale-[0.98]'}`}
                                 >
-                                    {isAuditing ? <Loader2 className="w-5 h-5 animate-spin"/> : <Sparkles className="w-5 h-5"/>}
-                                    {isAuditing ? '正在解构经营位面...' : '立即生成今日指挥官简报并推送'}
+                                    {isPushing ? <Loader2 className="w-5 h-5 animate-spin"/> : <ListChecks className="w-5 h-5"/>}
+                                    {isPushing ? '正在收集物流载荷...' : '立即推送当前物流清单到飞书'}
                                 </button>
                             </div>
                         </div>
@@ -137,22 +107,23 @@ const FeishuConfig: React.FC = () => {
                 <div className="lg:col-span-5 space-y-6">
                     <div className="ios-glass-panel p-8 rounded-[2.5rem] bg-indigo-600/5 border border-indigo-500/20 shadow-xl">
                         <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
-                            <Settings2 className="w-5 h-5 text-indigo-400" /> 云服务器联动说明
+                            <ClipboardList className="w-5 h-5 text-indigo-400" /> 同步逻辑说明
                         </h3>
                         <div className="space-y-6 text-[11px] text-slate-400 leading-relaxed font-bold italic uppercase">
-                            <p>1. <span className="text-white">本地数据闭环</span>：该功能仅分析您 ERP 内部的库存、订单和任务，不涉及任何外部 API 的联网搜索，响应速度快且稳定。</p>
-                            <p>2. <span className="text-white">智能决策压缩</span>：AI 会将海量表格数据转化为手机端易读的“关键行动建议”，实现精准管理。</p>
-                            <p>3. <span className="text-white">私有指挥链路</span>：报文通过私有 Webhook 发送，确保商业数据仅在您的飞书工作台流通。</p>
+                            <p>1. <span className="text-white">一键复制</span>：推送的消息采用简洁格式，方便您在飞书移动端直接复制单号到官方 App 查询。</p>
+                            <p>2. <span className="text-white">仅限在途</span>：系统会自动过滤“已送达”的货件，只推送当前您最关心的活跃运单。</p>
+                            <p>3. <span className="text-white">安全性</span>：数据仅通过 Webhook 直接发送至您的飞书私有频道，不经过任何第三方处理。</p>
                         </div>
                     </div>
 
                     <div className="ios-glass-panel p-8 rounded-[2.5rem] border border-emerald-500/30 bg-emerald-500/5 shadow-2xl">
                         <h4 className="text-emerald-400 text-xs font-black uppercase mb-2 flex items-center gap-2">
-                            <ShieldCheck className="w-4 h-4" /> 通讯安全性校验
+                            <ShieldCheck className="w-4 h-4" /> 链路状态
                         </h4>
-                        <p className="text-[10px] text-emerald-500/80 leading-relaxed font-bold italic">
-                            探行 ERP 采用 TLS 1.3 加密传输。生成的简报将自动包含“探行”关键字，以通过飞书机器人的内容过滤机制。
-                        </p>
+                        <div className="flex items-center gap-2 mt-4">
+                            <div className={`w-2 h-2 rounded-full ${feishuUrl ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></div>
+                            <span className="text-[10px] text-slate-300 font-black uppercase tracking-widest">{feishuUrl ? '通讯链路已激活' : '等待地址输入'}</span>
+                        </div>
                     </div>
                 </div>
             </div>
