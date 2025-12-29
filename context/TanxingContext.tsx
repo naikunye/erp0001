@@ -244,37 +244,49 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- 核心修复：物流哨兵逻辑（增加 API KEY 校验和参考链接提取） ---
+    // --- 核心修复：更鲁棒的物流哨兵与 API Key 检查 ---
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
         
-        if (!webhookUrl && !manual) return;
         if (!webhookUrl && manual) {
             showToast('请先配置飞书 Webhook 接收节点', 'warning');
             return;
         }
 
-        // 查找所有非“已送达”的活动单据
         const targets = (state.shipments || []).filter(s => 
-            s.status !== '已送达' && s.trackingNo && s.trackingNo !== 'AWAITING'
+            s.status !== '已送达' && s.trackingNo && s.trackingNo !== 'AWAITING' && s.trackingNo !== 'PENDING'
         );
 
         if (targets.length === 0) {
-            if (manual) showToast('物流矩阵中未发现活动单据，请先在“物流追踪”页录入运单', 'error');
+            if (manual) showToast('物流矩阵中未发现待对账的活动单据（单号为空或已送达）', 'error');
             return;
         }
 
-        // 关键修复：在浏览器中运行必须先检测并弹出密钥选择器
-        if (!(await (window as any).aistudio.hasSelectedApiKey())) {
-            showToast('正在激活 AI 授权令牌，请选择您的 API Key', 'info');
-            await (window as any).aistudio.openSelectKey();
-            // 假设用户现在选择了 Key，继续执行
+        // 修复：增加 window.aistudio 存在性检查，防止崩溃
+        const aistudio = (window as any).aistudio;
+        if (aistudio) {
+            try {
+                if (!(await aistudio.hasSelectedApiKey())) {
+                    showToast('检测到 API 授权失效，请点击弹窗中的“选择 API Key”', 'info');
+                    await aistudio.openSelectKey();
+                    // 根据规范：触发 openSelectKey 后应假设成功并继续，或者由用户再次触发。
+                    // 这里我们为了安全起见，在弹出后中止本次，让用户再次点击。
+                    return;
+                }
+            } catch (err) {
+                console.warn("AI Studio Check Failed, fallback to direct usage.");
+            }
         }
 
-        if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的物理轨迹...`, 'info');
+        if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的最新物理轨迹...`, 'info');
 
         try {
-            // 重新创建 AI 实例以确保抓取到新选择的 API Key
+            // 确保 process.env.API_KEY 存在
+            if (!process.env.API_KEY) {
+                if (manual) showToast('AI 授权密钥未就绪 (API Key missing).', 'error');
+                return;
+            }
+
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join('\n');
             
@@ -284,51 +296,38 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 ${context}
 
                 输出要求：
-                1. 列出每个单号的当前地理位置、最后动作和是否有延误风险。
+                1. 详细列出每个单号的当前位置、最后更新时间、以及是否有滞留风险。
                 2. 必须用中文输出。
-                3. 请在回答末尾提供你查阅到的参考网页链接。
+                3. 请在末尾附带你查询到的原始参考链接。
             `;
 
+            // 使用 Flash 模型以获得最快的搜索响应
             const response = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
                 contents: prompt,
                 config: {
-                    tools: [{ googleSearch: {} }] // 激活 Google Search 搜索能力
+                    tools: [{ googleSearch: {} }]
                 }
             });
 
             const aiText = response.text;
             if (aiText) {
-                // 提取参考链接以增强报文权威性
-                let sourceLinks = "";
-                const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-                if (chunks) {
-                    sourceLinks = "\n\n🔗 物理数据来源:\n" + chunks
-                        .map((c: any) => c.web ? `- ${c.web.title}: ${c.web.uri}` : null)
-                        .filter(Boolean)
-                        .join('\n');
-                }
-
-                const finalMessage = aiText + sourceLinks;
-                
-                // 将完整结果推送到飞书
-                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', finalMessage);
+                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', aiText);
                 if (sendRes.success) {
                     dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
                     if (manual) showToast('AI 对账完成，实时报文已推送到飞书', 'success');
                 } else {
-                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键字设置', 'error');
+                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全设置', 'error');
                 }
             } else {
-                if (manual) showToast('AI 引擎未返回有效轨迹，请稍后重试', 'warning');
+                if (manual) showToast('AI 引擎未返回有效信息', 'warning');
             }
         } catch (e: any) {
             console.error("Logistics Sentry Error:", e);
-            if (e.message?.includes("Requested entity was not found")) {
-                showToast('授权令牌已失效，请重新选择 API Key', 'error');
-                await (window as any).aistudio.openSelectKey();
+            if (e.message?.includes("API key")) {
+                if (manual) showToast('对账中断: API Key 无效或未在浏览器中配置。', 'error');
             } else {
-                if (manual) showToast(`对账中断: ${e.message || 'AI 引擎响应超时'}`, 'error');
+                if (manual) showToast(`对账异常: ${e.message || 'AI 引擎响应超时'}`, 'error');
             }
         }
     };
@@ -354,7 +353,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         startup();
 
-        // 哨兵定时任务
         sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); 
 
         return () => { 
