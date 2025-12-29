@@ -16,7 +16,7 @@ import {
   ArrowRight, Coins, RefreshCw
 } from 'lucide-react';
 
-// 图片压缩工具函数：确保 Base64 载荷不会撑爆数据库
+// 图片压缩工具函数
 const compressImage = (base64Str: string, maxWidth = 800): Promise<string> => {
     return new Promise((resolve) => {
         const img = new Image();
@@ -33,7 +33,7 @@ const compressImage = (base64Str: string, maxWidth = 800): Promise<string> => {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             ctx?.drawImage(img, 0, 0, width, height);
-            resolve(canvas.toDataURL('image/jpeg', 0.7)); // 压缩率 0.7
+            resolve(canvas.toDataURL('image/jpeg', 0.7)); 
         };
     });
 };
@@ -42,7 +42,10 @@ const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
     const t = trackingNo.trim();
     if (!t) return '#';
     const c = carrier.toLowerCase().trim();
-    if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+    // 强制跳转 UPS 中国
+    if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
+        return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+    }
     if (c.includes('dhl')) return `https://www.dhl.com/cn-zh/home/tracking.html?tracking-id=${t}`;
     if (c.includes('fedex')) return `https://www.fedex.com/fedextrack/?trknbr=${t}`;
     if (c.includes('usps')) return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${t}`;
@@ -197,7 +200,6 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const estimatedTotalStockProfitUSD = estimatedProfitUSD * formData.stock;
 
     const handleInternalSave = () => {
-        // 数据清洗：仅保留基础字段，去除 ReplenishmentItem 带来的计算属性干扰
         const cleanProduct: Product = {
             id: formData.id,
             name: formData.name,
@@ -430,7 +432,6 @@ const Inventory: React.FC = () => {
         const products = state.products || [];
         const exists = products.find(p => p.id === updatedProduct.id);
         
-        // 生成变更详情日志
         let logDetails = "资产快照对齐完成";
         if (exists) {
             const changes = [];
@@ -557,7 +558,7 @@ const Inventory: React.FC = () => {
                                     <div className="space-y-1.5">
                                         <div className="flex items-center gap-2 text-xs text-blue-400 font-bold"> {item.logistics?.method === 'Sea' ? <Ship className="w-3.5 h-3.5" /> : <Plane className="w-3.5 h-3.5" />} <span>{item.logistics?.method || 'Air'}</span> </div>
                                         {item.liveTrackingStatus && ( <div className={`text-[9px] px-2 py-0.5 rounded border w-fit font-black uppercase flex items-center gap-1 shadow-lg ${getLiveStatusStyle(item.liveTrackingStatus)}`}> {(item.liveTrackingStatus === '异常' || item.liveTrackingStatus === '延迟') && <AlertTriangle className="w-2.5 h-2.5" />} {item.liveTrackingStatus === '已送达' && <CheckCircle2 className="w-2.5 h-2.5" />} {item.liveTrackingStatus} </div> )}
-                                        <div className="flex items-center gap-2"> <a href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)} target="_blank" rel="noreferrer" className="text-[10px] text-blue-300/70 hover:text-blue-300 underline block truncate max-w-[100px] font-mono" > {item.logistics?.trackingNo || 'N/A'} </a> {item.logistics?.trackingNo && ( <button onClick={() => handleSyncToTrackingMatrix(item)} disabled={syncingId === item.id} className={`p-1 rounded border transition-all ${syncingId === item.id ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 animate-spin' : 'bg-white/5 border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30'} ${item.liveTrackingStatus === '待同步' ? 'animate-pulse text-amber-500 border-amber-500/30' : ''}`} title={item.liveTrackingStatus === '待同步' ? "单号已填，点击闪电同步激活追踪" : "同步至物流追踪矩阵"} > {syncingId === item.id ? <RefreshCw className="w-2.5 h-2.5" /> : <Zap className="w-2.5 h-2.5 fill-current" />} </button> )} </div>
+                                        <div className="flex items-center gap-2"> <a href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)} target="_blank" rel="noreferrer" className="text-[10px] text-blue-300 font-bold hover:text-blue-200 underline block truncate max-w-[100px] font-mono" > {item.logistics?.trackingNo || 'N/A'} </a> {item.logistics?.trackingNo && ( <button onClick={() => handleSyncToTrackingMatrix(item)} disabled={syncingId === item.id} className={`p-1 rounded border transition-all ${syncingId === item.id ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400 animate-spin' : 'bg-white/5 border-white/10 text-slate-500 hover:text-indigo-400 hover:border-indigo-500/30'} ${item.liveTrackingStatus === '待同步' ? 'animate-pulse text-amber-500 border-amber-500/30' : ''}`} title={item.liveTrackingStatus === '待同步' ? "单号已填，点击闪电同步激活追踪" : "同步至物流追踪矩阵"} > {syncingId === item.id ? <RefreshCw className="w-2.5 h-2.5" /> : <Zap className="w-2.5 h-2.5 fill-current" />} </button> )} </div>
                                         <div className="text-[10px] text-slate-500 font-mono"> 计费: {item.totalWeight?.toFixed(1)}kg / {item.boxes}box </div>
                                     </div>
                                 </td>

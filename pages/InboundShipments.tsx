@@ -1,3 +1,4 @@
+
 import React, { useState, useMemo, useEffect } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { InboundShipment, Product, InboundShipmentItem, Shipment } from '../types';
@@ -27,6 +28,17 @@ const InboundShipments: React.FC = () => {
   const [sourceNode, setSourceNode] = useState('深圳分拨中心');
   const [destNode, setDestNode] = useState('FBA-US-WEST');
   const [plannedItems, setPlannedItems] = useState<{product: Product, quantity: number}[]>([]);
+
+  // UPS 跳转逻辑
+  const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
+    const t = trackingNo.trim();
+    if (!t) return '#';
+    const c = carrier.toLowerCase().trim();
+    if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
+        return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+    }
+    return `https://www.google.com/search?q=${encodeURIComponent(carrier)}+tracking+${encodeURIComponent(t)}`;
+  };
 
   // --- 2. 搜索过滤逻辑 ---
   const filteredProducts = useMemo(() => {
@@ -359,7 +371,15 @@ const InboundShipments: React.FC = () => {
                                                 <div className="flex items-center justify-between">
                                                     <div className="flex flex-col gap-1">
                                                         <span className="text-[10px] text-slate-600 font-black uppercase">Carrier: <span className="text-white font-mono">{selectedShipment.carrier || 'TBD'}</span></span>
-                                                        <span className="text-lg font-black text-white font-mono tracking-tight">{selectedShipment.trackingNumber || '待录入'}</span>
+                                                        <a 
+                                                            href={getTrackingUrl(selectedShipment.carrier, selectedShipment.trackingNumber)} 
+                                                            target="_blank" 
+                                                            rel="noreferrer"
+                                                            className="text-lg font-black text-blue-400 hover:text-blue-300 font-mono tracking-tight underline flex items-center gap-2 transition-colors"
+                                                        >
+                                                            {selectedShipment.trackingNumber || '待录入'}
+                                                            <ExternalLink className="w-4 h-4" />
+                                                        </a>
                                                     </div>
                                                 </div>
                                             )}

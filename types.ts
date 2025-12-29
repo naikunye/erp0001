@@ -33,6 +33,26 @@ export interface ProposedAction { id: string; type: 'inventory_update' | 'task_c
 export type ProductStatus = 'active' | 'draft' | 'archived' | 'out_of_stock' | 'low_stock';
 export type ProductLifecycle = 'New' | 'Growing' | 'Stable' | 'Clearance';
 
+// Added OrderItem and Order interfaces to resolve global import errors
+export interface OrderItem {
+  productId: string;
+  sku: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Order {
+  id: string;
+  customerName: string;
+  date: string;
+  total: number;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  itemsCount: number;
+  lineItems?: OrderItem[];
+  deletedAt?: string;
+}
+
+// Added InventoryBreakdown interface for Product
 export interface InventoryBreakdown {
   warehouseId: string;
   quantity: number;
@@ -52,9 +72,9 @@ export interface Product {
   dailyBurnRate?: number; 
   lifecycle?: ProductLifecycle; 
   supplier?: string; 
+  // Added supplierId and supplierContact to Product
   supplierId?: string;
   supplierContact?: string;
-  inventoryBreakdown?: InventoryBreakdown[];
   costPrice?: number; 
   leadTime?: number; 
   safetyStockDays?: number; 
@@ -66,39 +86,44 @@ export interface Product {
   image?: string; 
   images?: string[]; 
   notes?: string; 
+  // Added inventoryBreakdown to Product
+  inventoryBreakdown?: InventoryBreakdown[];
   logistics?: { method: 'Air' | 'Sea'; carrier: string; trackingNo: string; unitFreightCost: number; billingWeight?: number; totalFreightCost?: number; consumablesFee?: number; customsFee?: number; portFee?: number; targetWarehouse: string; unitBillingWeight?: number }; 
   economics?: { platformFeePercent: number; creatorFeePercent: number; fixedCost: number; lastLegShipping: number; adCost: number; refundRatePercent?: number }; 
   deletedAt?: string; 
 }
 
-export interface InboundShipmentItem { productId: string; sku: string; name: string; quantity: number; boxes: number; unitPrice: number; rowTotalWeight: number; freightRate: number; }
-export interface ReplenishmentItem extends Product { dailyBurnRate: number; daysRemaining: number; safetyStock: number; reorderPoint: number; totalInvestment: number; freightCost: number; goodsCost: number; revenue30d: number; growth: number; profit: number; totalPotentialProfit: number; margin: number; totalWeight: number; boxes: number; liveTrackingStatus?: string | null; }
-export interface AutomationRule { id: string; name: string; trigger: 'logistics_exception' | 'low_stock_warning' | 'high_refund_rate' | 'new_vip_order'; action: 'create_task' | 'generate_ai_copy' | 'notify_admin' | 'generate_ai_task'; status: 'active' | 'paused'; lastTriggered?: string; }
-export interface AutomationLog { id: string; timestamp: string; ruleName: string; details: string; status: 'success' | 'failed'; }
-export interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning' | 'info'; }
-export type TransactionType = 'income' | 'expense';
-export type PaymentMethod = 'Bank' | 'PayPal' | 'CreditCard' | 'AliPay' | 'WeChat' | 'Payoneer' | 'PingPong' | 'Stripe' | 'Other';
-export type TransactionCategory = 'Revenue' | 'COGS' | 'Logistics' | 'Marketing' | 'Software' | 'Office' | 'Payroll' | 'Other';
-export interface Transaction { id: string; date: string; type: TransactionType; category: TransactionCategory; amount: number; currency: 'USD' | 'CNY' | 'EUR'; description: string; status: 'pending' | 'completed' | 'failed'; paymentMethod: PaymentMethod; }
 export interface ShipmentEvent { date: string; time: string; location: string; description: string; status: 'Normal' | 'Exception' | 'Delivered' | 'InTransit'; }
-export interface Shipment { id: string; trackingNo: string; carrier: string; status: '待处理' | '运输中' | '已送达' | '异常'; origin?: string; destination?: string; estimatedDelivery?: string; productName?: string; lastUpdate?: string; events: ShipmentEvent[]; shipDate?: string; notes?: string; }
-export interface Order { id: string; customerName: string; date: string; total: number; status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'; itemsCount: number; lineItems?: any[]; deletedAt?: string; paymentStatus?: 'paid' | 'unpaid'; }
-export interface InboundShipment { id: string; name: string; method: 'Air' | 'Sea'; sourceWarehouseId: string; destinationWarehouseId: string; status: 'Draft' | 'Working' | 'Shipped' | 'Receiving' | 'Closed'; items: InboundShipmentItem[]; totalWeight: number; totalVolume: number; carrier?: string; trackingNumber?: string; createdDate: string; shippedDate?: string; eta?: string; }
-export interface Customer { id: string; name: string; company?: string; email: string; phone?: string; level: 'Standard' | 'VIP' | 'Partner' | 'Blocked'; source: string; totalSpend: number; ordersCount: number; status: 'Active' | 'Inactive'; lastOrderDate: string; avatarColor?: string; notes?: string; }
-export interface AuditLog { id: string; timestamp: string; user: string; action: string; details: string; }
-export interface StockJournalEntry { id: string; timestamp: string; sku: string; change: number; previousStock: number; newStock: number; reason: string; operator: string; }
-export interface Supplier { id: string; name: string; contactName: string; email: string; phone: string; address: string; category: string; rating: number; paymentTerms: string; status: 'Active' | 'Inactive'; leadTime: number; }
-export interface Integration { id: string; platform: string; name: string; region: string; status: 'connected' | 'syncing' | 'error'; lastSync: string; }
+export interface Shipment { id: string; trackingNo: string; carrier: string; status: '待处理' | '运输中' | '已送达' | '异常'; origin?: string; destination?: string; estimatedDelivery?: string; productName?: string; lastUpdate?: string; events: ShipmentEvent[]; shipDate?: string; notes?: string; notified?: boolean; }
+
+// Added Transaction types
+export type TransactionType = 'income' | 'expense';
+export type TransactionCategory = 'Revenue' | 'COGS' | 'Logistics' | 'Marketing' | 'Software' | 'Office' | 'Payroll' | 'Other';
+export type PaymentMethod = 'Bank' | 'PayPal' | 'AliPay' | 'Payoneer' | 'CreditCard' | 'PingPong';
+
+export interface Transaction { id: string; date: string; type: TransactionType; category: TransactionCategory; amount: number; currency: 'USD' | 'CNY'; description: string; status: 'pending' | 'completed' | 'failed'; paymentMethod: string; }
+
+// --- 云端自动化配置 ---
+export interface CloudAutomationSettings {
+    enableSentinel: boolean;      // 物流异常哨兵
+    enableDailyReport: boolean;   // 经营早报推送
+    enableStockAlert: boolean;    // 低库存预警推送
+    sentinelInterval: number;     // 巡检间隔 (分钟)
+}
+
+// Added missing global interfaces used by components
 export interface SalesData { name: string; value: number; }
+export interface Customer { id: string; name: string; company: string; email: string; phone: string; level: string; source: string; totalSpend: number; ordersCount: number; status: string; lastOrderDate: string; notes: string; avatarColor: string; }
 export interface Warehouse { id: string; name: string; type: string; region: string; }
+export interface Supplier { id: string; name: string; contactName: string; email: string; phone: string; address: string; category: string; rating: number; paymentTerms: string; status: string; leadTime: number; }
+export interface InboundShipmentItem { productId: string; sku: string; name: string; quantity: number; boxes: number; unitPrice: number; rowTotalWeight: number; freightRate: number; }
+export interface InboundShipment { id: string; name: string; method: 'Air' | 'Sea'; sourceWarehouseId: string; destinationWarehouseId: string; status: 'Draft' | 'Working' | 'Shipped' | 'Receiving' | 'Closed'; items: InboundShipmentItem[]; totalWeight: number; totalVolume: number; carrier?: string; trackingNumber?: string; createdDate: string; shippedDate?: string; eta?: string; }
 export interface AdCampaign { id: string; name: string; platform: string; status: string; budget: number; spend: number; sales: number; acos: number; roas: number; clicks: number; impressions: number; ctr: number; cpc: number; }
+export interface ReplenishmentItem extends Product { dailyBurnRate: number; daysRemaining: number; safetyStock: number; reorderPoint: number; totalInvestment: number; freightCost: number; goodsCost: number; revenue30d: number; growth: number; profit: number; totalPotentialProfit: number; margin: number; totalWeight: number; boxes: number; liveTrackingStatus?: string | null; }
+export interface AuditLog { id: string; timestamp: string; user: string; action: string; details: string; }
 export interface CalendarEvent { id: string; title: string; date: string; type: EventType; description?: string; autoGenerated?: boolean; sku?: string; }
 export type EventType = 'logistics' | 'marketing' | 'finance' | 'product' | 'stockout';
-export interface AiInsight { id: string; text: string; }
-
-// --- 飞书配置类型 ---
-export interface CommunicationConfig {
-    feishuWebhook: string;
-    autoTrackingEnabled: boolean;
-    trackingFrequencyHours: number;
-}
+export interface Toast { id: string; message: string; type: 'success' | 'error' | 'warning' | 'info'; }
+export interface Integration { id: string; platform: string; name: string; region: string; status: 'connected' | 'syncing' | 'error'; lastSync: string; }
+export interface AutomationRule { id: string; name: string; trigger: 'logistics_exception' | 'low_stock_warning' | 'high_refund_rate' | 'new_vip_order'; action: 'generate_ai_task' | 'create_task' | 'generate_ai_copy' | 'notify_admin'; status: 'active' | 'paused'; }
+export interface AutomationLog { id: string; timestamp: string; ruleName: string; details: string; status: 'success' | 'error'; }

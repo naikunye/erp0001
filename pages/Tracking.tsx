@@ -6,7 +6,7 @@ import {
   Truck, MapPin, Calendar, Clock, CheckCircle2, AlertCircle, 
   Search, Plus, Globe, Edit2, Loader2, Bot, X, Trash2, Save,
   ArrowRight, Navigation, Box, FileText, StickyNote, CalendarOff, 
-  MessageCircle, Zap, ChevronRight, Map, Sparkles, Timer
+  MessageCircle, Zap, ChevronRight, Map, Sparkles, Timer, ExternalLink
 } from 'lucide-react';
 import { sendFeishuMessage } from '../utils/feishu';
 import { GoogleGenAI } from "@google/genai";
@@ -22,7 +22,18 @@ const Tracking: React.FC = () => {
   const [showEditModal, setShowEditModal] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Shipment>>({});
 
-  // 极高亮度色彩系统：增强霓虹发光感
+  // 统一 UPS 跳转逻辑
+  const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
+      const t = trackingNo.trim();
+      if (!t) return '#';
+      const c = carrier.toLowerCase().trim();
+      // 匹配 1Z 开头或 carrier 包含 ups
+      if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
+          return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
+      }
+      return `https://www.google.com/search?q=${encodeURIComponent(carrier)}+tracking+${encodeURIComponent(t)}`;
+  };
+
   const getStatusConfig = (status: string) => {
       switch (status) {
           case '已送达': return {
@@ -83,10 +94,7 @@ const Tracking: React.FC = () => {
     try {
         const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
         const prompt = `分析运单 ${selectedShipment.trackingNo}。状态：${selectedShipment.status}。货品：${selectedShipment.productName}。评估延迟风险。中文简短。`;
-        const response = await ai.models.generateContent({ 
-            model: 'gemini-3-flash-preview', 
-            contents: prompt 
-        });
+        const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
         setAiAnalysis(response.text);
     } catch (e: any) {
         showToast(`AI 节点通信受限`, 'error');
@@ -184,13 +192,23 @@ const Tracking: React.FC = () => {
                                 {shipment.productName || 'UNIDENTIFIED_PAYLOAD'}
                               </div>
                               <div className="flex items-center gap-3 mt-1.5">
-                                <span className="text-[11px] text-slate-500 font-mono font-bold tracking-tight">{shipment.trackingNo}</span>
+                                {/* 点击单号直接跳转 UPS 中国 */}
+                                <a 
+                                    href={getTrackingUrl(shipment.carrier, shipment.trackingNo)} 
+                                    target="_blank" 
+                                    rel="noreferrer"
+                                    onClick={e => e.stopPropagation()}
+                                    className="text-[11px] text-blue-400 hover:text-blue-300 font-mono font-bold tracking-tight underline flex items-center gap-1 transition-colors"
+                                >
+                                    {shipment.trackingNo}
+                                    <ExternalLink className="w-2.5 h-2.5" />
+                                </a>
                                 <div className="h-3 w-px bg-white/10"></div>
                                 <span className="text-[10px] text-slate-600 font-black uppercase">{shipment.origin || 'CN'} → {shipment.destination || 'US'}</span>
                               </div>
                           </div>
 
-                          {/* 重要：运营标注外显区 */}
+                          {/* 运营标注外显区 */}
                           {shipment.notes && (
                               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 relative z-10 animate-in fade-in duration-500">
                                   <div className="flex items-start gap-2">
@@ -202,7 +220,7 @@ const Tracking: React.FC = () => {
                               </div>
                           )}
                           
-                          {/* 进度条：极高亮度发光效果 */}
+                          {/* 进度条 */}
                           <div className="space-y-2 relative z-10">
                               <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
                                   <span>Syncing Progress</span>
@@ -213,7 +231,6 @@ const Tracking: React.FC = () => {
                                     className={`h-full transition-all duration-1000 ease-out relative overflow-hidden ${cfg.bg} ${cfg.glow}`} 
                                     style={{ width: getProgressWidth(shipment.status) }}
                                 >
-                                    {/* 扫描动画 */}
                                     {shipment.status === '运输中' && (
                                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/40 to-transparent w-1/2 h-full -skew-x-12 animate-[shimmer_2s_infinite]"></div>
                                     )}
@@ -226,7 +243,6 @@ const Tracking: React.FC = () => {
                               <ChevronRight className="w-4 h-4 text-slate-700 group-hover:text-indigo-500 transition-colors" />
                           </div>
 
-                          {/* 背景纹理 */}
                           <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.07] transition-all duration-700 pointer-events-none">
                               <Map className="w-32 h-32 rotate-[-15deg]" />
                           </div>
@@ -238,7 +254,6 @@ const Tracking: React.FC = () => {
           {/* 右侧：全息详情面板 */}
           {selectedShipment ? (
               <div className="flex-1 overflow-y-auto bg-[#050508]/90 flex flex-col animate-in fade-in duration-500 slide-in-from-right-4 relative">
-                  {/* 全息背景 */}
                   <div className="absolute top-0 right-0 p-12 opacity-[0.02] pointer-events-none">
                         <Globe className="w-[600px] h-[600px] text-white" />
                   </div>
@@ -246,7 +261,20 @@ const Tracking: React.FC = () => {
                   <div className="p-12 border-b border-white/5 bg-white/2 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 shrink-0 backdrop-blur-2xl relative z-10 overflow-hidden">
                        <div className="relative z-10">
                            <div className="flex items-center gap-8 mb-6">
-                               <h3 className="text-6xl font-black text-white font-mono tracking-tighter drop-shadow-2xl selection:bg-indigo-500">{selectedShipment.trackingNo}</h3>
+                               {/* 详情页单号链接：点击直跳 UPS 中国，带视觉增强 */}
+                               <a 
+                                 href={getTrackingUrl(selectedShipment.carrier, selectedShipment.trackingNo)}
+                                 target="_blank"
+                                 rel="noreferrer"
+                                 className="group/link flex items-center gap-4"
+                               >
+                                   <h3 className="text-6xl font-black text-white font-mono tracking-tighter drop-shadow-2xl selection:bg-indigo-500 group-hover/link:text-blue-400 transition-colors">
+                                     {selectedShipment.trackingNo}
+                                   </h3>
+                                   <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover/link:bg-blue-600 group-hover/link:border-blue-400 transition-all group-hover/link:scale-110 shadow-xl">
+                                      <ExternalLink className="w-6 h-6 text-slate-500 group-hover/link:text-white" />
+                                   </div>
+                               </a>
                                {(() => {
                                    const cfg = getStatusConfig(selectedShipment.status);
                                    return <span className={`text-sm font-black px-6 py-2.5 rounded-full border-2 shadow-2xl uppercase tracking-[0.2em] ${cfg.text} ${cfg.border} ${cfg.lightBg} ${cfg.glow}`}>{selectedShipment.status}</span>;

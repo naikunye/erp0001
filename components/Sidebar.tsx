@@ -1,9 +1,9 @@
+
 import React from 'react';
 import { 
     LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, 
     BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, 
-    PackageCheck, Factory, Calculator, ClipboardList, Terminal, Globe, Zap, Layers,
-    MessageCircle
+    PackageCheck, Factory, Calculator, ClipboardList, Terminal, Globe, Zap, Layers
 } from 'lucide-react';
 import { Page } from '../types';
 import { useTanxing } from '../context/TanxingContext';
@@ -21,8 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
   const menuItems = [
     { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
     { id: 'automation', label: '逻辑神经中枢', subLabel: 'Logic Hooks', icon: Zap },
-    { id: 'feishu', label: '飞书通讯矩阵', subLabel: 'Feishu Matrix', icon: MessageCircle, highlight: true },
-    { id: 'ai-command', label: 'AI 指令中心', subLabel: 'Command Matrix', icon: Terminal },
+    { id: 'ai-command', label: 'AI 指令中心', subLabel: 'Command Matrix', icon: Terminal, highlight: true },
     { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit },
     { id: 'tasks', label: '运营协同中心', subLabel: 'Operations', icon: ClipboardList },
     { id: 'inventory', label: '智能备货', subLabel: 'Inventory', icon: PackageCheck },
