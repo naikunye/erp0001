@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { 
     Box, Wallet, Zap, 
     AlertTriangle, ShieldCheck, Activity, Coins, Truck, Sparkles, Loader2, BrainCircuit,
-    MessageCircle, Send
+    MessageCircle, Send, RefreshCw, X
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { useTanxing } from '../context/TanxingContext';
@@ -50,16 +50,16 @@ const Dashboard: React.FC = () => {
             Total Assets: ¥${metrics.totalAssets.toLocaleString()}
             Cash: ¥${metrics.cash.toLocaleString()}
             Inventory: ¥${metrics.stockValue.toLocaleString()}
-            Low Stock Alerts: ${metrics.lowStock} SKUs (${metrics.lowStockSkus}).
-            Give a 3-sentence risk summary and 1 key advice. Use HTML for highlights.
+            Low Stock Alerts: ${metrics.lowStock} SKUs.
+            Give a 3-sentence risk summary. Use HTML for highlights.
           `;
           const response = await ai.models.generateContent({
               model: 'gemini-3-flash-preview',
               contents: prompt
           });
-          setAiReport(response.text);
+          setAiReport(response.text || "AI 未能返回分析结论。");
       } catch (e) {
-          setAiReport("<b>AI 神经元当前处于休眠状态。</b>");
+          setAiReport("<b>AI 神经元当前处于休眠状态，请稍后重试。</b>");
       } finally {
           setIsAiLoading(false);
       }
@@ -71,21 +71,38 @@ const Dashboard: React.FC = () => {
           showToast('请先在“飞书通讯矩阵”配置 Webhook 地址', 'warning');
           return;
       }
+
       setIsPushing(true);
+      let finalContent = "";
+      
       try {
-          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-          const prompt = `为探行ERP生成一份极其精简的飞书日报，包含：总资产¥${metrics.totalAssets.toLocaleString()}，现金¥${metrics.cash.toLocaleString()}，缺货提醒：${metrics.lowStock}款。语言要激昂专业。不超过80字。`;
-          const response = await ai.models.generateContent({
-              model: 'gemini-3-flash-preview',
-              contents: prompt
-          });
+          // 第一步：尝试调用 AI 生成精简报文
+          try {
+              const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+              const prompt = `为探行ERP生成一份极其精简的飞书日报。包含：总资产¥${metrics.totalAssets.toLocaleString()}，现金¥${metrics.cash.toLocaleString()}，缺货提醒：${metrics.lowStock}款。语言专业。不超过50字。`;
+              const response = await ai.models.generateContent({
+                  model: 'gemini-3-flash-preview',
+                  contents: prompt
+              });
+              finalContent = response.text || "";
+          } catch (aiErr) {
+              console.warn("AI Generation failed, using fallback template", aiErr);
+              // 如果 AI 挂了，使用系统自带的兜底模板
+              finalContent = `[系统自动生成] 当前探行资产水位：¥${metrics.totalAssets.toLocaleString()}，可用现金：¥${metrics.cash.toLocaleString()}。监测到 ${metrics.lowStock} 款 SKU 触发库存预警，请及时处理。`;
+          }
+
+          // 第二步：执行飞书发送逻辑
+          const fullMsg = `探行经营概览\n----------------\n${finalContent}\n----------------\n上报时间: ${new Date().toLocaleString()}`;
+          const res = await sendFeishuMessage(webhookUrl, '实时经营简报', fullMsg);
           
-          const content = `[探行核心摘要]\n----------------\n${response.text}\n----------------\n生成时间: ${new Date().toLocaleString()}`;
-          const res = await sendFeishuMessage(webhookUrl, '实时经营简报', content);
-          if (res.success) showToast('简报已同步至您的移动端飞书', 'success');
-          else throw new Error('发送失败');
+          if (res.success) {
+              showToast('经营简报已成功同步至移动端', 'success');
+          } else {
+              throw new Error('Feishu API Rejected');
+          }
       } catch (e) {
-          showToast('飞书节点响应异常', 'error');
+          console.error("Feishu Push Error:", e);
+          showToast('飞书推送失败，请检查网络或机器人配置', 'error');
       } finally {
           setIsPushing(false);
       }
@@ -108,28 +125,31 @@ const Dashboard: React.FC = () => {
             <button 
                 onClick={pushBriefingToFeishu}
                 disabled={isPushing}
-                className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl text-[9px] font-black text-emerald-400 uppercase flex items-center gap-2 transition-all shadow-lg"
+                className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl text-[9px] font-black text-emerald-400 uppercase flex items-center gap-2 transition-all shadow-lg active:scale-95"
             >
-                {isPushing ? <Loader2 className="w-3 h-3 animate-spin"/> : <MessageCircle className="w-3 h-3"/>}
-                推送到飞书
+                {isPushing ? <RefreshCw className="w-3.5 h-3.5 animate-spin"/> : <MessageCircle className="w-3.5 h-3.5"/>}
+                推送到飞书 (Push)
             </button>
             <button 
                 onClick={handleAiHealthCheck}
-                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black text-indigo-400 uppercase flex items-center gap-2 transition-all"
+                disabled={isAiLoading}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black text-indigo-400 uppercase flex items-center gap-2 transition-all active:scale-95"
             >
-                {isAiLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
+                {isAiLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin"/> : <BrainCircuit className="w-3.5 h-3.5"/>}
                 AI 风险扫描
             </button>
           </div>
       </div>
 
       {aiReport && (
-          <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500 bg-indigo-950/10 animate-in slide-in-from-top-2">
-              <div className="flex justify-between items-start mb-2">
+          <div className="ios-glass-card p-6 border-l-4 border-l-indigo-500 bg-indigo-950/10 animate-in slide-in-from-top-2 relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-1 opacity-10"><BrainCircuit className="w-20 h-20 text-indigo-500"/></div>
+              <div className="flex justify-between items-start mb-2 relative z-10">
                   <span className="text-[9px] font-black text-indigo-400 uppercase tracking-widest flex items-center gap-2"><Sparkles className="w-3 h-3"/> AI 健康监测报告</span>
-                  <button onClick={() => setAiReport(null)} className="text-slate-600 hover:text-white"><Activity className="w-3 h-3"/></button>
+                  {/* Fixed: Import 'X' icon from lucide-react to resolve the error on line 149 */}
+                  <button onClick={() => setAiReport(null)} className="text-slate-600 hover:text-white"><X className="w-3 h-3"/></button>
               </div>
-              <div className="text-xs text-indigo-100 leading-relaxed font-bold" dangerouslySetInnerHTML={{ __html: aiReport }}></div>
+              <div className="text-xs text-indigo-100 leading-relaxed font-bold relative z-10" dangerouslySetInnerHTML={{ __html: aiReport }}></div>
           </div>
       )}
 
