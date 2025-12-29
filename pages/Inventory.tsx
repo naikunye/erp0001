@@ -92,7 +92,7 @@ const HistoryPanel: React.FC<{ sku: string; logs: AuditLog[]; onClose: () => voi
 const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onSave: (p: Product) => void }> = ({ product, onClose, onSave }) => {
     const { state } = useTanxing();
     const [showHistory, setShowHistory] = useState(false);
-    const [isCompresing, setIsCompressing] = useState(false);
+    const [isCompressing, setIsCompressing] = useState(false);
     
     const exchangeRate = state.exchangeRate || 7.2;
     const [formData, setFormData] = useState<Product>({
@@ -196,6 +196,40 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
     const estimatedMargin = priceUSD > 0 ? (estimatedProfitUSD / priceUSD) * 100 : 0;
     const estimatedTotalStockProfitUSD = estimatedProfitUSD * formData.stock;
 
+    const handleInternalSave = () => {
+        // 数据清洗：仅保留基础字段，去除 ReplenishmentItem 带来的计算属性干扰
+        const cleanProduct: Product = {
+            id: formData.id,
+            name: formData.name,
+            sku: formData.sku,
+            category: formData.category,
+            stock: Number(formData.stock),
+            price: Number(formData.price),
+            status: formData.status,
+            lastUpdated: new Date().toISOString(),
+            dailyBurnRate: Number(formData.dailyBurnRate),
+            lifecycle: formData.lifecycle,
+            supplier: formData.supplier,
+            supplierId: formData.supplierId,
+            supplierContact: formData.supplierContact,
+            costPrice: Number(formData.costPrice),
+            leadTime: Number(formData.leadTime),
+            safetyStockDays: Number(formData.safetyStockDays),
+            dimensions: formData.dimensions,
+            unitWeight: Number(formData.unitWeight),
+            boxCount: Number(formData.boxCount),
+            itemsPerBox: Number(formData.itemsPerBox),
+            lingXingId: formData.lingXingId,
+            image: formData.image,
+            images: formData.images,
+            notes: formData.notes,
+            logistics: formData.logistics,
+            economics: formData.economics,
+            inventoryBreakdown: formData.inventoryBreakdown
+        };
+        onSave(cleanProduct);
+    };
+
     return createPortal(
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-md bg-black/80" onClick={onClose}>
             <div className="ios-glass-panel w-full max-w-6xl h-[90vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200 bg-[#121217] relative" onClick={e => e.stopPropagation()}>
@@ -230,8 +264,8 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                                                <button onClick={(e) => handleRemoveImage(idx, e)} className="absolute top-1 right-1 w-5 h-5 flex items-center justify-center bg-black/60 text-white rounded opacity-0 group-hover:opacity-100 hover:bg-red-500 transition-all transform scale-90 hover:scale-100" > <X className="w-3 h-3" /> </button>
                                            </div>
                                        ))}
-                                       <button onClick={() => fileInputRef.current?.click()} disabled={isCompresing} className="aspect-square rounded-lg border border-dashed border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/40 flex items-center justify-center text-slate-400 hover:text-white transition-all group" >
-                                           {isCompresing ? <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" /> : <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />}
+                                       <button onClick={() => fileInputRef.current?.click()} disabled={isCompressing} className="aspect-square rounded-lg border border-dashed border-white/20 bg-white/5 hover:bg-white/10 hover:border-white/40 flex items-center justify-center text-slate-400 hover:text-white transition-all group" >
+                                           {isCompressing ? <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" /> : <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />}
                                        </button>
                                    </div>
                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
@@ -301,7 +335,7 @@ const EditModal: React.FC<{ product: ReplenishmentItem, onClose: () => void, onS
                    </div>
                </div>
                <div className="p-4 border-t border-white/10 bg-white/5 flex justify-center items-center">
-                   <button onClick={() => onSave(formData)} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all"> <Save className="w-4 h-4" /> 保存修改并记录日志 </button>
+                   <button onClick={handleInternalSave} className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 text-white font-bold rounded-lg shadow-lg flex items-center justify-center gap-2 transition-all"> <Save className="w-4 h-4" /> 保存修改并记录日志 </button>
                </div>
             </div>
         </div>,
@@ -393,11 +427,33 @@ const Inventory: React.FC = () => {
     }, [state.products, state.orders, state.shipments, productStats, exchangeRate]);
 
     const handleSaveProduct = (updatedProduct: Product) => {
-        const exists = (state.products || []).find(p => p.id === updatedProduct.id);
+        const products = state.products || [];
+        const exists = products.find(p => p.id === updatedProduct.id);
+        
+        // 生成变更详情日志
+        let logDetails = "资产快照对齐完成";
+        if (exists) {
+            const changes = [];
+            if (exists.stock !== updatedProduct.stock) changes.push(`库存: ${exists.stock} -> ${updatedProduct.stock}`);
+            if (exists.price !== updatedProduct.price) changes.push(`定价: ${exists.price} -> ${updatedProduct.price}`);
+            if (exists.costPrice !== updatedProduct.costPrice) changes.push(`成本: ${exists.costPrice} -> ${updatedProduct.costPrice}`);
+            if (changes.length > 0) logDetails = changes.join(' | ');
+        }
+
+        const auditLog: AuditLog = {
+            id: `LOG-${Date.now()}`,
+            timestamp: new Date().toISOString(),
+            user: "管理员",
+            action: `[${updatedProduct.sku}] 业务参数变更`,
+            details: logDetails
+        };
+
         if (exists) dispatch({ type: 'UPDATE_PRODUCT', payload: updatedProduct });
         else dispatch({ type: 'ADD_PRODUCT', payload: updatedProduct });
+        
+        dispatch({ type: 'ADD_AUDIT_LOG', payload: auditLog });
         setEditingItem(null);
-        showToast('商品策略已更新', 'success');
+        showToast('商品策略已更新并固化', 'success');
     };
 
     const handleSyncToTrackingMatrix = async (item: ReplenishmentItem) => {
@@ -409,8 +465,7 @@ const Inventory: React.FC = () => {
         const cleanNo = trackingNo.toUpperCase();
         const existing = shipments.find(s => s.trackingNo?.trim().toUpperCase() === cleanNo);
         if (existing) {
-            // 修复点：将未定义的 shipment.trackingNumber 替换为局部变量 trackingNo
-            const updated: Shipment = { ...existing, trackingNo: trackingNo || existing.trackingNo, carrier: item.logistics?.carrier || existing.carrier, productName: item.name, destination: item.logistics?.targetWarehouse || existing.destination, notes: item.notes || existing.notes, lastUpdate: `数据对齐同步于: ${new Date().toLocaleTimeString()}` };
+            const updated: Shipment = { ...existing, trackingNo: trackingNo, carrier: item.logistics?.carrier || existing.carrier, productName: item.name, destination: item.logistics?.targetWarehouse || existing.destination, notes: item.notes || existing.notes, lastUpdate: `数据对齐同步于: ${new Date().toLocaleTimeString()}` };
             dispatch({ type: 'UPDATE_SHIPMENT', payload: updated });
             showToast(`已修正矩阵中的单号: ${trackingNo}`, 'success');
         } else {

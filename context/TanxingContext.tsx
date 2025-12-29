@@ -3,7 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef } from 
 import PocketBase from 'pocketbase';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
-    InboundShipment, Order, AutomationRule, Supplier, Influencer, AutomationLog, Theme
+    InboundShipment, Order, AutomationRule, Supplier, Influencer, AutomationLog, Theme, AuditLog
 } from '../types';
 import { 
     MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, 
@@ -76,6 +76,7 @@ interface AppState {
     toasts: Toast[];
     automationRules: AutomationRule[];
     automationLogs: AutomationLog[];
+    auditLogs: AuditLog[];
     isMobileMenuOpen: boolean;
     isInitialized: boolean;
     navParams?: any;
@@ -91,7 +92,7 @@ const initialState: AppState = {
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], transactions: [], customers: [], orders: [], shipments: [], 
     tasks: [], inboundShipments: [], suppliers: [], influencers: [], toasts: [],
-    automationRules: [], automationLogs: [], isMobileMenuOpen: false, isInitialized: false,
+    automationRules: [], automationLogs: [], auditLogs: [], isMobileMenuOpen: false, isInitialized: false,
     remoteVersion: 0
 };
 
@@ -133,6 +134,7 @@ type Action =
     | { type: 'UPDATE_AUTOMATION_RULE'; payload: AutomationRule }
     | { type: 'DELETE_AUTOMATION_RULE'; payload: string }
     | { type: 'ADD_AUTOMATION_LOG'; payload: AutomationLog }
+    | { type: 'ADD_AUDIT_LOG'; payload: AuditLog }
     | { type: 'CLEAR_NAV_PARAMS' };
 
 function appReducer(state: AppState, action: Action): AppState {
@@ -150,6 +152,7 @@ function appReducer(state: AppState, action: Action): AppState {
                 customers: action.payload.customers || state.customers || [],
                 orders: action.payload.orders || state.orders || [],
                 shipments: action.payload.shipments || state.shipments || [],
+                auditLogs: action.payload.auditLogs || state.auditLogs || [],
                 isInitialized: true 
             };
             break;
@@ -207,6 +210,7 @@ function appReducer(state: AppState, action: Action): AppState {
         case 'DELETE_AUTOMATION_RULE': nextState = { ...state, automationRules: deleteInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; break;
         
         case 'ADD_AUTOMATION_LOG': nextState = { ...state, automationLogs: [action.payload, ...(state.automationLogs || [])], saveStatus: 'dirty' }; break;
+        case 'ADD_AUDIT_LOG': nextState = { ...state, auditLogs: [action.payload, ...(state.auditLogs || [])], saveStatus: 'dirty' }; break;
         
         case 'ADD_TOAST': nextState = { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] }; break;
         case 'REMOVE_TOAST': nextState = { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) }; break;
@@ -309,7 +313,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 customers: state.customers, orders: state.orders, shipments: state.shipments,
                 influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
                 inboundShipments: state.inboundShipments, automationRules: state.automationRules,
-                automationLogs: state.automationLogs,
+                automationLogs: state.automationLogs, auditLogs: state.auditLogs,
                 lastUpdatedBy: SESSION_ID,
                 remoteVersion: newVersion,
                 timestamp: Date.now()
