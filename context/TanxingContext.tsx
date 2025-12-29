@@ -244,7 +244,15 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- Refined Logistics Sentry Logic with Authentication Support ---
+    // --- 核心：更强大的 AI 探测与授权逻辑 ---
+    const getAiStudio = () => {
+        try {
+            return (globalThis as any).aistudio || 
+                   (window as any).aistudio || 
+                   (window.parent as any)?.aistudio;
+        } catch (e) { return null; }
+    };
+
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
         if (!webhookUrl && manual) {
@@ -261,50 +269,36 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             return;
         }
 
-        // --- Exhaustive Search for aistudio Interface ---
-        const win = window as any;
-        const aistudio = win.aistudio || win.parent?.aistudio;
+        const aistudio = getAiStudio();
         
-        if (aistudio) {
+        // 预检查逻辑：如果明确知道没 Key 且 aistudio 在，就弹出
+        if (aistudio && !process.env.API_KEY) {
             try {
                 if (!(await aistudio.hasSelectedApiKey())) {
-                    if (manual) showToast('正在激活授权窗口，请选择 API Key...', 'info');
+                    if (manual) showToast('正在激活量子授权窗口，请选择 API Key...', 'info');
                     await aistudio.openSelectKey();
-                    // Assume success and let user click again or proceed
+                    // 假设用户会选成功，此处返回，让用户再次点击（符合 guidelines）
                     return;
                 }
-            } catch (err) {
-                console.warn("aistudio interface present but check failed:", err);
-            }
+            } catch (err) {}
         }
 
-        // Final check for process.env.API_KEY
-        if (!process.env.API_KEY) {
-            if (manual) {
-                if (aistudio) {
-                    showToast('检测到未完成授权，请点击上方“授权”并重新尝试。', 'warning');
-                    await aistudio.openSelectKey();
-                } else {
-                    showToast('未检测到有效的 API 令牌，请点击浏览器上方设置密钥。', 'error');
-                }
-            }
-            return;
-        }
-
-        if (manual) showToast(`量子链路正在联网检索 ${targets.length} 个单据...`, 'info');
+        if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的最新物理轨迹...`, 'info');
 
         try {
-            // New instance per call for fresh key
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const context = targets.map(s => `[${s.carrier}] 单号: ${s.trackingNo}`).join('\n');
+            // 每次调用创建新实例以使用最新 API_KEY
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+            const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join('\n');
             
             const prompt = `
-                你现在是探行 ERP 全球对账专家。
+                你现在是探行 ERP 全球物流对账专家。
                 请利用 Google Search 联网检索以下单据的最新物流轨迹：
                 ${context}
-                1. 详细列出每个单号的当前位置、最后更新时间。
-                2. 若发生滞留请警告。
-                3. 中文输出。
+
+                输出要求：
+                1. 详细列出每个单号的当前位置、最后更新时间、以及是否有滞留风险。
+                2. 必须用中文输出。
+                3. 请在末尾附带你查询到的原始参考链接。
             `;
 
             const response = await ai.models.generateContent({ 
@@ -315,30 +309,39 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             const aiText = response.text;
             if (aiText) {
-                let links = "";
+                let linksStr = "";
                 const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
                 if (grounding) {
-                    links = "\n\n🔗 物理数据来源:\n" + grounding
+                    linksStr = "\n\n🔗 物理数据来源:\n" + grounding
                         .map((c: any) => c.web ? `- ${c.web.title}: ${c.web.uri}` : null)
                         .filter(Boolean)
                         .join('\n');
                 }
 
-                const res = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', aiText + links);
-                if (res.success) {
+                const finalReport = aiText + linksStr;
+                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', finalReport);
+                
+                if (sendRes.success) {
                     dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
-                    if (manual) showToast('AI 对账完成，报文已同步至飞书', 'success');
+                    if (manual) showToast('AI 对账完成，实时报文已推送到飞书', 'success');
                 } else {
-                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全设置', 'error');
+                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键字设置', 'error');
                 }
             }
         } catch (e: any) {
-            const msg = e.message || '';
-            if (msg.includes("Requested entity was not found") && aistudio) {
-                showToast('授权实体失效，请重新选择 API Key', 'error');
-                await aistudio.openSelectKey();
+            console.error("Logistics Sentry Error:", e);
+            const errMsg = e.message || '';
+            
+            // 捕获 API Key 缺失或无效错误
+            if (errMsg.includes("API key") || errMsg.includes("Requested entity was not found")) {
+                if (aistudio) {
+                    if (manual) showToast('检测到未完成授权，正在唤起密钥选择器...', 'warning');
+                    await aistudio.openSelectKey();
+                } else {
+                    if (manual) showToast('未检测到有效的 API 令牌。请点击浏览器上方按钮设置密钥。', 'error');
+                }
             } else if (manual) {
-                showToast(`对账中断: ${msg || 'AI 引擎响应超时'}`, 'error');
+                showToast(`对账中断: ${errMsg || 'AI 引擎响应超时'}`, 'error');
             }
         }
     };
@@ -431,7 +434,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 finalId = created.id;
             }
             dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'idle', remoteVersion: newVersion, lastSyncTime: Date.now(), cloudRecordId: finalId } as any });
-            if (force) showToast('全域资产同步完成', 'success');
+            if (force) showToast('资产对账完成', 'success');
         } catch (e: any) {
             if (force) showToast(`对账失败: ${e.message}`, 'error');
         }
@@ -444,7 +447,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (record?.payload) {
                 const data = JSON.parse(record.payload);
                 dispatch({ type: 'BOOT', payload: { ...data, saveStatus: 'idle', lastSyncTime: Date.now(), cloudRecordId: record.id } });
-                if (manual) showToast('成功从云端拉取协议', 'success');
+                if (manual) showToast('成功拉取云端协议', 'success');
             }
         } catch (e: any) {
             if (manual) showToast(`拉取失败: ${e.message}`, 'error');

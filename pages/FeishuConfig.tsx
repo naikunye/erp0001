@@ -46,13 +46,18 @@ const FeishuConfig: React.FC = () => {
     };
 
     const handleForceAuth = async () => {
-        const win = window as any;
-        const aistudio = win.aistudio || win.parent?.aistudio;
+        const aistudio = (globalThis as any).aistudio || (window as any).aistudio || (window.parent as any)?.aistudio;
         if (aistudio) {
-            showToast('正在调起官方授权窗口...', 'info');
-            await aistudio.openSelectKey();
+            showToast('正在调起官方密钥授权窗口...', 'info');
+            try {
+                await aistudio.openSelectKey();
+                // 规范：Assume Success. 提示用户再次点击对账按钮即可生效。
+                showToast('授权流程已启动，完成后请再次尝试对账按钮。', 'success');
+            } catch (e) {
+                showToast('授权窗口激活失败，请检查浏览器拦截设置。', 'error');
+            }
         } else {
-            showToast('当前环境不支持动态授权，请手动配置 process.env.API_KEY', 'error');
+            showToast('当前环境不支持动态密钥选择。请确保您在 AI Studio 预览中操作，或手动配置 process.env.API_KEY。', 'error');
         }
     };
 
