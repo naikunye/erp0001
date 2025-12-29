@@ -198,7 +198,8 @@ const Inventory: React.FC = () => {
                                 </td>
                                 <td className="px-3 py-1 align-top pt-3">
                                     <div className="flex flex-col gap-0.5">
-                                        <div className="text-[20px] font-bold text-emerald-400 font-mono tracking-tighter leading-none drop-shadow-[0_0_10px_rgba(16,185,129,0.15)]">¥{item.totalInvestment.toLocaleString()}</div>
+                                        {/* 修正：字号从 text-[20px] 调整为 text-[18px] 与库存一致 */}
+                                        <div className="text-[18px] font-bold text-emerald-400 font-mono tracking-tighter leading-none drop-shadow-[0_0_10px_rgba(16,185,129,0.15)]">¥{item.totalInvestment.toLocaleString()}</div>
                                         <div className="space-y-1 mt-2">
                                             <div className="text-[9px] text-slate-500 font-bold uppercase flex items-center gap-1 tracking-tighter">
                                                 <span>货值:</span> 
@@ -223,7 +224,6 @@ const Inventory: React.FC = () => {
                                     </div>
                                 </td>
                                 <td className="px-3 py-1 align-top pt-3">
-                                    {/* 核心修正：复刻截图布局，消除 justifying Vacuum */}
                                     <div className="bg-[#0a0a0c] border border-white/10 rounded-lg p-2.5 w-[145px] shadow-inner">
                                         <div className="flex items-center justify-between mb-1.5">
                                             <div className="flex items-center gap-1.5 text-slate-500 text-[9px] font-bold uppercase tracking-wider">
