@@ -244,37 +244,65 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- 核心：物流哨兵逻辑 ---
+    // --- 核心：物理哨兵逻辑（已升级 Google Search 工具） ---
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
         const autoEnabled = localStorage.getItem('TX_FEISHU_AUTO') === 'true';
         
-        // 如果不是手动触发且没有开启自动通知，则退出
-        if (!webhookUrl || (!autoEnabled && !manual)) return;
-
-        const upsShipments = (state.shipments || []).filter(s => {
-            const isUps = (s.carrier?.toUpperCase() === 'UPS') || s.trackingNo?.toUpperCase().startsWith('1Z');
-            return isUps && (s.status === '运输中' || s.status === '异常' || s.status === '待同步');
-        });
-
-        if (upsShipments.length === 0) {
-            if (manual) showToast('未发现处于运输中的 UPS 单据', 'info');
+        if (!webhookUrl && !manual) return;
+        if (!webhookUrl && manual) {
+            showToast('请先配置飞书 Webhook 接收节点', 'warning');
             return;
         }
 
+        // 查找待处理、运输中、异常的单据，不再严格限制 UPS，让 AI 决定是否能查
+        const targets = (state.shipments || []).filter(s => 
+            s.status === '运输中' || s.status === '异常' || s.status === '待同步' || s.status === '待处理'
+        );
+
+        if (targets.length === 0) {
+            if (manual) showToast('当前对账矩阵中未发现活动单据', 'info');
+            return;
+        }
+
+        if (manual) showToast('正在启动 AI 引擎并接入 Google Search 实时链路...', 'info');
+
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const context = upsShipments.map(s => `单号:${s.trackingNo}, 货品:${s.productName}, 状态:${s.status}`).join('\n');
-            const prompt = `分析 UPS 运单流转，生成精简飞书播报。要求中文，指出延迟风险。运单：\n${context}`;
-            const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+            const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join(', ');
+            
+            const prompt = `
+                你现在是探行 ERP 全球物流哨兵。
+                请利用 Google Search 联网查询以下单据的最新物流轨迹状态：
+                ${context}
+
+                要求：
+                1. 优先核实 UPS (1Z开头) 的状态。
+                2. 总结每个单据的当前地理位置和最后动作（如：Arrival Scan, Out for Delivery）。
+                3. 用中文输出精简报文。
+                4. 如果查询不到，请基于系统中已有的 events 描述给出预测。
+            `;
+
+            const response = await ai.models.generateContent({ 
+                model: 'gemini-3-flash-preview', 
+                contents: prompt,
+                config: {
+                    tools: [{ googleSearch: {} }] // 开启搜索能力，无需 UPS API Key
+                }
+            });
 
             if (response.text) {
-                await sendMessageToBot(webhookUrl, 'UPS 轨迹巡检', response.text);
-                dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
+                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹巡检报告', response.text);
+                if (sendRes.success) {
+                    dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
+                    if (manual) showToast('实时对账报文已同步至移动端', 'success');
+                } else {
+                    if (manual) showToast('飞书机器人拒收报文，请检查 URL', 'error');
+                }
             }
-        } catch (e) {
+        } catch (e: any) {
             console.error("Logistics Sentry Error:", e);
-            if (manual) showToast('AI 物流核账任务中断，请检查 API KEY', 'error');
+            if (manual) showToast(`对账中断: ${e.message || 'AI 引擎响应异常'}`, 'error');
         }
     };
 
@@ -299,7 +327,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         startup();
 
-        sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); // 3小时
+        sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); 
 
         return () => { 
             if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*'); 
@@ -334,7 +362,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         }
                     } catch (err) { console.warn("Live sync error"); }
                 }
-            }, { requestKey: null }); // 禁用订阅冲突
+            }, { requestKey: null }); 
             
             await pullFromCloud(false);
             return true;
@@ -364,7 +392,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             let record = null;
             try {
-                // 使用 requestKey: null 禁用自动取消保护，确保强制同步生效
                 record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
             } catch (err: any) {}
             

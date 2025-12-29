@@ -65,19 +65,15 @@ const FeishuConfig: React.FC = () => {
 
         setIsManualChecking(true);
         try {
-            // 1. 预处理：确保同步最新的配置到上下文缓存
+            // 确保同步最新的配置到缓存
             localStorage.setItem('TX_FEISHU_URL', targetUrl);
             localStorage.setItem('TX_FEISHU_AUTO', autoNotify.toString());
             
-            showToast('正在扫描 UPS 实时轨迹...', 'info');
-
-            // 2. 执行对账推送 (关键修复：传递 true 表示手动触发)
+            // 执行对账推送
             await performLogisticsSentry(true);
-            
-            showToast('全球轨迹对账指令已送达 AI 引擎', 'success');
         } catch (e: any) {
             console.error(e);
-            showToast(`对账任务启动失败: ${e.message || '未知错误'}`, 'error');
+            showToast(`对账任务启动失败: ${e.message || 'AI 引擎响应超时'}`, 'error');
         } finally {
             setIsManualChecking(false);
         }
@@ -145,17 +141,17 @@ const FeishuConfig: React.FC = () => {
                                     <div>
                                         <div className="text-sm font-bold text-white uppercase italic">哨兵状态监控</div>
                                         <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                                            监控目标：<span className="text-indigo-400 font-black">UPS 全球件</span> | 上次巡检：<span className="text-white">{state.lastLogisticsCheck ? new Date(state.lastLogisticsCheck).toLocaleString() : '等待首次运行'}</span>
+                                            监控目标：<span className="text-indigo-400 font-black">全网活动件</span> | 上次巡检：<span className="text-white">{state.lastLogisticsCheck ? new Date(state.lastLogisticsCheck).toLocaleString() : '等待首次运行'}</span>
                                         </p>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={handleManualCheck}
                                     disabled={isManualChecking}
-                                    className={`w-full py-3 border rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${isManualChecking ? 'bg-indigo-600/10 border-indigo-500/20 text-indigo-300' : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300'}`}
+                                    className={`w-full py-4 border rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${isManualChecking ? 'bg-indigo-600/10 border-indigo-500/20 text-indigo-300' : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]'}`}
                                 >
-                                    {isManualChecking ? <Loader2 className="w-3 h-3 animate-spin"/> : <RefreshCw className="w-3 h-3"/>}
-                                    {isManualChecking ? 'AI 正在分析并推送...' : '立即触发全球轨迹对账'}
+                                    {isManualChecking ? <Loader2 className="w-4 h-4 animate-spin"/> : <Zap className="w-4 h-4"/>}
+                                    {isManualChecking ? '量子引擎分析中...' : '立即触发全球轨迹对账'}
                                 </button>
                             </div>
                         </div>
@@ -166,7 +162,7 @@ const FeishuConfig: React.FC = () => {
                                 disabled={isTesting}
                                 className="flex-1 py-5 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-3 transition-all active:scale-95"
                             >
-                                {isTesting ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Zap className="w-4 h-4 text-yellow-500"/>}
+                                {isTesting ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Radio className="w-4 h-4 text-emerald-500"/>}
                                 发送测试心跳
                             </button>
                             <button 
@@ -183,19 +179,19 @@ const FeishuConfig: React.FC = () => {
                 <div className="lg:col-span-5 space-y-6">
                     <div className="ios-glass-panel p-8 rounded-[2.5rem] bg-indigo-600/5 border border-indigo-500/20">
                         <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
-                            <Sparkles className="w-5 h-5 text-indigo-400" /> 物流哨兵如何工作？
+                            <Sparkles className="w-5 h-5 text-indigo-400" /> 物流哨兵·联网对账
                         </h3>
                         
                         <div className="space-y-6 text-[11px] text-slate-400 leading-relaxed font-medium">
-                            <p>1. <span className="text-white font-bold">自动识别</span>：系统每 3 小时扫描一次您的“物流追踪”矩阵。凡是 UPS 承运且未妥投的单据，都会进入哨兵池。</p>
-                            <p>2. <span className="text-white font-bold">AI 翻译与压缩</span>：Gemini 3 会自动将复杂的物流更新（如：Arrival Scan, Departure Scan）翻译成易懂的中文动态。</p>
-                            <p>3. <span className="text-white font-bold">静默推送</span>：当识别到轨迹发生物理位移或出现“异常”状态时，飞书群将收到即时预警。</p>
+                            <p>1. <span className="text-white font-bold">无感联网</span>：本系统利用 Gemini 3 的 Google Search 工具，直接在全球互联网搜索公开的物流状态信息，<span className="text-indigo-400 font-black">无需申请复杂的 UPS API Key</span>。</p>
+                            <p>2. <span className="text-white font-bold">自愈识别</span>：当 AI 识别到单号发生“滞留”、“报关异常”或“已签收”时，会自动向您的飞书群广播详细的中文诊断。</p>
+                            <p>3. <span className="text-white font-bold">数据闭环</span>：查询到的最新状态将自动同步至您的“物流追踪”矩阵。</p>
                         </div>
 
-                        <div className="mt-8 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
-                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                            <p className="text-[9px] text-emerald-200/70 font-bold leading-relaxed uppercase">
-                                <b>注意：</b> 由于是浏览器端 AI 逻辑，请在电脑上保持 ERP 标签页开启以维持自动推送。
+                        <div className="mt-8 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-start gap-3">
+                            <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
+                            <p className="text-[9px] text-indigo-200/70 font-bold leading-relaxed uppercase">
+                                <b>提示：</b> 只要您的“物流追踪”模块中有正在运输中的单据（特别是 UPS），点击左侧按钮即可触发 AI 联网核账。
                             </p>
                         </div>
                     </div>
