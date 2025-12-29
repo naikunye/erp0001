@@ -99,7 +99,6 @@ const initialState: AppState = {
     remoteVersion: 0
 };
 
-// Fixed Error on line 102: Added missing Action type definition
 type Action =
     | { type: 'BOOT'; payload: any }
     | { type: 'NAVIGATE'; payload: { page: Page; params?: any } }
@@ -245,14 +244,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- 核心修复：物流哨兵逻辑（升级到 Pro 模型并增强搜索） ---
+    // --- 核心修复：物流哨兵逻辑（增加 API KEY 校验和参考链接提取） ---
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
-        const autoEnabled = localStorage.getItem('TX_FEISHU_AUTO') === 'true';
         
         if (!webhookUrl && !manual) return;
         if (!webhookUrl && manual) {
-            showToast('请先配置飞书 Webhook URL', 'warning');
+            showToast('请先配置飞书 Webhook 接收节点', 'warning');
             return;
         }
 
@@ -262,52 +260,76 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         );
 
         if (targets.length === 0) {
-            if (manual) showToast('物流矩阵中未发现待对账的活动单据，请先在“物流追踪”页添加单号', 'error');
+            if (manual) showToast('物流矩阵中未发现活动单据，请先在“物流追踪”页录入运单', 'error');
             return;
         }
 
-        if (manual) showToast(`正在对 ${targets.length} 个单据启动 AI 联网对账...`, 'info');
+        // 关键修复：在浏览器中运行必须先检测并弹出密钥选择器
+        if (!(await (window as any).aistudio.hasSelectedApiKey())) {
+            showToast('正在激活 AI 授权令牌，请选择您的 API Key', 'info');
+            await (window as any).aistudio.openSelectKey();
+            // 假设用户现在选择了 Key，继续执行
+        }
+
+        if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的物理轨迹...`, 'info');
 
         try {
+            // 重新创建 AI 实例以确保抓取到新选择的 API Key
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join('\n');
             
             const prompt = `
                 你现在是探行 ERP 全球物流对账专家。
-                请利用 Google Search 联网检索以下单据的最新物流轨迹（重点查询官网公开信息）：
+                请利用 Google Search 联网检索以下单据的最新物流轨迹：
                 ${context}
 
                 输出要求：
-                1. 详细列出每个单号的当前位置、最后更新时间、以及是否有风险（如滞留、报关失败）。
+                1. 列出每个单号的当前地理位置、最后动作和是否有延误风险。
                 2. 必须用中文输出。
-                3. 请在末尾附带你查询到的原始参考链接。
+                3. 请在回答末尾提供你查阅到的参考网页链接。
             `;
 
-            // 使用 gemini-3-pro-preview 以获得更强大的搜索对账能力
             const response = await ai.models.generateContent({ 
-                model: 'gemini-3-pro-preview', 
+                model: 'gemini-3-flash-preview', 
                 contents: prompt,
                 config: {
-                    tools: [{ googleSearch: {} }]
+                    tools: [{ googleSearch: {} }] // 激活 Google Search 搜索能力
                 }
             });
 
             const aiText = response.text;
             if (aiText) {
-                // 将结果推送到飞书
-                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', aiText);
+                // 提取参考链接以增强报文权威性
+                let sourceLinks = "";
+                const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                if (chunks) {
+                    sourceLinks = "\n\n🔗 物理数据来源:\n" + chunks
+                        .map((c: any) => c.web ? `- ${c.web.title}: ${c.web.uri}` : null)
+                        .filter(Boolean)
+                        .join('\n');
+                }
+
+                const finalMessage = aiText + sourceLinks;
+                
+                // 将完整结果推送到飞书
+                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', finalMessage);
                 if (sendRes.success) {
                     dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
-                    if (manual) showToast('AI 对账完成，结果已推送到飞书', 'success');
+                    if (manual) showToast('AI 对账完成，实时报文已推送到飞书', 'success');
                 } else {
-                    if (manual) showToast('飞书机器人拒绝了消息，请检查 Webhook 关键字设置', 'error');
+                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键字设置', 'error');
                 }
             } else {
-                if (manual) showToast('AI 引擎未返回有效信息，请稍后重试', 'warning');
+                if (manual) showToast('AI 引擎未返回有效轨迹，请稍后重试', 'warning');
             }
         } catch (e: any) {
             console.error("Logistics Sentry Error:", e);
-            if (manual) showToast(`对账中断: ${e.message || 'AI 引擎响应超时'}`, 'error');
+            if (e.message?.includes("Requested entity was not found")) {
+                showToast('授权令牌已失效，请重新选择 API Key', 'error');
+                await (window as any).aistudio.openSelectKey();
+            } else {
+                if (manual) showToast(`对账中断: ${e.message || 'AI 引擎响应超时'}`, 'error');
+            }
         }
     };
 
@@ -332,6 +354,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         startup();
 
+        // 哨兵定时任务
         sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); 
 
         return () => { 
@@ -367,7 +390,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         }
                     } catch (err) { console.warn("Live sync error"); }
                 }
-            }, { requestKey: null }); // 修复：防止订阅请求被 autocancel
+            }, { requestKey: null }); 
             
             await pullFromCloud(false);
             return true;
@@ -379,7 +402,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (force: boolean = false) => {
         if (!pbRef.current || state.connectionStatus !== 'connected') {
-            if (force) showToast('同步失败：云端节点未就绪', 'error');
+            if (force) showToast('同步失败：量子链路未就绪', 'error');
             return;
         }
         try {
@@ -397,7 +420,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             let record = null;
             try {
-                // 修复：添加 requestKey: null 解决连接失败报错
                 record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
             } catch (err: any) {}
             
@@ -414,14 +436,13 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (force) showToast('通讯链路已激活，数据完成全域同步', 'success');
         } catch (e: any) {
             console.error("Cloud push error:", e);
-            if (force) showToast(`链路异常: ${e.message}`, 'error');
+            if (force) showToast(`资产对账失败: ${e.message}`, 'error');
         }
     };
 
     const pullFromCloud = async (manual: boolean = false) => {
         if (!pbRef.current) return;
         try {
-            // 修复：添加 requestKey: null 解决拉取失败
             const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
             if (record?.payload) {
                 const data = JSON.parse(record.payload);
