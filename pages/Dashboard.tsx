@@ -2,19 +2,21 @@
 import React, { useMemo, useState } from 'react';
 import { 
     Box, Wallet, Zap, 
-    AlertTriangle, ShieldCheck, Activity, Coins, Truck, Sparkles, Loader2, BrainCircuit
+    AlertTriangle, ShieldCheck, Activity, Coins, Truck, Sparkles, Loader2, BrainCircuit,
+    MessageCircle, Send
 } from 'lucide-react';
 import StatCard from '../components/StatCard';
 import { useTanxing } from '../context/TanxingContext';
 import { GoogleGenAI } from "@google/genai";
+import { sendFeishuMessage } from '../utils/feishu';
 
 const Dashboard: React.FC = () => {
-  const { state } = useTanxing();
+  const { state, showToast } = useTanxing();
   const [aiReport, setAiReport] = useState<string | null>(null);
   const [isAiLoading, setIsAiLoading] = useState(false);
+  const [isPushing, setIsPushing] = useState(false);
 
   const metrics = useMemo(() => {
-      // 核心防御：确保在数据未加载或加载失败时程序不崩溃
       const products = Array.isArray(state.products) ? state.products : [];
       const transactions = Array.isArray(state.transactions) ? state.transactions : [];
       const exchangeRate = state.exchangeRate || 7.2;
@@ -32,7 +34,8 @@ const Dashboard: React.FC = () => {
           totalAssets: cash + stockValue,
           stockValue,
           cash,
-          lowStock: products.filter(p => (p.stock || 0) < 10).length
+          lowStock: products.filter(p => (p.stock || 0) < 10).length,
+          lowStockSkus: products.filter(p => (p.stock || 0) < 10).map(p => p.sku).join(', ')
       };
   }, [state.products, state.transactions, state.exchangeRate]);
 
@@ -47,7 +50,7 @@ const Dashboard: React.FC = () => {
             Total Assets: ¥${metrics.totalAssets.toLocaleString()}
             Cash: ¥${metrics.cash.toLocaleString()}
             Inventory: ¥${metrics.stockValue.toLocaleString()}
-            Low Stock Alerts: ${metrics.lowStock} SKUs.
+            Low Stock Alerts: ${metrics.lowStock} SKUs (${metrics.lowStockSkus}).
             Give a 3-sentence risk summary and 1 key advice. Use HTML for highlights.
           `;
           const response = await ai.models.generateContent({
@@ -59,6 +62,32 @@ const Dashboard: React.FC = () => {
           setAiReport("<b>AI 神经元当前处于休眠状态。</b>");
       } finally {
           setIsAiLoading(false);
+      }
+  };
+
+  const pushBriefingToFeishu = async () => {
+      const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
+      if (!webhookUrl) {
+          showToast('请先在“飞书通讯矩阵”配置 Webhook 地址', 'warning');
+          return;
+      }
+      setIsPushing(true);
+      try {
+          const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+          const prompt = `为探行ERP生成一份极其精简的飞书日报，包含：总资产¥${metrics.totalAssets.toLocaleString()}，现金¥${metrics.cash.toLocaleString()}，缺货提醒：${metrics.lowStock}款。语言要激昂专业。不超过80字。`;
+          const response = await ai.models.generateContent({
+              model: 'gemini-3-flash-preview',
+              contents: prompt
+          });
+          
+          const content = `[探行核心摘要]\n----------------\n${response.text}\n----------------\n生成时间: ${new Date().toLocaleString()}`;
+          const res = await sendFeishuMessage(webhookUrl, '实时经营简报', content);
+          if (res.success) showToast('简报已同步至您的移动端飞书', 'success');
+          else throw new Error('发送失败');
+      } catch (e) {
+          showToast('飞书节点响应异常', 'error');
+      } finally {
+          setIsPushing(false);
       }
   };
 
@@ -75,13 +104,23 @@ const Dashboard: React.FC = () => {
                     : state.connectionStatus === 'connecting' ? "正在建立神经连接..." : "离线网格已激活 - 仅保存于本地"}
             </p>
           </div>
-          <button 
-            onClick={handleAiHealthCheck}
-            className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black text-indigo-400 uppercase flex items-center gap-2 transition-all"
-          >
-              {isAiLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
-              AI 风险扫描
-          </button>
+          <div className="flex gap-2">
+            <button 
+                onClick={pushBriefingToFeishu}
+                disabled={isPushing}
+                className="px-4 py-2 bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/30 rounded-xl text-[9px] font-black text-emerald-400 uppercase flex items-center gap-2 transition-all shadow-lg"
+            >
+                {isPushing ? <Loader2 className="w-3 h-3 animate-spin"/> : <MessageCircle className="w-3 h-3"/>}
+                推送到飞书
+            </button>
+            <button 
+                onClick={handleAiHealthCheck}
+                className="px-4 py-2 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[9px] font-black text-indigo-400 uppercase flex items-center gap-2 transition-all"
+            >
+                {isAiLoading ? <Loader2 className="w-3 h-3 animate-spin"/> : <BrainCircuit className="w-3 h-3"/>}
+                AI 风险扫描
+            </button>
+          </div>
       </div>
 
       {aiReport && (
@@ -103,7 +142,7 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-12 gap-6">
           <div className="col-span-12 lg:col-span-8 bg-black/40 border border-white/5 rounded-[2.5rem] p-10 flex flex-col justify-center items-center text-center relative overflow-hidden min-h-[400px] group">
-              <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none group-hover:opacity-10 transition-opacity"><ShieldCheck className="w-64 h-64 text-indigo-500"/></div>
+              <div className="absolute top-0 right-0 p-10 opacity-5 pointer-events-none group-hover:opacity-100 transition-opacity"><ShieldCheck className="w-64 h-64 text-indigo-500"/></div>
               <Activity className="w-12 h-12 text-indigo-500 mb-6 animate-pulse" />
               <h2 className="text-2xl font-black text-white italic uppercase tracking-widest">
                   {state.connectionStatus === 'connected' ? '云端指挥矩阵已固化' : '本地离线节点在线'}

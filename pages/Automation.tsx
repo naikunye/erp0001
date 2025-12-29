@@ -4,7 +4,7 @@ import {
     Zap, Radio, ShieldCheck, Play, Pause, Trash2, Clock, 
     ChevronRight, Terminal, Network, Activity, Settings2, 
     MessageSquare, AlertTriangle, Layers, BrainCircuit, X, Plus, Save, Info, Sparkles, Loader2, Cpu,
-    ExternalLink, MessageCircle
+    ExternalLink, MessageCircle, Bot
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { AutomationRule, Task } from '../types';
@@ -23,6 +23,7 @@ const Automation: React.FC = () => {
         status: 'active'
     });
 
+    const hasFeishu = !!localStorage.getItem('TX_FEISHU_URL');
     const rules = state.automationRules || [];
     const logs = state.automationLogs || [];
 
@@ -149,24 +150,32 @@ const Automation: React.FC = () => {
                         <Activity className="w-3 h-3 text-emerald-400" /> Automated Response Layer Active
                     </p>
                 </div>
-                <div className="flex bg-black/60 p-1 rounded-xl border border-white/10">
-                    <button onClick={() => setActiveTab('rules')} className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>自动化规则</button>
-                    <button onClick={() => setActiveTab('logs')} className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>执行日志</button>
+                <div className="flex items-center gap-3">
+                    <div className={`px-4 py-2 rounded-xl border flex items-center gap-2 transition-all ${hasFeishu ? 'bg-indigo-600/10 border-indigo-500/30' : 'bg-rose-500/10 border-rose-500/30'}`}>
+                        <Bot className={`w-4 h-4 ${hasFeishu ? 'text-indigo-400' : 'text-rose-400'}`}/>
+                        <span className={`text-[10px] font-black uppercase ${hasFeishu ? 'text-indigo-300' : 'text-rose-300'}`}>
+                            Robot: {hasFeishu ? 'Online' : 'Offline'}
+                        </span>
+                    </div>
+                    <div className="flex bg-black/60 p-1 rounded-xl border border-white/10">
+                        <button onClick={() => setActiveTab('rules')} className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>自动化规则</button>
+                        <button onClick={() => setActiveTab('logs')} className={`px-6 py-2 rounded-lg text-xs font-bold transition-all ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>执行日志</button>
+                    </div>
                 </div>
             </div>
 
             {/* 快捷跳转提示 */}
-            {!localStorage.getItem('TX_FEISHU_URL') && (
+            {!hasFeishu && (
                 <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-center justify-between animate-pulse">
                     <div className="flex items-center gap-3">
                         <AlertTriangle className="w-5 h-5 text-amber-500" />
                         <p className="text-xs text-amber-200 font-bold uppercase italic">检测到通讯协议未就绪：飞书 Webhook 尚未配置</p>
                     </div>
                     <button 
-                        onClick={() => dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } })}
+                        onClick={() => dispatch({ type: 'NAVIGATE', payload: { page: 'feishu' } })}
                         className="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-2"
                     >
-                        前往“系统设置-通讯矩阵”配置 <ExternalLink className="w-3 h-3"/>
+                        前往“通讯矩阵”配置 <ExternalLink className="w-3 h-3"/>
                     </button>
                 </div>
             )}
