@@ -1,9 +1,9 @@
 
 import React from 'react';
 import { 
-    LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, 
-    BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, 
-    PackageCheck, Factory, Calculator, ClipboardList, Terminal, Globe, Zap, Layers
+    LayoutDashboard, Users, Settings, LogOut, Hexagon, 
+    Wallet, Map, CalendarDays, Megaphone, PieChart, 
+    PackageCheck
 } from 'lucide-react';
 import { Page } from '../types';
 import { useTanxing } from '../context/TanxingContext';
@@ -20,19 +20,14 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
 
   const menuItems = [
     { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
-    { id: 'automation', label: '逻辑神经中枢', subLabel: 'Logic Hooks', icon: Zap },
-    { id: 'ai-command', label: 'AI 指令中心', subLabel: 'Command Matrix', icon: Terminal, highlight: true },
-    { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit },
-    { id: 'tasks', label: '运营协同中心', subLabel: 'Operations', icon: ClipboardList },
-    { id: 'inventory', label: '智能备货', subLabel: 'Inventory', icon: PackageCheck },
-    { id: 'logistics-hub', label: '物流中枢', subLabel: 'Logistics Hub', icon: Globe },
-    { id: 'finance', label: '财务穿透', subLabel: 'Audit', icon: Wallet },
-    { id: 'analytics', label: '数据分析', subLabel: 'Analytics', icon: PieChart }, 
-    { id: 'tracking', label: '物流追踪', subLabel: 'Tracking', icon: Map },
-    { id: 'marketing', label: '达人建联', subLabel: 'Influencers', icon: Megaphone },
-    { id: 'customers', label: '客户管理', subLabel: 'CRM', icon: Users },
-    { id: 'suppliers', label: '供应商管理', subLabel: 'Suppliers', icon: Factory },
-    { id: 'settings', label: '系统设置', subLabel: 'Settings', icon: Settings },
+    { id: 'inventory', label: '智能备货清单', subLabel: 'Inventory', icon: PackageCheck },
+    { id: 'finance', label: '财务穿透审计', subLabel: 'Audit', icon: Wallet },
+    { id: 'analytics', label: '盈利分析矩阵', subLabel: 'Analytics', icon: PieChart }, 
+    { id: 'tracking', label: '物流全球追踪', subLabel: 'Tracking', icon: Map },
+    { id: 'calendar', label: '运营全景日历', subLabel: 'Calendar', icon: CalendarDays },
+    { id: 'marketing', label: '红人营销建联', subLabel: 'Influencers', icon: Megaphone },
+    { id: 'customers', label: '客户资产管理', subLabel: 'CRM', icon: Users },
+    { id: 'settings', label: '系统核心设置', subLabel: 'Settings', icon: Settings },
   ];
 
   const handleNav = (page: Page) => {
@@ -58,8 +53,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                     {menuItems.map((item) => {
                         const Icon = item.icon;
                         const isActive = activePage === item.id;
-                        // @ts-ignore
-                        const isHighlight = item.highlight;
                         return (
                             <button key={item.id} onClick={() => handleNav(item.id as Page)} className={`w-full flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
                                 {isActive && <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-transparent border-l-2 border-violet-500 opacity-100"></div>}
@@ -68,7 +61,6 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                                     <span className={`text-sm font-medium leading-none ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
                                     <span className={`text-[8px] mt-1 font-mono tracking-wide uppercase ${isActive ? 'text-indigo-300/70' : 'text-slate-600 group-hover:text-slate-500'}`}>{item.subLabel}</span>
                                 </div>
-                                {isHighlight && <div className={`ml-auto w-1.5 h-1.5 rounded-full animate-pulse shadow-[0_0_8px_#6366f1] ${isActive ? 'bg-white' : 'bg-indigo-500'}`}></div>}
                             </button>
                         );
                     })}
@@ -76,7 +68,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                 <div className="pt-4 mt-auto border-t border-white/5 relative z-10">
                     <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-all text-[10px] font-bold border border-transparent hover:border-red-500/20 active:scale-95 uppercase tracking-widest">
                         <LogOut className="w-4 h-4" />
-                        <span>断开连接 (Disconnect)</span>
+                        <span>退出系统 (Logout)</span>
                     </button>
                 </div>
             </div>

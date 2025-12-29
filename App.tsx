@@ -1,10 +1,10 @@
+
 import React, { useState, useEffect } from 'react';
 import { TanxingProvider, useTanxing } from './context/TanxingContext';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
 import Inventory from './pages/Inventory';
-import Intelligence from './pages/Intelligence';
 import Customers from './pages/Customers';
 import Settings from './pages/Settings';
 import Finance from './pages/Finance';
@@ -12,17 +12,10 @@ import Tracking from './pages/Tracking';
 import Calendar from './pages/Calendar';
 import Marketing from './pages/Marketing';
 import Analytics from './pages/Analytics'; 
-import CalculatorCenter from './pages/CalculatorCenter';
-import OperationsTasks from './pages/OperationsTasks';
-import AICommandCenter from './pages/AICommandCenter';
-import InboundShipments from './pages/InboundShipments';
-import Automation from './pages/Automation';
-import VirtualWarehouse from './pages/VirtualWarehouse';
+import Profile from './pages/Profile';
 import FeishuConfig from './pages/FeishuConfig';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
-import Suppliers from './pages/Suppliers'; 
-import Profile from './pages/Profile';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Page } from './types';
 import { Hexagon, ArrowRight, Loader2 } from 'lucide-react';
@@ -57,7 +50,7 @@ const MainLayout: React.FC = () => {
   };
 
   const handleLogout = () => {
-      if (confirm('确认断开神经连接并退出系统？')) {
+      if (confirm('确认退出系统？')) {
           setIsAuthenticated(false);
       }
   };
@@ -69,25 +62,17 @@ const MainLayout: React.FC = () => {
   const getPageTitle = (page: Page) => {
     switch (page) {
       case 'dashboard': return '指挥中枢 (Command Center)';
-      case 'finance': return '财务穿透 (Audit & Capital)';
+      case 'finance': return '财务穿透 (Audit & Finance)';
       case 'tracking': return '全球物流 (Global Logistics)';
-      case 'customers': return '客户数据库 (Client Database)';
-      case 'inventory': return '库存供应链 (Inventory & Supply)';
-      case 'intelligence': return 'AI 实验室 (AI Laboratory)';
-      case 'marketing': return '达人建联履约 (Influencer & Fulfill)';
-      case 'analytics': return '深度分析 (Deep Analytics)';
-      case 'calculator': return '智能计算 (Intelligent Calc)';
-      case 'calendar': return '运营日历 (Operations Timeline)';
-      case 'settings': return '系统配置 (System Config)';
-      case 'suppliers': return '供应商管理 (Suppliers)';
-      case 'profile': return '管理员配置 (Admin Profile)';
-      case 'tasks': return '运营协同中心 (Operations Hub)';
-      case 'ai-command': return 'AI 指令控制台 (Quantum Command)';
-      case 'logistics-hub': return '物流中枢 (Logistics Matrix)';
-      case 'automation': return '逻辑神经中枢 (Logic Hooks)';
-      case 'virtual-warehouse': return '虚拟仓库数字孪生 (Digital Twin)';
-      case 'feishu': return '飞书通讯矩阵 (Messaging Matrix)';
-      default: return '探行 OS (Quantum Edition)';
+      case 'customers': return '客户管理 (Client CRM)';
+      case 'inventory': return '库存供应链 (Inventory)';
+      case 'marketing': return '达人建联 (Influencer Hub)';
+      case 'analytics': return '分析矩阵 (Analytics)';
+      case 'calendar': return '运营日历 (Calendar)';
+      case 'settings': return '系统配置 (Settings)';
+      case 'profile': return '个人中心 (Profile)';
+      case 'feishu': return '飞书配置 (Feishu)';
+      default: return '探行 OS';
     }
   };
 
@@ -99,20 +84,12 @@ const MainLayout: React.FC = () => {
       case 'calendar': return <Calendar />;
       case 'customers': return <Customers />;
       case 'inventory': return <Inventory />;
-      case 'intelligence': return <Intelligence />;
       case 'marketing': return <Marketing />;
       case 'analytics': return <Analytics />;
-      case 'calculator': return <CalculatorCenter />;
       case 'settings': return <Settings />;
-      case 'suppliers': return <Suppliers />;
       case 'profile': return <Profile />;
-      case 'tasks': return <OperationsTasks />;
-      case 'ai-command': return <AICommandCenter />;
-      case 'logistics-hub': return <InboundShipments />;
-      case 'automation': return <Automation />;
-      case 'virtual-warehouse': return <VirtualWarehouse />;
       case 'feishu': return <FeishuConfig />;
-      default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
+      default: return <Dashboard />;
     }
   };
 
@@ -121,7 +98,7 @@ const MainLayout: React.FC = () => {
           <div className="min-h-screen flex flex-col items-center justify-center bg-[#0f172a] gap-6">
               <div className="relative">
                   <div className="w-20 h-20 rounded-2xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center animate-pulse">
-                      <Hexagon className="w-10 h-10 text-indigo-500 animate-spin-slow" />
+                      <Hexagon className="w-10 h-10 text-indigo-500" />
                   </div>
               </div>
               <h2 className="text-white font-mono font-bold tracking-[0.3em] uppercase text-sm">System Initializing</h2>
