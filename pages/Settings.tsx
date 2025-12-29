@@ -7,68 +7,24 @@ import {
     Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle,
     Shield, Monitor, Globe, Settings2, Command, Search, Fingerprint, ChevronRight,
     Upload, Download, FileUp, FileDown, AlertOctagon, Power, CloudUpload, CloudDownload,
-    Wifi, WifiOff, Fingerprint as ScanIcon, BellRing, MessageSquare, Send, Smartphone,
-    Bot
+    Wifi, WifiOff, Fingerprint as ScanIcon
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, connectToPb, syncToCloud, pullFromCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'cloud' | 'data' | 'notif'>('cloud'); 
+  const [activeTab, setActiveTab] = useState<'cloud' | 'data'>('cloud'); 
   const [pbInput, setPbInput] = useState(state.pbUrl || '');
   const [isTesting, setIsTesting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
-  const [isNotifTesting, setIsNotifTesting] = useState(false);
-  
-  // 通知配置状态 (通常保存在本地或随快照同步)
-  const [notifConfig, setNotifConfig] = useState({
-      tgToken: localStorage.getItem('TG_BOT_TOKEN') || '',
-      tgChatId: localStorage.getItem('TG_CHAT_ID') || '',
-      frequency: '2h',
-      enabled: true
-  });
-
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const isHttps = window.location.protocol === 'https:';
 
   useEffect(() => {
     setPbInput(state.pbUrl);
   }, [state.pbUrl]);
-
-  const handleSaveNotif = () => {
-      localStorage.setItem('TG_BOT_TOKEN', notifConfig.tgToken);
-      localStorage.setItem('TG_CHAT_ID', notifConfig.tgChatId);
-      showToast('推送协议已保存在本地，下次同步将广播至云端', 'success');
-  };
-
-  const testTgPush = async () => {
-      if (!notifConfig.tgToken || !notifConfig.tgChatId) {
-          showToast('请先配置 Token 和 ChatID', 'warning');
-          return;
-      }
-      setIsNotifTesting(true);
-      try {
-          const url = `https://api.telegram.org/bot${notifConfig.tgToken}/sendMessage`;
-          const text = `🚀 *探行 ERP 链路测试成功*\n\n节点: ${SESSION_ID}\n状态: 活跃 (Active)\n时间: ${new Date().toLocaleString()}\n\n服务器已准备好每隔 ${notifConfig.frequency} 扫描一次物流矩阵。`;
-          
-          const res = await fetch(url, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ chat_id: notifConfig.tgChatId, text, parse_mode: 'Markdown' })
-          });
-          
-          if (res.ok) {
-              showToast('测试指令已发出，请检查手机 Telegram', 'success');
-          } else {
-              throw new Error('Telegram API 响应异常');
-          }
-      } catch (e: any) {
-          showToast(`推送失败: ${e.message}`, 'error');
-      } finally {
-          setIsNotifTesting(false);
-      }
-  };
 
   const handleConnect = async () => {
       if (!pbInput.trim()) return showToast('请输入节点地址', 'warning');
@@ -151,9 +107,6 @@ const Settings: React.FC = () => {
           <button onClick={() => setActiveTab('cloud')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'cloud' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
               <Cloud className="w-4 h-4" /> 实时协同云 (Live Sync)
           </button>
-          <button onClick={() => setActiveTab('notif')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'notif' ? 'bg-purple-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-              <BellRing className="w-4 h-4" /> 自动推送中枢 (Notif)
-          </button>
           <button onClick={() => setActiveTab('data')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'data' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
               <Database className="w-4 h-4" /> 物理资产管理
           </button>
@@ -161,6 +114,7 @@ const Settings: React.FC = () => {
 
       {activeTab === 'cloud' && (
           <div className="space-y-8">
+              {/* 核心诊断：HTTPS 混合内容警告 */}
               {isHttps && pbInput.startsWith('http:') && (
                   <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 flex items-start gap-4">
                       <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
@@ -247,100 +201,42 @@ const Settings: React.FC = () => {
                                   </button>
                               </div>
                           </div>
+
+                          <div className="bg-black/60 rounded-[1.5rem] border border-white/5 p-6 space-y-4">
+                                <div className="flex items-center gap-2 mb-2">
+                                    <ScanIcon className="w-4 h-4 text-slate-500" />
+                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">节点诊断详情</span>
+                                </div>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Cloud ID</span>
+                                        <span className="text-xs text-white font-mono truncate">{state.cloudRecordId || 'N/A'}</span>
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Asset Version</span>
+                                        <span className="text-xs text-white font-mono">v{state.remoteVersion}</span>
+                                    </div>
+                                    <div className="flex flex-col col-span-2">
+                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Last Heartbeat</span>
+                                        <span className="text-xs text-slate-400 font-mono italic">{state.lastSyncTime ? new Date(state.lastSyncTime).toLocaleString() : 'NEVER'}</span>
+                                    </div>
+                                </div>
+                                <div className="pt-2 border-t border-white/5">
+                                    <p className="text-[9px] text-slate-600 leading-relaxed font-bold italic">提示：如果两台电脑显示的 Cloud ID 相同且 Version 不同，点击“从云端抓取”即可对齐。</p>
+                                </div>
+                          </div>
                       </div>
                   )}
-              </div>
-          </div>
-      )}
 
-      {activeTab === 'notif' && (
-          <div className="space-y-8 animate-in slide-in-from-bottom-4">
-              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 bg-[#0a0a0c] shadow-xl space-y-8">
-                  <div className="flex items-center gap-6">
-                      <div className="w-16 h-16 bg-purple-600 rounded-3xl flex items-center justify-center text-white shadow-2xl shadow-purple-900/40">
-                          <Bot className="w-8 h-8" />
+                  <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-8">
+                      <div className="flex items-center gap-3 text-emerald-500">
+                          <ShieldCheck className="w-5 h-5" />
+                          <span className="text-[10px] font-bold uppercase tracking-widest">End-to-End Encryption</span>
                       </div>
-                      <div>
-                          <h3 className="text-xl font-black text-white italic uppercase tracking-tighter">Telegram 自动化推送引擎</h3>
-                          <p className="text-xs text-slate-500 mt-1">服务器后端将每隔 2 小时通过此链路向您手机汇报物流实况</p>
+                      <div className="flex items-center gap-3 justify-end text-right">
+                          <Activity className="w-5 h-5 text-indigo-500" />
+                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">LATENCY: ~20MS</span>
                       </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                      <div className="space-y-4">
-                          <div>
-                            <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-2 block">Bot API Token</label>
-                            <input 
-                                type="password"
-                                value={notifConfig.tgToken}
-                                onChange={e => setNotifConfig({...notifConfig, tgToken: e.target.value})}
-                                className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-xs text-indigo-400 font-mono focus:border-purple-500 outline-none" 
-                                placeholder="通过 @BotFather 获取的 Token..." 
-                            />
-                          </div>
-                          <div>
-                            <label className="text-[10px] text-slate-500 font-black uppercase tracking-[0.2em] mb-2 block">Chat ID (Your Account)</label>
-                            <input 
-                                type="text"
-                                value={notifConfig.tgChatId}
-                                onChange={e => setNotifConfig({...notifConfig, tgChatId: e.target.value})}
-                                className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 text-xs text-white font-mono focus:border-purple-500 outline-none" 
-                                placeholder="您的 Telegram ID (可通过 @userinfobot 获取)..." 
-                            />
-                          </div>
-                      </div>
-
-                      <div className="space-y-6 bg-white/2 border border-white/5 p-8 rounded-[2rem]">
-                          <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-slate-400">自动巡检频率</span>
-                              <select 
-                                value={notifConfig.frequency}
-                                onChange={e => setNotifConfig({...notifConfig, frequency: e.target.value})}
-                                className="bg-black/60 border border-white/10 rounded-lg px-4 py-2 text-xs text-white outline-none"
-                              >
-                                  <option value="1h">每 1 小时 (高频)</option>
-                                  <option value="2h">每 2 小时 (建议)</option>
-                                  <option value="4h">每 4 小时 (省电)</option>
-                                  <option value="12h">每天两次</option>
-                              </select>
-                          </div>
-                          <div className="flex justify-between items-center">
-                              <span className="text-xs font-bold text-slate-400">推送状态</span>
-                              <button 
-                                onClick={() => setNotifConfig({...notifConfig, enabled: !notifConfig.enabled})}
-                                className={`px-6 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${notifConfig.enabled ? 'bg-emerald-600 text-white' : 'bg-slate-800 text-slate-500'}`}
-                              >
-                                  {notifConfig.enabled ? '协议运行中' : '已离线'}
-                              </button>
-                          </div>
-                          <div className="pt-4 border-t border-white/5">
-                              <button 
-                                onClick={testTgPush}
-                                disabled={isNotifTesting}
-                                className="w-full py-4 bg-white/5 hover:bg-white/10 text-white rounded-2xl text-[10px] font-black uppercase tracking-widest border border-white/10 flex items-center justify-center gap-3 transition-all"
-                              >
-                                  {isNotifTesting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                                  向手机发送测试信号
-                              </button>
-                          </div>
-                      </div>
-                  </div>
-
-                  <div className="flex justify-end pt-6 border-t border-white/5">
-                      <button onClick={handleSaveNotif} className="px-12 py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl text-xs font-black uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all">
-                          保存推送协议
-                      </button>
-                  </div>
-              </div>
-
-              <div className="ios-glass-card p-8 bg-blue-600/5 border-l-4 border-l-blue-600 rounded-[2rem] flex items-start gap-6">
-                  <Info className="w-8 h-8 text-blue-500 shrink-0" />
-                  <div className="space-y-2">
-                      <h4 className="text-white font-bold text-sm uppercase">为什么需要手动保存？</h4>
-                      <p className="text-xs text-slate-500 leading-relaxed">
-                          通知配置包含您的私密 Token，保存后它将作为“系统载荷”的一部分存储在您的 PocketBase 云端。
-                          只要您的服务器运行着 <b>Logistics Watcher</b> 脚本，它就能读取这些配置并自动开始推送工作。
-                      </p>
                   </div>
               </div>
           </div>
@@ -364,6 +260,17 @@ const Settings: React.FC = () => {
                         <p className="text-[11px] text-slate-500 mb-6">下载当前系统的全量数据包，可作为冷备份存档。</p>
                         <button onClick={handleExportJson} className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl text-xs font-black uppercase tracking-widest">执行导出</button>
                     </div>
+                  </div>
+                  
+                  <div className="p-8 bg-red-600/5 border border-red-500/20 rounded-[2rem] flex items-center justify-between">
+                      <div className="flex items-center gap-6">
+                        <AlertOctagon className="w-8 h-8 text-red-500" />
+                        <div>
+                            <div className="text-red-400 font-bold text-sm uppercase">紧急核心擦除</div>
+                            <p className="text-[10px] text-slate-500">这会永久抹除此浏览器的所有缓存，且不可撤销。</p>
+                        </div>
+                      </div>
+                      <button onClick={() => { if(confirm('确定抹除？')) { localStorage.clear(); window.location.reload(); } }} className="px-6 py-3 bg-red-600/10 text-red-500 border border-red-500/30 rounded-xl text-[10px] font-black uppercase">执行擦除</button>
                   </div>
               </div>
           </div>

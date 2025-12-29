@@ -36,6 +36,7 @@ const idb = {
             const db = await this.init();
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
+            // 存入前进行深拷贝，确保纯净数据
             const cleanData = JSON.parse(JSON.stringify(val));
             store.put({ ...cleanData, lastLocalUpdate: Date.now() }, 'LATEST');
         } catch (e) { console.warn("IDB Cache Ignored", e); }
@@ -133,12 +134,15 @@ type Action =
 
 function appReducer(state: AppState, action: Action): AppState {
     let nextState = { ...state };
+    
+    // 助手函数：安全地更新/删除数组中的项
     const updateInArray = (arr: any[], item: any) => (arr || []).map(i => i.id === item.id ? item : i);
     const deleteInArray = (arr: any[], id: string) => (arr || []).filter(i => i.id !== id);
 
     switch (action.type) {
         case 'BOOT':
-            return { 
+            // 移除 return，改为赋值并 break，确保触发末尾的 idb.set
+            nextState = { 
                 ...state, 
                 ...action.payload, 
                 products: action.payload.products || state.products || [],
@@ -148,6 +152,7 @@ function appReducer(state: AppState, action: Action): AppState {
                 shipments: action.payload.shipments || state.shipments || [],
                 isInitialized: true 
             };
+            break;
         case 'NAVIGATE':
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
             nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
@@ -158,109 +163,55 @@ function appReducer(state: AppState, action: Action): AppState {
         case 'UPDATE_DATA':
             nextState = { ...state, ...action.payload };
             break;
-        case 'ADD_PRODUCT': 
-            nextState = { ...state, products: [action.payload, ...state.products], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_PRODUCT': 
-            nextState = { ...state, products: updateInArray(state.products, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_PRODUCT': 
-            nextState = { ...state, products: deleteInArray(state.products, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_TRANSACTION': 
-            nextState = { ...state, transactions: [action.payload, ...state.transactions], saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_TRANSACTION': 
-            nextState = { ...state, transactions: deleteInArray(state.transactions, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_CUSTOMER': 
-            nextState = { ...state, customers: [action.payload, ...state.customers], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_CUSTOMER': 
-            nextState = { ...state, customers: updateInArray(state.customers, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_CUSTOMER': 
-            nextState = { ...state, customers: deleteInArray(state.customers, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_SHIPMENT': 
-            nextState = { ...state, shipments: [action.payload, ...state.shipments], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_SHIPMENT': 
-            nextState = { ...state, shipments: updateInArray(state.shipments, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_SHIPMENT': 
-            nextState = { ...state, shipments: deleteInArray(state.shipments, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_ORDER': 
-            nextState = { ...state, orders: [action.payload, ...state.orders], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_ORDER': 
-            nextState = { ...state, orders: updateInArray(state.orders, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'CREATE_INBOUND_SHIPMENT': 
-            nextState = { ...state, inboundShipments: [action.payload, ...state.inboundShipments], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_INBOUND_SHIPMENT': 
-            nextState = { ...state, inboundShipments: updateInArray(state.inboundShipments, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_INBOUND_SHIPMENT': 
-            nextState = { ...state, inboundShipments: deleteInArray(state.inboundShipments, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_SUPPLIER': 
-            nextState = { ...state, suppliers: [action.payload, ...state.suppliers], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_SUPPLIER': 
-            nextState = { ...state, suppliers: updateInArray(state.suppliers, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_SUPPLIER': 
-            nextState = { ...state, suppliers: deleteInArray(state.suppliers, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_INFLUENCER': 
-            nextState = { ...state, influencers: [action.payload, ...state.influencers], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_INFLUENCER': 
-            nextState = { ...state, influencers: updateInArray(state.influencers, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_INFLUENCER': 
-            nextState = { ...state, influencers: deleteInArray(state.influencers, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_TASK': 
-            nextState = { ...state, tasks: [action.payload, ...state.tasks], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_TASK': 
-            nextState = { ...state, tasks: updateInArray(state.tasks, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_TASK': 
-            nextState = { ...state, tasks: deleteInArray(state.tasks, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_AUTOMATION_RULE': 
-            nextState = { ...state, automationRules: [action.payload, ...state.automationRules], saveStatus: 'dirty' }; 
-            break;
-        case 'UPDATE_AUTOMATION_RULE': 
-            nextState = { ...state, automationRules: updateInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'DELETE_AUTOMATION_RULE': 
-            nextState = { ...state, automationRules: deleteInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_AUTOMATION_LOG': 
-            nextState = { ...state, automationLogs: [action.payload, ...(state.automationLogs || [])], saveStatus: 'dirty' }; 
-            break;
-        case 'ADD_TOAST': 
-            nextState = { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] };
-            break;
-        case 'REMOVE_TOAST': 
-            nextState = { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) };
-            break;
-        case 'TOGGLE_MOBILE_MENU': 
-            nextState = { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-            break;
-        case 'CLEAR_NAV_PARAMS': 
-            nextState = { ...state, navParams: undefined };
-            break;
-        default: 
-            return state;
+        
+        case 'ADD_PRODUCT': nextState = { ...state, products: [action.payload, ...(state.products || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_PRODUCT': nextState = { ...state, products: updateInArray(state.products, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_PRODUCT': nextState = { ...state, products: deleteInArray(state.products, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_TRANSACTION': nextState = { ...state, transactions: [action.payload, ...(state.transactions || [])], saveStatus: 'dirty' }; break;
+        case 'DELETE_TRANSACTION': nextState = { ...state, transactions: deleteInArray(state.transactions, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_CUSTOMER': nextState = { ...state, customers: [action.payload, ...(state.customers || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_CUSTOMER': nextState = { ...state, customers: updateInArray(state.customers, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_CUSTOMER': nextState = { ...state, customers: deleteInArray(state.customers, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_SHIPMENT': nextState = { ...state, shipments: [action.payload, ...(state.shipments || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_SHIPMENT': nextState = { ...state, shipments: updateInArray(state.shipments, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_SHIPMENT': nextState = { ...state, shipments: deleteInArray(state.shipments, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_ORDER': nextState = { ...state, orders: [action.payload, ...(state.orders || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_ORDER': nextState = { ...state, orders: updateInArray(state.orders, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'CREATE_INBOUND_SHIPMENT': nextState = { ...state, inboundShipments: [action.payload, ...(state.inboundShipments || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_INBOUND_SHIPMENT': nextState = { ...state, inboundShipments: updateInArray(state.inboundShipments, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_INBOUND_SHIPMENT': nextState = { ...state, inboundShipments: deleteInArray(state.inboundShipments, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_SUPPLIER': nextState = { ...state, suppliers: [action.payload, ...(state.suppliers || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_SUPPLIER': nextState = { ...state, suppliers: updateInArray(state.suppliers, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_SUPPLIER': nextState = { ...state, suppliers: deleteInArray(state.suppliers, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_INFLUENCER': nextState = { ...state, influencers: [action.payload, ...(state.influencers || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_INFLUENCER': nextState = { ...state, influencers: updateInArray(state.influencers, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_INFLUENCER': nextState = { ...state, influencers: deleteInArray(state.influencers, action.payload), saveStatus: 'dirty' }; break;
+
+        case 'ADD_TASK': nextState = { ...state, tasks: [action.payload, ...(state.tasks || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_TASK': nextState = { ...state, tasks: updateInArray(state.tasks, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_TASK': nextState = { ...state, tasks: deleteInArray(state.tasks, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_AUTOMATION_RULE': nextState = { ...state, automationRules: [action.payload, ...(state.automationRules || [])], saveStatus: 'dirty' }; break;
+        case 'UPDATE_AUTOMATION_RULE': nextState = { ...state, automationRules: updateInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; break;
+        case 'DELETE_AUTOMATION_RULE': nextState = { ...state, automationRules: deleteInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; break;
+        
+        case 'ADD_AUTOMATION_LOG': nextState = { ...state, automationLogs: [action.payload, ...(state.automationLogs || [])], saveStatus: 'dirty' }; break;
+        
+        case 'ADD_TOAST': nextState = { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] }; break;
+        case 'REMOVE_TOAST': nextState = { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) }; break;
+        case 'TOGGLE_MOBILE_MENU': nextState = { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen }; break;
+        case 'CLEAR_NAV_PARAMS': nextState = { ...state, navParams: undefined }; break;
+        default: return state;
     }
     
+    // 关键修复：确保所有状态变更（包括 BOOT）都能立即同步到本地磁盘缓存
     if (nextState !== state) {
         idb.set(nextState);
     }
@@ -310,7 +261,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 syncToCloud(false);
             }, 2000);
         }
-    }, [state.products, state.transactions, state.customers, state.orders, state.shipments, state.tasks, state.saveStatus]);
+    }, [state.products, state.transactions, state.customers, state.orders, state.shipments, state.saveStatus]);
 
     const connectToPb = async (url: string): Promise<boolean> => {
         if (!url) return false;
@@ -343,13 +294,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     };
 
     const syncToCloud = async (force: boolean = false) => {
-        if (!pbRef.current || state.connectionStatus !== 'connected' || state.saveStatus === 'saving') {
-            if (force && state.connectionStatus !== 'connected') showToast('同步失败：未连接云端', 'error');
+        if (!pbRef.current || state.connectionStatus !== 'connected') {
+            if (force) showToast('同步失败：未连接云端', 'error');
             return;
         }
-        
         try {
-            dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'saving' } as any });
             const newVersion = (state.remoteVersion || 0) + 1;
             const payload = JSON.stringify({
                 products: state.products, transactions: state.transactions,
@@ -380,7 +329,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (force) showToast('资产快照已同步至云端', 'success');
         } catch (e: any) {
             console.error("Cloud push error:", e);
-            dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'error' } as any });
             if (force) showToast(`同步失败: ${e.message}`, 'error');
         }
     };
