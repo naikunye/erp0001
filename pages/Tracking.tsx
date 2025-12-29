@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useTanxing } from '../context/TanxingContext';
 import { Shipment, ShipmentEvent } from '../types';
 import { 
@@ -14,7 +14,13 @@ import { GoogleGenAI } from "@google/genai";
 const Tracking: React.FC = () => {
   const { state, dispatch, showToast } = useTanxing();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
+  
+  // 改为 ID 选中，确保详情页数据永远与全局 State 同步
+  const [selectedShipmentId, setSelectedShipmentId] = useState<string | null>(null);
+  const selectedShipment = useMemo(() => 
+    (state.shipments || []).find((s: Shipment) => s.id === selectedShipmentId) || null
+  , [state.shipments, selectedShipmentId]);
+
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isPushingToFeishu, setIsPushingToFeishu] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState<string | null>(null);
@@ -27,7 +33,6 @@ const Tracking: React.FC = () => {
       const t = trackingNo.trim();
       if (!t) return '#';
       const c = carrier.toLowerCase().trim();
-      // 匹配 1Z 开头或 carrier 包含 ups
       if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) {
           return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
       }
@@ -77,7 +82,7 @@ const Tracking: React.FC = () => {
       }
   };
 
-  const filteredShipments = (state.shipments || []).filter(s => 
+  const filteredShipments = (state.shipments || []).filter((s: Shipment) => 
     (s.trackingNo || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
     (s.productName || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
@@ -122,19 +127,33 @@ const Tracking: React.FC = () => {
       if (!editForm.trackingNo) return showToast('单号必填', 'warning');
       if (editForm.id) {
           dispatch({ type: 'UPDATE_SHIPMENT', payload: editForm as Shipment });
-          if (selectedShipment?.id === editForm.id) setSelectedShipment(editForm as Shipment);
           showToast('节点已固化', 'success');
       } else {
-          const newShipment: Shipment = { ...editForm as any, id: `SH-${Date.now()}`, events: [] };
+          const newId = `SH-${Date.now()}`;
+          const newShipment: Shipment = { ...editForm as any, id: newId, events: [] };
           dispatch({ type: 'ADD_SHIPMENT', payload: newShipment });
+          setSelectedShipmentId(newId);
           showToast('新协议注入完成', 'success');
       }
       setShowEditModal(false);
   };
 
+  const handleShipOut = async () => {
+      if (!selectedShipment) return;
+      // 修正：Shipment 对象使用的是 trackingNo 而非 trackingNumber
+      if (!selectedShipment.trackingNo) {
+          showToast('请先录入正式运单号再执行离场', 'warning');
+          setEditForm({ ...selectedShipment });
+          setShowEditModal(true);
+          return;
+      }
+      const updated = { ...selectedShipment, status: '运输中' as const, shipDate: new Date().toISOString().split('T')[0] };
+      dispatch({ type: 'UPDATE_SHIPMENT', payload: updated });
+      showToast('货件已标记为离场运输中', 'success');
+  };
+
   return (
     <div className="ios-glass-panel rounded-[2.5rem] border border-white/10 shadow-2xl flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-black/40">
-      {/* 顶部中枢栏 */}
       <div className="p-6 border-b border-white/10 flex flex-col lg:flex-row justify-between items-center gap-4 bg-white/5 backdrop-blur-3xl z-20">
         <div className="flex items-center gap-5">
             <div className="w-14 h-14 bg-indigo-600 rounded-[1.5rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-900/60 ring-4 ring-indigo-500/20">
@@ -168,15 +187,14 @@ const Tracking: React.FC = () => {
       </div>
 
       <div className="flex-1 overflow-hidden flex z-10">
-          {/* 列表：标注外显 + 霓虹进度条 */}
           <div className={`${selectedShipment ? 'hidden xl:block w-[450px]' : 'w-full'} border-r border-white/5 overflow-y-auto p-5 space-y-4 bg-black/20 custom-scrollbar`}>
               {filteredShipments.map(shipment => {
                   const cfg = getStatusConfig(shipment.status);
                   return (
                       <div 
                         key={shipment.id} 
-                        onClick={() => setSelectedShipment(shipment)} 
-                        className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer flex flex-col gap-4 relative overflow-hidden group ${selectedShipment?.id === shipment.id ? 'bg-indigo-600/10 border-indigo-500/80 shadow-inner scale-[0.98]' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
+                        onClick={() => setSelectedShipmentId(shipment.id)} 
+                        className={`p-6 rounded-[2rem] border-2 transition-all cursor-pointer flex flex-col gap-4 relative overflow-hidden group ${selectedShipmentId === shipment.id ? 'bg-indigo-600/10 border-indigo-500/80 shadow-inner scale-[0.98]' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
                       >
                           <div className="flex justify-between items-center relative z-10">
                               <span className="text-[10px] px-3 py-1 bg-black/60 text-slate-300 rounded-xl font-black border border-white/10 uppercase font-mono shadow-lg">
@@ -192,7 +210,6 @@ const Tracking: React.FC = () => {
                                 {shipment.productName || 'UNIDENTIFIED_PAYLOAD'}
                               </div>
                               <div className="flex items-center gap-3 mt-1.5">
-                                {/* 点击单号直接跳转 UPS 中国 */}
                                 <a 
                                     href={getTrackingUrl(shipment.carrier, shipment.trackingNo)} 
                                     target="_blank" 
@@ -208,7 +225,6 @@ const Tracking: React.FC = () => {
                               </div>
                           </div>
 
-                          {/* 运营标注外显区 */}
                           {shipment.notes && (
                               <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-3 relative z-10 animate-in fade-in duration-500">
                                   <div className="flex items-start gap-2">
@@ -220,7 +236,6 @@ const Tracking: React.FC = () => {
                               </div>
                           )}
                           
-                          {/* 进度条 */}
                           <div className="space-y-2 relative z-10">
                               <div className="flex justify-between text-[9px] font-black uppercase tracking-[0.2em] text-slate-500">
                                   <span>Syncing Progress</span>
@@ -242,33 +257,23 @@ const Tracking: React.FC = () => {
                               <span className="text-[9px] text-indigo-400/80 font-black uppercase italic tracking-widest">{shipment.shipDate || '--'} DEPARTURE</span>
                               <ChevronRight className="w-4 h-4 text-slate-700 group-hover:text-indigo-500 transition-colors" />
                           </div>
-
-                          <div className="absolute -right-4 -bottom-4 opacity-[0.03] group-hover:opacity-[0.07] transition-all duration-700 pointer-events-none">
-                              <Map className="w-32 h-32 rotate-[-15deg]" />
-                          </div>
                       </div>
                   );
               })}
           </div>
 
-          {/* 右侧：全息详情面板 */}
           {selectedShipment ? (
               <div className="flex-1 overflow-y-auto bg-[#050508]/90 flex flex-col animate-in fade-in duration-500 slide-in-from-right-4 relative">
-                  <div className="absolute top-0 right-0 p-12 opacity-[0.02] pointer-events-none">
-                        <Globe className="w-[600px] h-[600px] text-white" />
-                  </div>
-
                   <div className="p-12 border-b border-white/5 bg-white/2 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8 shrink-0 backdrop-blur-2xl relative z-10 overflow-hidden">
                        <div className="relative z-10">
                            <div className="flex items-center gap-8 mb-6">
-                               {/* 详情页单号链接：点击直跳 UPS 中国，带视觉增强 */}
                                <a 
                                  href={getTrackingUrl(selectedShipment.carrier, selectedShipment.trackingNo)}
                                  target="_blank"
                                  rel="noreferrer"
                                  className="group/link flex items-center gap-4"
                                >
-                                   <h3 className="text-6xl font-black text-white font-mono tracking-tighter drop-shadow-2xl selection:bg-indigo-500 group-hover/link:text-blue-400 transition-colors">
+                                   <h3 className="text-6xl font-black text-white font-mono tracking-tighter drop-shadow-2xl group-hover/link:text-blue-400 transition-colors">
                                      {selectedShipment.trackingNo}
                                    </h3>
                                    <div className="w-12 h-12 bg-white/5 rounded-2xl flex items-center justify-center border border-white/10 group-hover/link:bg-blue-600 group-hover/link:border-blue-400 transition-all group-hover/link:scale-110 shadow-xl">
@@ -335,9 +340,6 @@ const Tracking: React.FC = () => {
                                   <h3 className="text-xs font-black text-amber-500 uppercase tracking-[0.4em] mb-6 flex items-center gap-3"><StickyNote className="w-5 h-5"/> 运营前线标注</h3>
                                   <p className="text-3xl font-bold text-amber-100/90 leading-tight italic tracking-tight">{selectedShipment.notes}</p>
                               </div>
-                              <div className="absolute -right-8 -bottom-8 opacity-[0.06] group-hover:opacity-[0.12] transition-all duration-700">
-                                  <FileText className="w-56 h-56 rotate-12" />
-                              </div>
                           </div>
                       )}
 
@@ -393,7 +395,6 @@ const Tracking: React.FC = () => {
           )}
       </div>
 
-      {/* 增强型编辑模态框 */}
       {showEditModal && (
           <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 backdrop-blur-3xl bg-black/80 animate-in fade-in duration-300" onClick={() => setShowEditModal(false)}>
               <div className="ios-glass-panel w-full max-w-5xl rounded-[4rem] shadow-[0_0_100px_rgba(0,0,0,1)] p-12 border border-white/20 flex flex-col gap-12 bg-[#08080a] relative overflow-hidden" onClick={e => e.stopPropagation()}>
@@ -460,7 +461,7 @@ const Tracking: React.FC = () => {
 
                   <div className="flex justify-between items-center mt-4 pt-12 border-t border-white/10">
                       <button 
-                        onClick={() => { if(editForm.id) { if(confirm('确认物理销毁该节点？')) { dispatch({type:'DELETE_SHIPMENT', payload:editForm.id}); setShowEditModal(false); setSelectedShipment(null); } } }}
+                        onClick={() => { if(editForm.id) { if(confirm('确认物理销毁该节点？')) { dispatch({type:'DELETE_SHIPMENT', payload:editForm.id}); setShowEditModal(false); setSelectedShipmentId(null); } } }}
                         className="px-10 py-6 text-[12px] font-black text-rose-500 uppercase tracking-[0.4em] hover:bg-rose-500/10 rounded-[2rem] transition-all"
                       >
                           {editForm.id ? 'Destroy_Physical_Node' : ''}
