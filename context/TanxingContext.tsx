@@ -81,9 +81,9 @@ function appReducer(state: any, action: any): any {
             nextState = { ...state, ...action.payload }; 
             break;
 
-        // --- 商品 (Inventory) 核心逻辑 ---
+        // --- 商品 (Inventory) 核心逻辑：调整为头部插入 ---
         case 'ADD_PRODUCT':
-            nextState = { ...state, products: [...(state.products || []), action.payload] };
+            nextState = { ...state, products: [action.payload, ...(state.products || [])] };
             break;
         case 'UPDATE_PRODUCT':
             nextState = { ...state, products: (state.products || []).map((p: Product) => p.id === action.payload.id ? action.payload : p) };
@@ -122,9 +122,9 @@ function appReducer(state: any, action: any): any {
             nextState = { ...state, transactions: (state.transactions || []).filter((t: Transaction) => t.id !== action.payload) };
             break;
 
-        // --- 客户关系 (CRM) ---
+        // --- 客户关系 (CRM)：调整为头部插入 ---
         case 'ADD_CUSTOMER':
-            nextState = { ...state, customers: [...(state.customers || []), action.payload] };
+            nextState = { ...state, customers: [action.payload, ...(state.customers || [])] };
             break;
         case 'UPDATE_CUSTOMER':
             nextState = { ...state, customers: (state.customers || []).map((c: Customer) => c.id === action.payload.id ? action.payload : c) };
@@ -133,9 +133,9 @@ function appReducer(state: any, action: any): any {
             nextState = { ...state, customers: (state.customers || []).filter((c: Customer) => c.id !== action.payload) };
             break;
 
-        // --- 供应商管理 (SRM) ---
+        // --- 供应商管理 (SRM)：调整为头部插入 ---
         case 'ADD_SUPPLIER':
-            nextState = { ...state, suppliers: [...(state.suppliers || []), action.payload] };
+            nextState = { ...state, suppliers: [action.payload, ...(state.suppliers || [])] };
             break;
         case 'UPDATE_SUPPLIER':
             nextState = { ...state, suppliers: (state.suppliers || []).map((s: Supplier) => s.id === action.payload.id ? action.payload : s) };
@@ -144,9 +144,9 @@ function appReducer(state: any, action: any): any {
             nextState = { ...state, suppliers: (state.suppliers || []).filter((s: Supplier) => s.id !== action.payload) };
             break;
 
-        // --- 达人营销 (Marketing) ---
+        // --- 达人营销 (Marketing)：调整为头部插入 ---
         case 'ADD_INFLUENCER':
-            nextState = { ...state, influencers: [...(state.influencers || []), action.payload] };
+            nextState = { ...state, influencers: [action.payload, ...(state.influencers || [])] };
             break;
         case 'UPDATE_INFLUENCER':
             nextState = { ...state, influencers: (state.influencers || []).map((i: Influencer) => i.id === action.payload.id ? action.payload : i) };
@@ -168,7 +168,7 @@ function appReducer(state: any, action: any): any {
 
         // --- 自动化与日志 ---
         case 'ADD_AUTOMATION_RULE':
-            nextState = { ...state, automationRules: [...(state.automationRules || []), action.payload] };
+            nextState = { ...state, automationRules: [action.payload, ...(state.automationRules || [])] };
             break;
         case 'UPDATE_AUTOMATION_RULE':
             nextState = { ...state, automationRules: (state.automationRules || []).map((r: AutomationRule) => r.id === action.payload.id ? action.payload : r) };
