@@ -23,7 +23,7 @@ const FeishuConfig: React.FC = () => {
 
     // 监听 URL 变化，同步到本地存储，防止点击对账时读取不到
     useEffect(() => {
-        if (feishuUrl.startsWith('http')) {
+        if (feishuUrl && feishuUrl.startsWith('http')) {
             localStorage.setItem('TX_FEISHU_URL', feishuUrl);
         }
     }, [feishuUrl]);
@@ -65,15 +65,19 @@ const FeishuConfig: React.FC = () => {
 
         setIsManualChecking(true);
         try {
-            // 确保同步最新的配置到上下文
+            // 1. 预处理：确保同步最新的配置到上下文缓存
             localStorage.setItem('TX_FEISHU_URL', targetUrl);
             localStorage.setItem('TX_FEISHU_AUTO', autoNotify.toString());
             
-            // 执行对账推送
-            await performLogisticsSentry();
-            showToast('手动触发成功：正在扫描 UPS 轨迹并推送...', 'success');
-        } catch (e) {
-            showToast('对账任务启动失败', 'error');
+            showToast('正在扫描 UPS 实时轨迹...', 'info');
+
+            // 2. 执行对账推送 (关键修复：传递 true 表示手动触发)
+            await performLogisticsSentry(true);
+            
+            showToast('全球轨迹对账指令已送达 AI 引擎', 'success');
+        } catch (e: any) {
+            console.error(e);
+            showToast(`对账任务启动失败: ${e.message || '未知错误'}`, 'error');
         } finally {
             setIsManualChecking(false);
         }
@@ -148,10 +152,10 @@ const FeishuConfig: React.FC = () => {
                                 <button 
                                     onClick={handleManualCheck}
                                     disabled={isManualChecking}
-                                    className="w-full py-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 rounded-xl text-[10px] font-black text-indigo-300 uppercase flex items-center justify-center gap-2 transition-all"
+                                    className={`w-full py-3 border rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${isManualChecking ? 'bg-indigo-600/10 border-indigo-500/20 text-indigo-300' : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300'}`}
                                 >
                                     {isManualChecking ? <Loader2 className="w-3 h-3 animate-spin"/> : <RefreshCw className="w-3 h-3"/>}
-                                    立即触发全球轨迹对账
+                                    {isManualChecking ? 'AI 正在分析并推送...' : '立即触发全球轨迹对账'}
                                 </button>
                             </div>
                         </div>
@@ -191,7 +195,7 @@ const FeishuConfig: React.FC = () => {
                         <div className="mt-8 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
                             <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
                             <p className="text-[9px] text-emerald-200/70 font-bold leading-relaxed uppercase">
-                                <b>注意：</b> 由于是浏览器端 AI 逻辑，请在电脑上保持 ERP 标签页开启以维持自动推送。若需 24/7 离线推送，需配合后端 Node 脚本。
+                                <b>注意：</b> 由于是浏览器端 AI 逻辑，请在电脑上保持 ERP 标签页开启以维持自动推送。
                             </p>
                         </div>
                     </div>
