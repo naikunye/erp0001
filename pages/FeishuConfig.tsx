@@ -11,7 +11,7 @@ import { useTanxing } from '../context/TanxingContext';
 import { sendMessageToBot } from '../utils/feishu';
 
 const FeishuConfig: React.FC = () => {
-    const { state, showToast, syncToCloud, performLogisticsSentry } = useTanxing();
+    const { state, showToast, syncToCloud, performLogisticsSentry, connectToPb } = useTanxing();
     const [platform, setPlatform] = useState<'feishu' | 'dingtalk'>('feishu');
     
     // 实时状态
@@ -19,9 +19,10 @@ const FeishuConfig: React.FC = () => {
     const [autoNotify, setAutoNotify] = useState(localStorage.getItem('TX_FEISHU_AUTO') === 'true');
     const [isTesting, setIsTesting] = useState(false);
     const [isManualChecking, setIsManualChecking] = useState(false);
+    const [isDeploying, setIsDeploying] = useState(false);
     const [lastSync, setLastSync] = useState(localStorage.getItem('TX_FEISHU_LAST') || '从未同步');
 
-    // 监听 URL 变化，同步到本地存储，防止点击对账时读取不到
+    // 监听 URL 变化
     useEffect(() => {
         if (feishuUrl && feishuUrl.startsWith('http')) {
             localStorage.setItem('TX_FEISHU_URL', feishuUrl);
@@ -33,15 +34,23 @@ const FeishuConfig: React.FC = () => {
             showToast('无效的 Webhook 地址格式', 'error');
             return;
         }
+        
+        setIsDeploying(true);
         localStorage.setItem('TX_FEISHU_URL', feishuUrl);
         localStorage.setItem('TX_FEISHU_AUTO', autoNotify.toString());
         
-        await syncToCloud(true);
-        
-        const now = new Date().toLocaleString();
-        setLastSync(now);
-        localStorage.setItem('TX_FEISHU_LAST', now);
-        showToast('通讯矩阵协议已部署并生效', 'success');
+        try {
+            // 首先尝试同步云端数据
+            await syncToCloud(true);
+            
+            const now = new Date().toLocaleString();
+            setLastSync(now);
+            localStorage.setItem('TX_FEISHU_LAST', now);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsDeploying(false);
+        }
     };
 
     const testBot = async () => {
@@ -52,28 +61,24 @@ const FeishuConfig: React.FC = () => {
         const res = await sendMessageToBot(targetUrl, '链路压力测试', '探行 ERP 通讯节点响应正常。\n当前状态：量子中枢已接入。');
         setIsTesting(false);
         
-        if (res.success) showToast('心跳报文发送成功！', 'success');
-        else showToast('发送失败。请检查 URL 是否正确，或飞书机器人安全设置是否包含关键词“探行”', 'error');
+        if (res.success) showToast('飞书握手报文发送成功！', 'success');
+        else showToast('发送失败。请检查机器人关键词是否包含“探行”，或 URL 是否有效', 'error');
     };
 
     const handleManualCheck = async () => {
         const targetUrl = feishuUrl || localStorage.getItem('TX_FEISHU_URL');
         if (!targetUrl) {
-            showToast('未检测到 Webhook 配置，请先录入 URL', 'warning');
+            showToast('请先配置并保存飞书 Webhook URL', 'warning');
             return;
         }
 
         setIsManualChecking(true);
         try {
-            // 确保同步最新的配置到缓存
-            localStorage.setItem('TX_FEISHU_URL', targetUrl);
-            localStorage.setItem('TX_FEISHU_AUTO', autoNotify.toString());
-            
-            // 执行对账推送
+            // 立即执行对账逻辑，强制传递 manual=true
             await performLogisticsSentry(true);
         } catch (e: any) {
             console.error(e);
-            showToast(`对账任务启动失败: ${e.message || 'AI 引擎响应超时'}`, 'error');
+            showToast(`对账中断: ${e.message}`, 'error');
         } finally {
             setIsManualChecking(false);
         }
@@ -117,14 +122,18 @@ const FeishuConfig: React.FC = () => {
                                         placeholder={platform === 'feishu' ? 'https://open.feishu.cn/open-apis/bot/v2/hook/...' : 'https://oapi.dingtalk.com/robot/send?...'}
                                     />
                                 </div>
+                                <div className="mt-2 flex items-center gap-2 px-2">
+                                    <div className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`}></div>
+                                    <span className="text-[9px] font-black text-slate-600 uppercase">云端状态: {state.connectionStatus.toUpperCase()}</span>
+                                </div>
                             </div>
 
                             <div className="flex items-center justify-between p-6 bg-white/2 border border-white/5 rounded-[2rem] hover:bg-white/5 transition-all">
                                 <div className="flex gap-4 items-center">
                                     <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400"><Bell className="w-5 h-5 animate-pulse"/></div>
                                     <div>
-                                        <div className="text-sm font-bold text-white uppercase italic">UPS 物流哨兵计划 (Sentry)</div>
-                                        <p className="text-[9px] text-slate-500 font-bold uppercase">自动同步 UPS 全球轨迹异常至移动端 (每3小时)</p>
+                                        <div className="text-sm font-bold text-white uppercase italic">全球物流哨兵计划 (Sentry)</div>
+                                        <p className="text-[9px] text-slate-500 font-bold uppercase">自动识别轨迹状态并同步至移动端 (每3小时轮询)</p>
                                     </div>
                                 </div>
                                 <button 
@@ -141,7 +150,7 @@ const FeishuConfig: React.FC = () => {
                                     <div>
                                         <div className="text-sm font-bold text-white uppercase italic">哨兵状态监控</div>
                                         <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                                            监控目标：<span className="text-indigo-400 font-black">全网活动件</span> | 上次巡检：<span className="text-white">{state.lastLogisticsCheck ? new Date(state.lastLogisticsCheck).toLocaleString() : '等待首次运行'}</span>
+                                            监控范围：<span className="text-indigo-400 font-black">物流追踪页所有单号</span> | 上次巡检：<span className="text-white">{state.lastLogisticsCheck ? new Date(state.lastLogisticsCheck).toLocaleString() : '等待首次激活'}</span>
                                         </p>
                                     </div>
                                 </div>
@@ -150,8 +159,8 @@ const FeishuConfig: React.FC = () => {
                                     disabled={isManualChecking}
                                     className={`w-full py-4 border rounded-xl text-[10px] font-black uppercase flex items-center justify-center gap-2 transition-all ${isManualChecking ? 'bg-indigo-600/10 border-indigo-500/20 text-indigo-300' : 'bg-indigo-600/20 hover:bg-indigo-600/30 border-indigo-500/40 text-indigo-300 shadow-[0_0_15px_rgba(99,102,241,0.2)]'}`}
                                 >
-                                    {isManualChecking ? <Loader2 className="w-4 h-4 animate-spin"/> : <Zap className="w-4 h-4"/>}
-                                    {isManualChecking ? '量子引擎分析中...' : '立即触发全球轨迹对账'}
+                                    {isManualChecking ? <Loader2 className="w-4 h-4 animate-spin"/> : <RefreshCw className="w-4 h-4"/>}
+                                    {isManualChecking ? 'AI 量子引擎对账中...' : '立即触发全球轨迹对账'}
                                 </button>
                             </div>
                         </div>
@@ -167,9 +176,11 @@ const FeishuConfig: React.FC = () => {
                             </button>
                             <button 
                                 onClick={handleSave}
-                                className="flex-[1.5] py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 italic shadow-indigo-900/40"
+                                disabled={isDeploying}
+                                className="flex-[1.5] py-5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-2xl font-black text-xs uppercase tracking-widest shadow-2xl flex items-center justify-center gap-3 transition-all active:scale-95 italic shadow-indigo-900/40 disabled:opacity-50"
                             >
-                                <Save className="w-4 h-4"/> 部署并激活通讯链路
+                                {isDeploying ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Save className="w-4 h-4"/>} 
+                                {isDeploying ? '激活链路中...' : '部署并激活通讯链路'}
                             </button>
                         </div>
                     </div>
@@ -183,15 +194,15 @@ const FeishuConfig: React.FC = () => {
                         </h3>
                         
                         <div className="space-y-6 text-[11px] text-slate-400 leading-relaxed font-medium">
-                            <p>1. <span className="text-white font-bold">无感联网</span>：本系统利用 Gemini 3 的 Google Search 工具，直接在全球互联网搜索公开的物流状态信息，<span className="text-indigo-400 font-black">无需申请复杂的 UPS API Key</span>。</p>
-                            <p>2. <span className="text-white font-bold">自愈识别</span>：当 AI 识别到单号发生“滞留”、“报关异常”或“已签收”时，会自动向您的飞书群广播详细的中文诊断。</p>
-                            <p>3. <span className="text-white font-bold">数据闭环</span>：查询到的最新状态将自动同步至您的“物流追踪”矩阵。</p>
+                            <p>1. <span className="text-white font-bold">无感核账</span>：系统利用 Gemini 3 的联网能力，直接在互联网扫描公开物流状态，<span className="text-indigo-400 font-black">无需 UPS 官方 API 密钥</span>。</p>
+                            <p>2. <span className="text-white font-bold">关键反馈</span>：当 AI 识别到单号发生“滞留”、“报关异常”或“已签收”时，会自动向飞书群广播详细的中文诊断结果。</p>
+                            <p>3. <span className="text-white font-bold">同步机制</span>：点击左侧按钮前，请确保您已在“物流追踪”页录入了 UPS、DHL 等有效单号。</p>
                         </div>
 
-                        <div className="mt-8 p-4 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl flex items-start gap-3">
-                            <CheckCircle2 className="w-4 h-4 text-indigo-500 shrink-0 mt-0.5" />
-                            <p className="text-[9px] text-indigo-200/70 font-bold leading-relaxed uppercase">
-                                <b>提示：</b> 只要您的“物流追踪”模块中有正在运输中的单据（特别是 UPS），点击左侧按钮即可触发 AI 联网核账。
+                        <div className="mt-8 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                            <p className="text-[9px] text-emerald-200/70 font-bold leading-relaxed uppercase">
+                                <b>注意：</b> 飞书机器人安全设置中必须包含关键词“探行”，否则报文将被拦截。
                             </p>
                         </div>
                     </div>
