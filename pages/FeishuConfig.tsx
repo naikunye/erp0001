@@ -1,26 +1,35 @@
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import { 
     MessageCircle, Zap, Radio, RefreshCw, Save, Bot, 
     ExternalLink, ShieldCheck, Activity, Bell, Info,
     ChevronRight, Settings2, Users, HelpCircle, AlertCircle,
     Smartphone, Link, Globe, ShieldQuestion, CheckCircle2,
-    // Fix: Added missing Sparkles icon import
-    Sparkles
+    Sparkles, Truck, Loader2
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { sendMessageToBot } from '../utils/feishu';
 
 const FeishuConfig: React.FC = () => {
-    const { state, showToast, syncToCloud } = useTanxing();
+    const { state, showToast, syncToCloud, performLogisticsSentry } = useTanxing();
     const [platform, setPlatform] = useState<'feishu' | 'dingtalk'>('feishu');
     
+    // 实时状态
     const [feishuUrl, setFeishuUrl] = useState(localStorage.getItem('TX_FEISHU_URL') || '');
     const [autoNotify, setAutoNotify] = useState(localStorage.getItem('TX_FEISHU_AUTO') === 'true');
     const [isTesting, setIsTesting] = useState(false);
+    const [isManualChecking, setIsManualChecking] = useState(false);
     const [lastSync, setLastSync] = useState(localStorage.getItem('TX_FEISHU_LAST') || '从未同步');
 
+    // 监听 URL 变化，同步到本地存储，防止点击对账时读取不到
+    useEffect(() => {
+        if (feishuUrl.startsWith('http')) {
+            localStorage.setItem('TX_FEISHU_URL', feishuUrl);
+        }
+    }, [feishuUrl]);
+
     const handleSave = async () => {
-        if (!feishuUrl.startsWith('http')) {
+        if (!feishuUrl || !feishuUrl.startsWith('http')) {
             showToast('无效的 Webhook 地址格式', 'error');
             return;
         }
@@ -32,16 +41,42 @@ const FeishuConfig: React.FC = () => {
         const now = new Date().toLocaleString();
         setLastSync(now);
         localStorage.setItem('TX_FEISHU_LAST', now);
-        showToast('通讯矩阵协议已更新', 'success');
+        showToast('通讯矩阵协议已部署并生效', 'success');
     };
 
     const testBot = async () => {
-        if (!feishuUrl) return showToast('请先录入 Webhook 地址', 'warning');
+        const targetUrl = feishuUrl || localStorage.getItem('TX_FEISHU_URL');
+        if (!targetUrl) return showToast('请先录入 Webhook 地址', 'warning');
+        
         setIsTesting(true);
-        const res = await sendMessageToBot(feishuUrl, '系统心跳对账', '通讯链路已打通。\nERP 中枢状态：全功能就绪。');
+        const res = await sendMessageToBot(targetUrl, '链路压力测试', '探行 ERP 通讯节点响应正常。\n当前状态：量子中枢已接入。');
         setIsTesting(false);
-        if (res.success) showToast('心跳报文发送成功！请查看群聊', 'success');
-        else showToast('发送失败。请检查是否在飞书后台设置了关键词“探行”', 'error');
+        
+        if (res.success) showToast('心跳报文发送成功！', 'success');
+        else showToast('发送失败。请检查 URL 是否正确，或飞书机器人安全设置是否包含关键词“探行”', 'error');
+    };
+
+    const handleManualCheck = async () => {
+        const targetUrl = feishuUrl || localStorage.getItem('TX_FEISHU_URL');
+        if (!targetUrl) {
+            showToast('未检测到 Webhook 配置，请先录入 URL', 'warning');
+            return;
+        }
+
+        setIsManualChecking(true);
+        try {
+            // 确保同步最新的配置到上下文
+            localStorage.setItem('TX_FEISHU_URL', targetUrl);
+            localStorage.setItem('TX_FEISHU_AUTO', autoNotify.toString());
+            
+            // 执行对账推送
+            await performLogisticsSentry();
+            showToast('手动触发成功：正在扫描 UPS 轨迹并推送...', 'success');
+        } catch (e) {
+            showToast('对账任务启动失败', 'error');
+        } finally {
+            setIsManualChecking(false);
+        }
     };
 
     return (
@@ -62,7 +97,6 @@ const FeishuConfig: React.FC = () => {
                 {/* 左侧：配置面板 */}
                 <div className="lg:col-span-7 space-y-8">
                     <div className="ios-glass-panel p-8 rounded-[3rem] border-white/10 bg-black/40 space-y-8 shadow-2xl relative overflow-hidden">
-                        {/* 装饰性背景 */}
                         <div className="absolute top-0 right-0 -mr-10 -mt-10 w-40 h-40 bg-indigo-500/10 blur-3xl rounded-full"></div>
                         
                         <div className="flex gap-2 p-1 bg-black/40 rounded-2xl border border-white/5 w-fit relative z-10">
@@ -85,29 +119,39 @@ const FeishuConfig: React.FC = () => {
                                 </div>
                             </div>
 
-                            <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-3xl p-6 flex items-start gap-4">
-                                <ShieldCheck className="w-6 h-6 text-indigo-400 shrink-0 mt-1" />
-                                <div>
-                                    <div className="text-sm font-bold text-white uppercase italic">必做：安全设置校验</div>
-                                    <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
-                                        在{platform === 'feishu' ? '飞书' : '钉钉'}机器人后台，请务必启用 <span className="text-indigo-400 font-black">“自定义关键词”</span>，并添加关键词：<span className="text-white bg-indigo-600 px-2 py-0.5 rounded font-mono">探行</span>。否则消息会被平台拦截。
-                                    </p>
-                                </div>
-                            </div>
-
                             <div className="flex items-center justify-between p-6 bg-white/2 border border-white/5 rounded-[2rem] hover:bg-white/5 transition-all">
                                 <div className="flex gap-4 items-center">
                                     <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400"><Bell className="w-5 h-5 animate-pulse"/></div>
                                     <div>
-                                        <div className="text-sm font-bold text-white uppercase italic">异常实时推算</div>
-                                        <p className="text-[9px] text-slate-500 font-bold uppercase">自动同步全球物流轨迹异常至移动端</p>
+                                        <div className="text-sm font-bold text-white uppercase italic">UPS 物流哨兵计划 (Sentry)</div>
+                                        <p className="text-[9px] text-slate-500 font-bold uppercase">自动同步 UPS 全球轨迹异常至移动端 (每3小时)</p>
                                     </div>
                                 </div>
                                 <button 
                                     onClick={() => setAutoNotify(!autoNotify)}
-                                    className={`w-14 h-8 rounded-full relative transition-all ${autoNotify ? 'bg-indigo-600 shadow-[0_0_10px_rgba(99,102,241,0.4)]' : 'bg-slate-800'}`}
+                                    className={`w-14 h-8 rounded-full relative transition-all ${autoNotify ? 'bg-indigo-600 shadow-[0_0:10px_rgba(99,102,241,0.4)]' : 'bg-slate-800'}`}
                                 >
                                     <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${autoNotify ? 'left-7' : 'left-1'}`}></div>
+                                </button>
+                            </div>
+
+                            <div className="bg-indigo-500/5 border border-indigo-500/20 rounded-3xl p-6 flex flex-col gap-4">
+                                <div className="flex items-start gap-4">
+                                    <Truck className="w-6 h-6 text-indigo-400 shrink-0 mt-1" />
+                                    <div>
+                                        <div className="text-sm font-bold text-white uppercase italic">哨兵状态监控</div>
+                                        <p className="text-[11px] text-slate-400 mt-1 leading-relaxed">
+                                            监控目标：<span className="text-indigo-400 font-black">UPS 全球件</span> | 上次巡检：<span className="text-white">{state.lastLogisticsCheck ? new Date(state.lastLogisticsCheck).toLocaleString() : '等待首次运行'}</span>
+                                        </p>
+                                    </div>
+                                </div>
+                                <button 
+                                    onClick={handleManualCheck}
+                                    disabled={isManualChecking}
+                                    className="w-full py-3 bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 rounded-xl text-[10px] font-black text-indigo-300 uppercase flex items-center justify-center gap-2 transition-all"
+                                >
+                                    {isManualChecking ? <Loader2 className="w-3 h-3 animate-spin"/> : <RefreshCw className="w-3 h-3"/>}
+                                    立即触发全球轨迹对账
                                 </button>
                             </div>
                         </div>
@@ -129,48 +173,25 @@ const FeishuConfig: React.FC = () => {
                             </button>
                         </div>
                     </div>
-
-                    <div className="ios-glass-card p-6 border-l-4 border-l-emerald-500 flex justify-between items-center">
-                        <div className="flex items-center gap-4">
-                            <CheckCircle2 className="w-6 h-6 text-emerald-500" />
-                            <div>
-                                <div className="text-xs font-black text-white uppercase tracking-widest">物理链路状态：已就绪</div>
-                                <p className="text-[10px] text-slate-500 font-bold uppercase">Ready to broadcast logistics events</p>
-                            </div>
-                        </div>
-                        <span className="text-[10px] text-slate-600 font-mono italic">v12.0 Stable</span>
-                    </div>
                 </div>
 
                 {/* 右侧：操作引导 */}
                 <div className="lg:col-span-5 space-y-6">
                     <div className="ios-glass-panel p-8 rounded-[2.5rem] bg-indigo-600/5 border border-indigo-500/20">
                         <h3 className="text-sm font-black text-white uppercase tracking-[0.2em] mb-6 flex items-center gap-3">
-                            <HelpCircle className="w-5 h-5 text-indigo-400" /> 成功配置的最后 2 步
+                            <Sparkles className="w-5 h-5 text-indigo-400" /> 物流哨兵如何工作？
                         </h3>
                         
-                        <div className="space-y-6 relative pl-4">
-                            <div className="absolute left-1.5 top-2 bottom-2 w-px bg-white/5"></div>
-                            {[
-                                { step: '1', title: '复制 URL 地址', desc: '点击飞书机器人界面的“复制”按钮，拿到 Webhook 地址。', icon: Link },
-                                { step: '2', title: '设置安全关键词', desc: '在“安全设置”中勾选“自定义关键词”，输入“探行”。', icon: ShieldCheck },
-                                { step: '3', title: '粘贴并部署', desc: '将地址粘贴到左侧，点击“部署并激活”按钮。', icon: ExternalLink },
-                                { step: '4', title: '心跳测试', desc: '点击“发送测试心跳”，如果飞书群里弹出消息，说明大功告成！', icon: Zap }
-                            ].map((item, idx) => (
-                                <div key={idx} className="relative pl-8">
-                                    <div className="absolute left-[-11px] top-1 w-5 h-5 rounded-full bg-black border border-indigo-500/50 flex items-center justify-center text-[10px] font-black text-indigo-400 z-10">{item.step}</div>
-                                    <div className="flex items-start gap-4">
-                                        <div className="p-2 bg-white/5 rounded-lg text-indigo-300 mt-1"><item.icon className="w-4 h-4" /></div>
-                                        <div><div className="text-xs font-bold text-slate-200 mb-1">{item.title}</div><p className="text-[10px] text-slate-500 leading-relaxed font-medium">{item.desc}</p></div>
-                                    </div>
-                                </div>
-                            ))}
+                        <div className="space-y-6 text-[11px] text-slate-400 leading-relaxed font-medium">
+                            <p>1. <span className="text-white font-bold">自动识别</span>：系统每 3 小时扫描一次您的“物流追踪”矩阵。凡是 UPS 承运且未妥投的单据，都会进入哨兵池。</p>
+                            <p>2. <span className="text-white font-bold">AI 翻译与压缩</span>：Gemini 3 会自动将复杂的物流更新（如：Arrival Scan, Departure Scan）翻译成易懂的中文动态。</p>
+                            <p>3. <span className="text-white font-bold">静默推送</span>：当识别到轨迹发生物理位移或出现“异常”状态时，飞书群将收到即时预警。</p>
                         </div>
-                        
+
                         <div className="mt-8 p-4 bg-emerald-500/10 border border-emerald-500/20 rounded-2xl flex items-start gap-3">
-                            <Sparkles className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                            <p className="text-[9px] text-emerald-200/70 font-bold leading-relaxed">
-                                完成后，ERP 系统将自动在后台通过“逻辑神经中枢”监控您的全球物流状态。一旦轨迹发生变化，机器人会立即在手机上通知您。
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
+                            <p className="text-[9px] text-emerald-200/70 font-bold leading-relaxed uppercase">
+                                <b>注意：</b> 由于是浏览器端 AI 逻辑，请在电脑上保持 ERP 标签页开启以维持自动推送。若需 24/7 离线推送，需配合后端 Node 脚本。
                             </p>
                         </div>
                     </div>

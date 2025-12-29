@@ -9,6 +9,8 @@ import {
     MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, 
     MOCK_SHIPMENTS, MOCK_ORDERS
 } from '../constants';
+import { GoogleGenAI } from "@google/genai";
+import { sendMessageToBot } from '../utils/feishu';
 
 const DB_NAME = 'TANXING_V6_CORE';
 const STORE_NAME = 'GLOBAL_STATE';
@@ -83,6 +85,7 @@ interface AppState {
     remoteVersion: number;
     lastSyncTime?: number;
     cloudRecordId?: string;
+    lastLogisticsCheck?: number;
 }
 
 const initialState: AppState = {
@@ -232,12 +235,48 @@ const TanxingContext = createContext<{
     pullFromCloud: (manual?: boolean) => Promise<void>;
     connectToPb: (url: string) => Promise<boolean>;
     showToast: (m: string, t: Toast['type']) => void;
+    performLogisticsSentry: (manual?: boolean) => Promise<void>;
 } | undefined>(undefined);
 
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, initialState);
     const pbRef = useRef<PocketBase | null>(null);
     const syncTimerRef = useRef<any>(null);
+    const sentryTimerRef = useRef<any>(null);
+
+    // --- 核心：物流哨兵逻辑 ---
+    const performLogisticsSentry = async (manual: boolean = false) => {
+        const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
+        const autoEnabled = localStorage.getItem('TX_FEISHU_AUTO') === 'true';
+        
+        // 如果不是手动触发且没有开启自动通知，则退出
+        if (!webhookUrl || (!autoEnabled && !manual)) return;
+
+        const upsShipments = (state.shipments || []).filter(s => {
+            const isUps = (s.carrier?.toUpperCase() === 'UPS') || s.trackingNo?.toUpperCase().startsWith('1Z');
+            return isUps && (s.status === '运输中' || s.status === '异常' || s.status === '待同步');
+        });
+
+        if (upsShipments.length === 0) {
+            if (manual) showToast('未发现处于运输中的 UPS 单据', 'info');
+            return;
+        }
+
+        try {
+            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            const context = upsShipments.map(s => `单号:${s.trackingNo}, 货品:${s.productName}, 状态:${s.status}`).join('\n');
+            const prompt = `分析 UPS 运单流转，生成精简飞书播报。要求中文，指出延迟风险。运单：\n${context}`;
+            const response = await ai.models.generateContent({ model: 'gemini-3-flash-preview', contents: prompt });
+
+            if (response.text) {
+                await sendMessageToBot(webhookUrl, 'UPS 轨迹巡检', response.text);
+                dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
+            }
+        } catch (e) {
+            console.error("Logistics Sentry Error:", e);
+            if (manual) showToast('AI 物流核账任务中断，请检查 API KEY', 'error');
+        }
+    };
 
     useEffect(() => {
         const startup = async () => {
@@ -259,15 +298,19 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (lastUrl) setTimeout(() => connectToPb(lastUrl), 800);
         };
         startup();
-        return () => { if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*'); };
+
+        sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); // 3小时
+
+        return () => { 
+            if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*'); 
+            clearInterval(sentryTimerRef.current);
+        };
     }, []);
 
     useEffect(() => {
         if (state.saveStatus === 'dirty' && state.connectionStatus === 'connected') {
             clearTimeout(syncTimerRef.current);
-            syncTimerRef.current = setTimeout(() => {
-                syncToCloud(false);
-            }, 2000);
+            syncTimerRef.current = setTimeout(() => { syncToCloud(false); }, 2000);
         }
     }, [state.products, state.transactions, state.customers, state.orders, state.shipments, state.saveStatus]);
 
@@ -289,9 +332,9 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                         if (remote.lastUpdatedBy !== SESSION_ID) {
                             dispatch({ type: 'BOOT', payload: { ...remote, saveStatus: 'idle', lastSyncTime: Date.now(), cloudRecordId: e.record.id } });
                         }
-                    } catch (err) { console.warn("Live sync payload parsing error"); }
+                    } catch (err) { console.warn("Live sync error"); }
                 }
-            });
+            }, { requestKey: null }); // 禁用订阅冲突
             
             await pullFromCloud(false);
             return true;
@@ -303,7 +346,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const syncToCloud = async (force: boolean = false) => {
         if (!pbRef.current || state.connectionStatus !== 'connected') {
-            if (force) showToast('同步失败：未连接云端', 'error');
+            if (force) showToast('同步失败：量子链路未连接', 'error');
             return;
         }
         try {
@@ -321,34 +364,35 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
             let record = null;
             try {
-                record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"');
+                // 使用 requestKey: null 禁用自动取消保护，确保强制同步生效
+                record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
             } catch (err: any) {}
             
             let finalId = "";
             if (record) {
-                const updated = await pbRef.current.collection('backups').update(record.id, { payload });
+                const updated = await pbRef.current.collection('backups').update(record.id, { payload }, { requestKey: null });
                 finalId = updated.id;
             } else {
-                const created = await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload });
+                const created = await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload }, { requestKey: null });
                 finalId = created.id;
             }
             
             dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'idle', remoteVersion: newVersion, lastSyncTime: Date.now(), cloudRecordId: finalId } as any });
-            if (force) showToast('资产快照已同步至云端', 'success');
+            if (force) showToast('全域资产协议已激活并同步至云端', 'success');
         } catch (e: any) {
             console.error("Cloud push error:", e);
-            if (force) showToast(`同步失败: ${e.message}`, 'error');
+            if (force) showToast(`资产对齐失败: ${e.message}`, 'error');
         }
     };
 
     const pullFromCloud = async (manual: boolean = false) => {
         if (!pbRef.current) return;
         try {
-            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"');
+            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
             if (record?.payload) {
                 const data = JSON.parse(record.payload);
                 dispatch({ type: 'BOOT', payload: { ...data, saveStatus: 'idle', lastSyncTime: Date.now(), cloudRecordId: record.id } });
-                if (manual) showToast('云端数据已成功对齐', 'success');
+                if (manual) showToast('云端协议已成功加载', 'success');
             }
         } catch (e: any) {
             if (manual) showToast(`拉取失败: ${e.message}`, 'error');
@@ -358,7 +402,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
 
     return (
-        <TanxingContext.Provider value={{ state, dispatch, syncToCloud, pullFromCloud, connectToPb, showToast }}>
+        <TanxingContext.Provider value={{ state, dispatch, syncToCloud, pullFromCloud, connectToPb, showToast, performLogisticsSentry }}>
             {children}
         </TanxingContext.Provider>
     );
