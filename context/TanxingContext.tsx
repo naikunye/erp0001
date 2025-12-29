@@ -95,7 +95,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
-            const model = ai.models.get('gemini-3-flash-preview');
 
             // 构建核心经营上下文
             const lowStock = state.products.filter((p: any) => p.stock < 15).map((p: any) => `${p.sku}(剩${p.stock})`);
@@ -114,13 +113,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 - 不超过 100 字。不要使用联网搜索。
             `;
 
-            const response = await model.generateContent({ contents: [{ role: 'user', parts: [{ text: prompt }] }] });
+            // 修正：直接使用 ai.models.generateContent 并在内部指定 model 名
+            const response = await ai.models.generateContent({
+                model: 'gemini-3-flash-preview',
+                contents: prompt
+            });
+
             const report = response.text;
 
             if (report) {
                 const res = await sendMessageToBot(webhookUrl, '探行经营·中枢快报', report);
                 if (res.success) {
-                    dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } });
+                    dispatch({ type: 'UPDATE_DATA', payload: { lastOperationalAudit: Date.now() } });
                     if (manual) showToast('AI 指挥官报文已同步至飞书', 'success');
                 } else if (manual) {
                     showToast('飞书节点连接失败，请检查关键字设置', 'error');
