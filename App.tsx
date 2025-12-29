@@ -18,6 +18,7 @@ import AICommandCenter from './pages/AICommandCenter';
 import InboundShipments from './pages/InboundShipments';
 import Automation from './pages/Automation';
 import VirtualWarehouse from './pages/VirtualWarehouse';
+import FeishuConfig from './pages/FeishuConfig';
 import ToastContainer from './components/Toast';
 import GlobalSearch from './components/GlobalSearch';
 import Suppliers from './pages/Suppliers'; 
@@ -85,6 +86,7 @@ const MainLayout: React.FC = () => {
       case 'logistics-hub': return '物流中枢 (Logistics Matrix)';
       case 'automation': return '逻辑神经中枢 (Logic Hooks)';
       case 'virtual-warehouse': return '虚拟仓库数字孪生 (Digital Twin)';
+      case 'feishu': return '飞书通讯矩阵 (Messaging Matrix)';
       default: return '探行 OS (Quantum Edition)';
     }
   };
@@ -109,6 +111,7 @@ const MainLayout: React.FC = () => {
       case 'logistics-hub': return <InboundShipments />;
       case 'automation': return <Automation />;
       case 'virtual-warehouse': return <VirtualWarehouse />;
+      case 'feishu': return <FeishuConfig />;
       default: return <div className="p-12 text-center text-slate-500 font-mono">模块建设中...</div>;
     }
   };

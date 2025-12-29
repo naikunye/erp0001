@@ -3,7 +3,8 @@ import React, { useState } from 'react';
 import { 
     Zap, Radio, ShieldCheck, Play, Pause, Trash2, Clock, 
     ChevronRight, Terminal, Network, Activity, Settings2, 
-    MessageSquare, AlertTriangle, Layers, BrainCircuit, X, Plus, Save, Info, Sparkles, Loader2, Cpu
+    MessageSquare, AlertTriangle, Layers, BrainCircuit, X, Plus, Save, Info, Sparkles, Loader2, Cpu,
+    ExternalLink, MessageCircle
 } from 'lucide-react';
 import { useTanxing } from '../context/TanxingContext';
 import { AutomationRule, Task } from '../types';
@@ -45,7 +46,6 @@ const Automation: React.FC = () => {
         try {
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             
-            // 准备上下文数据
             let context = "";
             if (rule.trigger === 'logistics_exception') {
                 const exceptions = state.shipments.filter(s => s.status === '异常');
@@ -155,6 +155,22 @@ const Automation: React.FC = () => {
                 </div>
             </div>
 
+            {/* 快捷跳转提示 */}
+            {!localStorage.getItem('TX_FEISHU_URL') && (
+                <div className="p-4 bg-amber-950/20 border border-amber-500/30 rounded-2xl flex items-center justify-between animate-pulse">
+                    <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                        <p className="text-xs text-amber-200 font-bold uppercase italic">检测到通讯协议未就绪：飞书 Webhook 尚未配置</p>
+                    </div>
+                    <button 
+                        onClick={() => dispatch({ type: 'NAVIGATE', payload: { page: 'settings' } })}
+                        className="px-4 py-1.5 bg-amber-600 text-white rounded-lg text-[10px] font-black uppercase flex items-center gap-2"
+                    >
+                        前往“系统设置-通讯矩阵”配置 <ExternalLink className="w-3 h-3"/>
+                    </button>
+                </div>
+            )}
+
             <div className="flex-1 grid grid-cols-12 gap-6 min-h-0">
                 {activeTab === 'rules' ? (
                     <>
@@ -213,17 +229,17 @@ const Automation: React.FC = () => {
                                 </h3>
                                 <div className="space-y-8">
                                     <div className="flex gap-4">
+                                        <div className="p-3 bg-emerald-500/10 rounded-xl text-emerald-400 h-fit"><MessageCircle className="w-5 h-5"/></div>
+                                        <div>
+                                            <div className="text-sm font-bold text-white mb-1">飞书实时透传</div>
+                                            <p className="text-[10px] text-slate-500 leading-relaxed font-bold">配合服务器端每 3 小时的轮询，系统会将最新的物流变动直接推送至您的飞书 App，无需打开电脑。</p>
+                                        </div>
+                                    </div>
+                                    <div className="flex gap-4">
                                         <div className="p-3 bg-indigo-600/10 rounded-xl text-indigo-400 h-fit"><Sparkles className="w-5 h-5"/></div>
                                         <div>
                                             <div className="text-sm font-bold text-white mb-1">AI 深度诊断任务</div>
                                             <p className="text-[10px] text-slate-500 leading-relaxed font-bold">不仅仅是提醒，AI 会根据异常现场（如丢包、报关失败）自动推演最优对策，并分派给具体负责人。</p>
-                                        </div>
-                                    </div>
-                                    <div className="flex gap-4">
-                                        <div className="p-3 bg-white/5 rounded-xl text-slate-400 h-fit"><Layers className="w-5 h-5"/></div>
-                                        <div>
-                                            <div className="text-sm font-bold text-white mb-1">分布式监听</div>
-                                            <p className="text-[10px] text-slate-500 leading-relaxed font-bold">系统实时轮询物理世界镜像（物流/库位），在事件发生的秒级时间内完成逻辑解构。</p>
                                         </div>
                                     </div>
                                 </div>

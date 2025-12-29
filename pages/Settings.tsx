@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from 'react';
 import { 
     Settings as SettingsIcon, Database, Cloud, 
@@ -7,10 +6,13 @@ import {
     Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle,
     Shield, Monitor, Globe, Settings2, Command, Search, Fingerprint, ChevronRight,
     Upload, Download, FileUp, FileDown, AlertOctagon, Power, CloudUpload, CloudDownload,
-    Wifi, WifiOff, Fingerprint as ScanIcon, Palette, Sparkles, Box, Check
+    Wifi, WifiOff, Fingerprint as ScanIcon, Palette, Sparkles, Box, Check, MessageCircle, Bot, Radio,
+    // Fix: Added missing Save icon import
+    Save
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 import { Theme } from '../types';
+import { sendFeishuMessage } from '../utils/feishu';
 
 const THEMES: { id: Theme; name: string; desc: string; colors: string[] }[] = [
     { id: 'quantum', name: '量子深邃 (Default)', desc: '经典靛蓝与紫罗兰的科技平衡', colors: ['#6366f1', '#312e81', '#1e1b4b'] },
@@ -22,12 +24,17 @@ const THEMES: { id: Theme; name: string; desc: string; colors: string[] }[] = [
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, connectToPb, syncToCloud, pullFromCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'cloud' | 'appearance' | 'data'>('cloud'); 
+  const [activeTab, setActiveTab] = useState<'cloud' | 'appearance' | 'comm' | 'data'>('cloud'); 
   const [pbInput, setPbInput] = useState(state.pbUrl || '');
   const [isTesting, setIsTesting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
   const [isPulling, setIsPulling] = useState(false);
+  const [isTestingFeishu, setIsTestingFeishu] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // 飞书配置本地状态
+  const [feishuUrl, setFeishuUrl] = useState(localStorage.getItem('TX_FEISHU_URL') || '');
+  const [autoNotify, setAutoNotify] = useState(localStorage.getItem('TX_FEISHU_AUTO') === 'true');
 
   const isHttps = window.location.protocol === 'https:';
 
@@ -49,56 +56,19 @@ const Settings: React.FC = () => {
       }
   };
 
-  const handleManualPush = async () => {
-      if(confirm('推送将使用当前屏幕上的数据【覆盖】云端旧数据，另一台电脑也将同步被覆盖。是否确认？')) {
-          setIsPushing(true);
-          try {
-              await syncToCloud(true);
-          } finally {
-              setIsPushing(false);
-          }
-      }
+  const handleSaveFeishu = () => {
+      localStorage.setItem('TX_FEISHU_URL', feishuUrl);
+      localStorage.setItem('TX_FEISHU_AUTO', autoNotify.toString());
+      showToast('飞书通讯协议已更新', 'success');
   };
 
-  const handleManualPull = async () => {
-      setIsPulling(true);
-      try {
-          await pullFromCloud(true);
-      } finally {
-          setIsPulling(false);
-      }
-  };
-
-  const handleExportJson = () => {
-      const exportData = {
-          products: state.products, transactions: state.transactions,
-          customers: state.customers, orders: state.orders, shipments: state.shipments,
-          tasks: state.tasks, suppliers: state.suppliers, influencers: state.influencers,
-          automationRules: state.automationRules, exportDate: new Date().toISOString(), version: "Quantum_V6"
-      };
-      const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Tanxing_Backup_${new Date().toISOString().split('T')[0]}.json`;
-      link.click();
-      showToast('全量数据快照已导出', 'success');
-  };
-
-  const handleImportJson = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = (event) => {
-          try {
-              const json = JSON.parse(event.target?.result as string);
-              if (confirm('警告：导入将重置当前所有数据并自动同步至云端，是否继续？')) {
-                  dispatch({ type: 'BOOT', payload: { ...json, remoteVersion: Date.now() } });
-                  showToast('数据已注入，正在广播...', 'success');
-              }
-          } catch (err) { showToast('文件解析失败', 'error'); }
-      };
-      reader.readAsText(file);
+  const testFeishu = async () => {
+      if (!feishuUrl) return showToast('请先输入 Webhook URL', 'warning');
+      setIsTestingFeishu(true);
+      const res = await sendFeishuMessage(feishuUrl, '系统自检测试', '探行 ERP 量子中枢连接正常。当前时间：' + new Date().toLocaleString());
+      setIsTestingFeishu(false);
+      if (res.success) showToast('飞书同步测试成功', 'success');
+      else showToast('发送失败，请检查 URL', 'error');
   };
 
   const handleThemeChange = (id: Theme) => {
@@ -119,31 +89,21 @@ const Settings: React.FC = () => {
 
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
           <button onClick={() => setActiveTab('cloud')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'cloud' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-              <Cloud className="w-4 h-4" /> 实时协同云 (Live Sync)
+              <Cloud className="w-4 h-4" /> 实时协同云
+          </button>
+          <button onClick={() => setActiveTab('comm')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'comm' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+              <MessageCircle className="w-4 h-4" /> 通讯矩阵 (飞书)
           </button>
           <button onClick={() => setActiveTab('appearance')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'appearance' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-              <Palette className="w-4 h-4" /> 视觉外观 (Appearance)
+              <Palette className="w-4 h-4" /> 视觉外观
           </button>
           <button onClick={() => setActiveTab('data')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'data' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
-              <Database className="w-4 h-4" /> 物理资产管理
+              <Database className="w-4 h-4" /> 数据资产
           </button>
       </div>
 
       {activeTab === 'cloud' && (
           <div className="space-y-8">
-              {/* 核心诊断：HTTPS 混合内容警告 */}
-              {isHttps && pbInput.startsWith('http:') && (
-                  <div className="bg-amber-500/10 border border-amber-500/30 rounded-3xl p-6 flex items-start gap-4">
-                      <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
-                      <div className="text-xs space-y-2">
-                          <p className="text-amber-200 font-bold uppercase tracking-widest">警告：检测到不安全的连接请求 (Mixed Content)</p>
-                          <p className="text-slate-400">
-                            由于本程序运行在 HTTPS，而您的节点是 HTTP。如果无法同步，请点击地址栏左侧的“锁头”图标 &rarr; 【网站设置】 &rarr; 在底部找到【不安全内容】 &rarr; 选择【允许】。然后刷新页面。
-                          </p>
-                      </div>
-                  </div>
-              )}
-
               <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/10 space-y-10 bg-[#0a0a0c] shadow-xl relative overflow-hidden">
                   <div className="space-y-4">
                       <div className="flex justify-between items-center px-2">
@@ -166,71 +126,79 @@ const Settings: React.FC = () => {
                             className="w-full bg-black/60 border border-white/10 rounded-[1.5rem] p-6 pl-16 text-sm text-white font-mono outline-none transition-all focus:border-indigo-500" 
                             placeholder="http://IP:8090" 
                         />
-                        {isTesting && (
-                            <div className="absolute right-6 top-1/2 -translate-y-1/2 flex items-center gap-3">
-                                <RefreshCw className="w-5 h-5 text-indigo-500 animate-spin" />
-                            </div>
-                        )}
                       </div>
-                      <button 
-                        onClick={handleConnect}
-                        disabled={isTesting}
-                        className="w-full py-5 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 transition-all active:scale-[0.98]"
-                      >
+                      <button onClick={handleConnect} disabled={isTesting} className="w-full py-5 bg-white/5 hover:bg-white/10 text-white rounded-2xl font-black text-xs uppercase tracking-widest border border-white/10 transition-all">
                           {isTesting ? '正在握手...' : '激活节点连接'}
                       </button>
                   </div>
-                  
-                  {state.connectionStatus === 'connected' && (
-                      <div className="space-y-6 animate-in fade-in zoom-in-95">
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                              <div className="p-8 bg-indigo-500/5 border border-indigo-500/20 rounded-[2rem] space-y-4">
-                                  <div className="flex items-center gap-3">
-                                      <CloudUpload className="w-5 h-5 text-indigo-400" />
-                                      <h4 className="text-white font-bold uppercase text-sm">推送主控节点 (Broadcaster)</h4>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 leading-relaxed">
-                                      将本地数据作为“真相源”广播到云端。这会覆盖所有在线电脑的数据。通常用于初始化系统或完成大规模离线编辑后同步。
-                                  </p>
-                                  <button 
-                                    onClick={handleManualPush}
-                                    disabled={isPushing}
-                                    className="w-full py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 active:scale-95 disabled:opacity-50"
-                                  >
-                                      {isPushing ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                                      执行广播推送 (Push)
-                                  </button>
-                              </div>
+              </div>
+          </div>
+      )}
 
-                              <div className="p-8 bg-emerald-500/5 border border-emerald-500/20 rounded-[2rem] space-y-4">
-                                  <div className="flex items-center gap-3">
-                                      <CloudDownload className="w-5 h-5 text-emerald-400" />
-                                      <h4 className="text-white font-bold uppercase text-sm">强制云端对齐 (Subscriber)</h4>
-                                  </div>
-                                  <p className="text-[10px] text-slate-500 leading-relaxed">
-                                      如果您的电脑没有自动同步，请点击此按钮手动从云端抓取最新资产快照。这会清除您本地未同步的临时修改。
-                                  </p>
-                                  <button 
-                                    onClick={handleManualPull}
-                                    disabled={isPulling}
-                                    className="w-full py-4 bg-emerald-600/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest transition-all active:scale-95 disabled:opacity-50 flex items-center justify-center gap-3"
-                                  >
-                                      {isPulling ? <RefreshCw className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                                      从云端抓取 (Pull)
-                                  </button>
-                              </div>
+      {activeTab === 'comm' && (
+          <div className="space-y-6 animate-in fade-in zoom-in-95">
+              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/5 bg-black/40 space-y-8">
+                  <div>
+                      <h3 className="text-xl font-bold text-white flex items-center gap-3 uppercase italic">
+                          <Bot className="w-6 h-6 text-indigo-500" /> 飞书机器人·指挥协议
+                      </h3>
+                      <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">External Communication Node Layer</p>
+                  </div>
+
+                  <div className="space-y-6">
+                      <div className="space-y-2">
+                          <label className="text-[10px] text-slate-500 font-black uppercase tracking-widest ml-1">飞书自定义机器人 Webhook URL</label>
+                          <div className="relative">
+                            <MessageCircle className="absolute left-4 top-4 w-5 h-5 text-indigo-500" />
+                            <input 
+                                type="text" 
+                                value={feishuUrl}
+                                onChange={e => setFeishuUrl(e.target.value)}
+                                className="w-full bg-black/60 border border-white/10 rounded-2xl p-4 pl-12 text-sm text-white font-mono outline-none focus:border-indigo-500"
+                                placeholder="https://open.feishu.cn/open-apis/bot/v2/hook/..."
+                            />
                           </div>
                       </div>
-                  )}
 
-                  <div className="pt-4 border-t border-white/5 grid grid-cols-2 gap-8">
-                      <div className="flex items-center gap-3 text-emerald-500">
-                          <ShieldCheck className="w-5 h-5" />
-                          <span className="text-[10px] font-bold uppercase tracking-widest">End-to-End Encryption</span>
+                      <div className="flex items-center justify-between p-6 bg-white/2 border border-white/5 rounded-[2rem]">
+                          <div className="flex gap-4 items-start">
+                              <div className="p-3 bg-indigo-500/10 rounded-xl text-indigo-400"><Radio className="w-5 h-5 animate-pulse"/></div>
+                              <div>
+                                  <div className="text-sm font-bold text-white uppercase tracking-tight">自动物流同步报告 (3H周期)</div>
+                                  <p className="text-[10px] text-slate-500 mt-1">系统将每 3 小时通过服务器后台分析“运输中”单据，并自动推送轨迹变化到飞书。</p>
+                              </div>
+                          </div>
+                          <button 
+                            onClick={() => setAutoNotify(!autoNotify)}
+                            className={`w-14 h-8 rounded-full relative transition-all ${autoNotify ? 'bg-indigo-600' : 'bg-slate-800'}`}
+                          >
+                              <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${autoNotify ? 'left-7' : 'left-1'}`}></div>
+                          </button>
                       </div>
-                      <div className="flex items-center gap-3 justify-end text-right">
-                          <Activity className="w-5 h-5 text-indigo-500" />
-                          <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">LATENCY: ~20MS</span>
+
+                      <div className="grid grid-cols-2 gap-4">
+                          <button 
+                            onClick={testFeishu}
+                            disabled={isTestingFeishu}
+                            className="py-4 bg-white/5 border border-white/10 hover:bg-white/10 text-white rounded-xl font-bold text-xs uppercase tracking-widest flex items-center justify-center gap-2"
+                          >
+                              {isTestingFeishu ? <RefreshCw className="w-4 h-4 animate-spin"/> : <Zap className="w-4 h-4"/>}
+                              发送自检报文
+                          </button>
+                          <button 
+                            onClick={handleSaveFeishu}
+                            className="py-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-bold text-xs uppercase tracking-widest shadow-xl flex items-center justify-center gap-2"
+                          >
+                              <Save className="w-4 h-4"/> 部署通讯协议
+                          </button>
+                      </div>
+                  </div>
+
+                  <div className="p-6 bg-indigo-900/10 border border-indigo-500/20 rounded-[2rem] flex items-center gap-6">
+                      <Sparkles className="w-8 h-8 text-indigo-400" />
+                      <div>
+                          <div className="text-indigo-300 font-bold text-sm uppercase italic">腾讯云效能提示</div>
+                          <p className="text-[10px] text-slate-500 font-medium">配置完成后，系统将自动利用您的腾讯云实例执行定时查询。这不会消耗浏览器的资源，确保 24/7 监控您的全球货物流向。</p>
                       </div>
                   </div>
               </div>
@@ -238,82 +206,16 @@ const Settings: React.FC = () => {
       )}
 
       {activeTab === 'appearance' && (
-          <div className="space-y-6 animate-in fade-in zoom-in-95">
-              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/5 bg-black/40 space-y-10">
-                  <div>
-                      <h3 className="text-xl font-bold text-white flex items-center gap-3 uppercase italic">
-                          <Palette className="w-6 h-6 text-indigo-500" /> 视觉元空间配置
-                      </h3>
-                      <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Quantum UI Customization v1.0</p>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {THEMES.map(t => (
-                          <button 
-                            key={t.id} 
-                            onClick={() => handleThemeChange(t.id)}
-                            className={`p-6 rounded-[2rem] border-2 transition-all flex flex-col gap-4 text-left group relative overflow-hidden ${state.theme === t.id ? 'bg-indigo-600/10 border-indigo-500 shadow-xl' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
-                          >
-                              {state.theme === t.id && <div className="absolute top-4 right-4 bg-indigo-600 p-1.5 rounded-full text-white shadow-lg z-10 animate-in zoom-in"><Check className="w-4 h-4" /></div>}
-                              
-                              <div className="flex items-center gap-4 relative z-10">
-                                  <div className="flex -space-x-2">
-                                      {t.colors.map((c, i) => (
-                                          <div key={i} className="w-8 h-8 rounded-full border-2 border-black" style={{ backgroundColor: c }}></div>
-                                      ))}
-                                  </div>
-                                  <div>
-                                      <div className="text-sm font-bold text-white uppercase italic">{t.name}</div>
-                                      <div className="text-[10px] text-slate-500 font-bold">{t.desc}</div>
-                                  </div>
-                              </div>
-                              <div className={`mt-2 h-1 w-full rounded-full bg-gradient-to-r ${t.id === state.theme ? 'opacity-100' : 'opacity-20 group-hover:opacity-100 transition-opacity'}`} style={{ backgroundImage: `linear-gradient(to right, ${t.colors.join(', ')})` }}></div>
-                          </button>
-                      ))}
-                  </div>
-
-                  <div className="p-6 bg-indigo-900/10 border border-indigo-500/20 rounded-[2rem] flex items-center gap-6">
-                      <Sparkles className="w-8 h-8 text-indigo-400" />
-                      <div>
-                          <div className="text-indigo-300 font-bold text-sm uppercase">动态光场背景</div>
-                          <p className="text-[10px] text-slate-500 font-medium">主题切换将重构环境光场（Ambient Blobs），确保长时间操作时的舒适度。所有颜色均经过量子色彩对齐校验。</p>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in zoom-in-95">
+              {THEMES.map(t => (
+                  <button key={t.id} onClick={() => handleThemeChange(t.id)} className={`p-6 rounded-[2rem] border-2 transition-all flex flex-col gap-4 text-left group relative overflow-hidden ${state.theme === t.id ? 'bg-indigo-600/10 border-indigo-500' : 'bg-white/2 border-white/5 hover:border-white/20'}`}>
+                      {state.theme === t.id && <div className="absolute top-4 right-4 bg-indigo-600 p-1.5 rounded-full text-white z-10"><Check className="w-4 h-4" /></div>}
+                      <div className="flex items-center gap-4 relative z-10">
+                          <div className="flex -space-x-2">{t.colors.map((c, i) => <div key={i} className="w-8 h-8 rounded-full border-2 border-black" style={{ backgroundColor: c }}></div>)}</div>
+                          <div><div className="text-sm font-bold text-white uppercase italic">{t.name}</div><div className="text-[10px] text-slate-500 font-bold">{t.desc}</div></div>
                       </div>
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {activeTab === 'data' && (
-          <div className="space-y-6">
-              <div className="ios-glass-card p-10 rounded-[3.5rem] border-white/5 space-y-10 bg-black/40">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="ios-glass-card p-8 rounded-[2rem] border-indigo-500/20 hover:bg-indigo-600/5 transition-all text-left">
-                        <FileUp className="w-10 h-10 text-indigo-500 mb-6" />
-                        <div className="text-white font-bold text-lg mb-2 uppercase tracking-tight">导入本地数据</div>
-                        <p className="text-[11px] text-slate-500 mb-6">上传导出的 JSON 协议包。此操作会重置本地并自动同步。</p>
-                        <input type="file" ref={fileInputRef} className="hidden" accept=".json" onChange={handleImportJson} />
-                        <button onClick={() => fileInputRef.current?.click()} className="w-full py-4 bg-indigo-600 text-white rounded-xl text-xs font-black uppercase tracking-widest">选择协议文件</button>
-                    </div>
-
-                    <div className="ios-glass-card p-8 rounded-[2rem] border-white/10 hover:bg-white/5 transition-all text-left">
-                        <FileDown className="w-10 h-10 text-emerald-500 mb-6" />
-                        <div className="text-white font-bold text-lg mb-2 uppercase tracking-tight">导出快照包</div>
-                        <p className="text-[11px] text-slate-500 mb-6">下载当前系统的全量数据包，可作为冷备份存档。</p>
-                        <button onClick={handleExportJson} className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl font-black text-xs uppercase tracking-widest">执行导出</button>
-                    </div>
-                  </div>
-                  
-                  <div className="p-8 bg-red-600/5 border border-red-500/20 rounded-[2rem] flex items-center justify-between">
-                      <div className="flex items-center gap-6">
-                        <AlertOctagon className="w-8 h-8 text-red-500" />
-                        <div>
-                            <div className="text-red-400 font-bold text-sm uppercase">紧急核心擦除</div>
-                            <p className="text-[10px] text-slate-500">这会永久抹除此浏览器的所有缓存，且不可撤销。</p>
-                        </div>
-                      </div>
-                      <button onClick={() => { if(confirm('确定抹除？')) { localStorage.clear(); window.location.reload(); } }} className="px-6 py-3 bg-red-600/10 text-red-500 border border-red-500/30 rounded-xl text-[10px] font-black uppercase">执行擦除</button>
-                  </div>
-              </div>
+                  </button>
+              ))}
           </div>
       )}
     </div>

@@ -37,6 +37,16 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     }).format(now);
   };
 
+  const formatDate = (tz: string) => {
+    return new Intl.DateTimeFormat('zh-CN', {
+        timeZone: tz,
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        weekday: 'long'
+    }).format(now);
+  };
+
   return (
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
       <div className="flex items-center gap-4">
@@ -59,14 +69,28 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       </div>
 
       <div className="flex items-center space-x-6">
+        {/* 全球多维时间矩阵 */}
         <div className="hidden xl:flex items-center gap-6 pr-8 border-r border-white/5 font-mono">
             <div className="flex flex-col items-end">
-                <span className="text-[9px] text-indigo-400 font-bold uppercase">Los Angeles</span>
+                <span className="text-[9px] text-slate-500 font-bold">美国日期</span>
+                <span className="text-xs text-white">{formatDate('America/New_York')}</span>
+            </div>
+            
+            <div className="w-px h-6 bg-white/10"></div>
+            
+            <div className="flex flex-col items-end">
+                <span className="text-[9px] text-indigo-400 font-bold">美西 (PST)</span>
                 <span className="text-xs text-white">{formatTime('America/Los_Angeles')}</span>
             </div>
+            
             <div className="flex flex-col items-end border-l border-white/10 pl-6">
-                <span className="text-[9px] text-emerald-400 font-bold uppercase">Beijing</span>
-                <span className="text-xs text-white">{formatTime('Asia/Shanghai')}</span>
+                <span className="text-[9px] text-amber-400 font-bold">美中 (CST)</span>
+                <span className="text-xs text-white">{formatTime('America/Chicago')}</span>
+            </div>
+            
+            <div className="flex flex-col items-end border-l border-white/10 pl-6">
+                <span className="text-[9px] text-rose-400 font-bold">美东 (EST)</span>
+                <span className="text-xs text-white">{formatTime('America/New_York')}</span>
             </div>
         </div>
 
@@ -87,7 +111,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     className={`p-2 rounded-lg transition-all ${state.saveStatus === 'dirty' ? 'text-indigo-400' : 'text-emerald-500'}`}
                     title={state.saveStatus === 'dirty' ? "检测到本地修改，正在准备自动同步..." : "所有设备数据已对齐"}
                 >
-                    {/* Fix: Line 90 - Use ShieldCheck from lucide-react */}
                     {state.saveStatus === 'dirty' ? <RefreshCw className="w-4.5 h-4.5 animate-spin" /> : <ShieldCheck className="w-4.5 h-4.5" />}
                 </div>
             </div>

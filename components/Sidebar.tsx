@@ -2,7 +2,8 @@ import React from 'react';
 import { 
     LayoutDashboard, ShoppingCart, Users, Settings, LogOut, Hexagon, 
     BrainCircuit, Wallet, Map, CalendarDays, Megaphone, X, PieChart, 
-    PackageCheck, Factory, Calculator, ClipboardList, Terminal, Globe, Zap, Layers
+    PackageCheck, Factory, Calculator, ClipboardList, Terminal, Globe, Zap, Layers,
+    MessageCircle
 } from 'lucide-react';
 import { Page } from '../types';
 import { useTanxing } from '../context/TanxingContext';
@@ -19,8 +20,8 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
 
   const menuItems = [
     { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
-    { id: 'virtual-warehouse', label: '全息虚拟仓库', subLabel: 'Digital Twin', icon: Layers, highlight: true },
     { id: 'automation', label: '逻辑神经中枢', subLabel: 'Logic Hooks', icon: Zap },
+    { id: 'feishu', label: '飞书通讯矩阵', subLabel: 'Feishu Matrix', icon: MessageCircle, highlight: true },
     { id: 'ai-command', label: 'AI 指令中心', subLabel: 'Command Matrix', icon: Terminal },
     { id: 'intelligence', label: '智脑实验室', subLabel: 'AI Intelligence', icon: BrainCircuit },
     { id: 'tasks', label: '运营协同中心', subLabel: 'Operations', icon: ClipboardList },
@@ -50,7 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                         <Hexagon className="w-6 h-6 fill-current" />
                     </div>
                     <div>
-                        <div className="brand-logo text-2xl tracking-tighter leading-none">TANXING</div>
+                        <div className="font-display font-bold text-2xl text-white tracking-wide leading-none uppercase italic">TANXING</div>
                         <div className="text-[9px] text-indigo-400 font-mono tracking-[0.3em] mt-1.5 uppercase opacity-80">Quantum ERP</div>
                     </div>
                 </div>
