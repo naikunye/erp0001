@@ -244,49 +244,52 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- 核心修复：更鲁棒的物流哨兵与 API Key 检查 ---
+    // --- 核心修复：更鲁棒的物流哨兵逻辑（防御性 aistudio 访问） ---
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
         
         if (!webhookUrl && manual) {
-            showToast('请先配置飞书 Webhook 接收节点', 'warning');
+            showToast('请先在“通讯矩阵”配置飞书 Webhook 节点', 'warning');
             return;
         }
 
         const targets = (state.shipments || []).filter(s => 
-            s.status !== '已送达' && s.trackingNo && s.trackingNo !== 'AWAITING' && s.trackingNo !== 'PENDING'
+            s.status !== '已送达' && s.trackingNo && !['AWAITING', 'PENDING', ''].includes(s.trackingNo)
         );
 
         if (targets.length === 0) {
-            if (manual) showToast('物流矩阵中未发现待对账的活动单据（单号为空或已送达）', 'error');
+            if (manual) showToast('物流矩阵中未发现待核账单据（单号为空或已送达）', 'error');
             return;
         }
 
-        // 修复：增加 window.aistudio 存在性检查，防止崩溃
-        const aistudio = (window as any).aistudio;
-        if (aistudio) {
+        // --- 深度修复：极其严谨的 API KEY 检查流程 ---
+        const win = window as any;
+        const hasAiStudio = typeof win.aistudio !== 'undefined' && win.aistudio !== null;
+        
+        if (hasAiStudio) {
             try {
-                if (!(await aistudio.hasSelectedApiKey())) {
-                    showToast('检测到 API 授权失效，请点击弹窗中的“选择 API Key”', 'info');
-                    await aistudio.openSelectKey();
-                    // 根据规范：触发 openSelectKey 后应假设成功并继续，或者由用户再次触发。
-                    // 这里我们为了安全起见，在弹出后中止本次，让用户再次点击。
+                const hasKey = await win.aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    if (manual) showToast('正在激活量子授权对话框，请选择 API Key...', 'info');
+                    await win.aistudio.openSelectKey();
+                    // 根据规范：触发后假设成功并允许用户再次触发，此处直接返回
                     return;
                 }
             } catch (err) {
-                console.warn("AI Studio Check Failed, fallback to direct usage.");
+                console.warn("aistudio check failed, falling back to process.env", err);
             }
+        }
+
+        // 最后一道防线：检查 process.env 是否已被注入
+        if (!process.env.API_KEY) {
+            if (manual) showToast('未检测到有效的 API 令牌，请点击浏览器上方设置密钥。', 'error');
+            return;
         }
 
         if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的最新物理轨迹...`, 'info');
 
         try {
-            // 确保 process.env.API_KEY 存在
-            if (!process.env.API_KEY) {
-                if (manual) showToast('AI 授权密钥未就绪 (API Key missing).', 'error');
-                return;
-            }
-
+            // 每次调用都重新实例化，确保使用最新的 process.env.API_KEY
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
             const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join('\n');
             
@@ -301,33 +304,46 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 3. 请在末尾附带你查询到的原始参考链接。
             `;
 
-            // 使用 Flash 模型以获得最快的搜索响应
             const response = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
                 contents: prompt,
                 config: {
-                    tools: [{ googleSearch: {} }]
+                    tools: [{ googleSearch: {} }] // 确保启用 Google Search 搜索能力
                 }
             });
 
             const aiText = response.text;
             if (aiText) {
-                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', aiText);
+                // 提取引用链接（如果存在）
+                let linksStr = "";
+                const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+                if (grounding) {
+                    linksStr = "\n\n🔗 物理数据来源:\n" + grounding
+                        .map((c: any) => c.web ? `- ${c.web.title}: ${c.web.uri}` : null)
+                        .filter(Boolean)
+                        .join('\n');
+                }
+
+                const finalReport = aiText + linksStr;
+                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', finalReport);
+                
                 if (sendRes.success) {
                     dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
                     if (manual) showToast('AI 对账完成，实时报文已推送到飞书', 'success');
                 } else {
-                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全设置', 'error');
+                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键词设置（必须包含：探行）', 'error');
                 }
             } else {
-                if (manual) showToast('AI 引擎未返回有效信息', 'warning');
+                if (manual) showToast('AI 引擎响应为空，请稍后重试', 'warning');
             }
         } catch (e: any) {
-            console.error("Logistics Sentry Error:", e);
-            if (e.message?.includes("API key")) {
-                if (manual) showToast('对账中断: API Key 无效或未在浏览器中配置。', 'error');
+            console.error("Logistics Sentry Critical Error:", e);
+            const msg = e.message || '未知异常';
+            if (msg.includes("API key")) {
+                if (manual) showToast('对账中断: API Key 授权失效，请重新选择。', 'error');
+                if (hasAiStudio) win.aistudio.openSelectKey();
             } else {
-                if (manual) showToast(`对账异常: ${e.message || 'AI 引擎响应超时'}`, 'error');
+                if (manual) showToast(`对账异常: ${msg}`, 'error');
             }
         }
     };
@@ -353,6 +369,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         startup();
 
+        // 哨兵定时任务：每 3 小时执行一次
         sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); 
 
         return () => { 
