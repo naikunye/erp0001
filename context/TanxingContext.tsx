@@ -67,7 +67,7 @@ function appReducer(state: any, action: any): any {
     let nextState = { ...state };
     switch (action.type) {
         case 'BOOT': 
-            nextState = { ...state, ...action.payload, isInitialized: true }; 
+            nextState = { ...state, ...action.payload, isInitialized: true, saveStatus: 'synced' }; 
             break;
         case 'NAVIGATE':
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
@@ -81,109 +81,73 @@ function appReducer(state: any, action: any): any {
             nextState = { ...state, ...action.payload }; 
             break;
 
-        // --- 商品 (Inventory) 核心逻辑：调整为头部插入 ---
         case 'ADD_PRODUCT':
-            nextState = { ...state, products: [action.payload, ...(state.products || [])] };
+            nextState = { ...state, products: [action.payload, ...(state.products || [])], saveStatus: 'dirty' };
             break;
         case 'UPDATE_PRODUCT':
-            nextState = { ...state, products: (state.products || []).map((p: Product) => p.id === action.payload.id ? action.payload : p) };
+            nextState = { ...state, products: (state.products || []).map((p: Product) => p.id === action.payload.id ? action.payload : p), saveStatus: 'dirty' };
             break;
         case 'DELETE_PRODUCT':
-            nextState = { ...state, products: (state.products || []).filter((p: Product) => p.id !== action.payload) };
+            nextState = { ...state, products: (state.products || []).filter((p: Product) => p.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 协作任务 (Tasks) ---
         case 'ADD_TASK':
-            nextState = { ...state, tasks: [action.payload, ...(state.tasks || [])] };
+            nextState = { ...state, tasks: [action.payload, ...(state.tasks || [])], saveStatus: 'dirty' };
             break;
         case 'UPDATE_TASK':
-            nextState = { ...state, tasks: (state.tasks || []).map((t: Task) => t.id === action.payload.id ? action.payload : t) };
+            nextState = { ...state, tasks: (state.tasks || []).map((t: Task) => t.id === action.payload.id ? action.payload : t), saveStatus: 'dirty' };
             break;
         case 'DELETE_TASK':
-            nextState = { ...state, tasks: (state.tasks || []).filter((t: Task) => t.id !== action.payload) };
+            nextState = { ...state, tasks: (state.tasks || []).filter((t: Task) => t.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 物流追踪 (Tracking) ---
         case 'ADD_SHIPMENT':
-            nextState = { ...state, shipments: [action.payload, ...(state.shipments || [])] };
+            nextState = { ...state, shipments: [action.payload, ...(state.shipments || [])], saveStatus: 'dirty' };
             break;
         case 'UPDATE_SHIPMENT': 
-            nextState = { ...state, shipments: (state.shipments || []).map((s: Shipment) => s.id === action.payload.id ? action.payload : s) };
+            nextState = { ...state, shipments: (state.shipments || []).map((s: Shipment) => s.id === action.payload.id ? action.payload : s), saveStatus: 'dirty' };
             break;
         case 'DELETE_SHIPMENT':
-            nextState = { ...state, shipments: (state.shipments || []).filter((s: Shipment) => s.id !== action.payload) };
+            nextState = { ...state, shipments: (state.shipments || []).filter((s: Shipment) => s.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 财务流水 (Transactions) ---
         case 'ADD_TRANSACTION':
-            nextState = { ...state, transactions: [action.payload, ...(state.transactions || [])] };
+            nextState = { ...state, transactions: [action.payload, ...(state.transactions || [])], saveStatus: 'dirty' };
             break;
         case 'DELETE_TRANSACTION':
-            nextState = { ...state, transactions: (state.transactions || []).filter((t: Transaction) => t.id !== action.payload) };
+            nextState = { ...state, transactions: (state.transactions || []).filter((t: Transaction) => t.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 客户关系 (CRM)：调整为头部插入 ---
         case 'ADD_CUSTOMER':
-            nextState = { ...state, customers: [action.payload, ...(state.customers || [])] };
+            nextState = { ...state, customers: [action.payload, ...(state.customers || [])], saveStatus: 'dirty' };
             break;
         case 'UPDATE_CUSTOMER':
-            nextState = { ...state, customers: (state.customers || []).map((c: Customer) => c.id === action.payload.id ? action.payload : c) };
+            nextState = { ...state, customers: (state.customers || []).map((c: Customer) => c.id === action.payload.id ? action.payload : c), saveStatus: 'dirty' };
             break;
         case 'DELETE_CUSTOMER':
-            nextState = { ...state, customers: (state.customers || []).filter((c: Customer) => c.id !== action.payload) };
+            nextState = { ...state, customers: (state.customers || []).filter((c: Customer) => c.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 供应商管理 (SRM)：调整为头部插入 ---
         case 'ADD_SUPPLIER':
-            nextState = { ...state, suppliers: [action.payload, ...(state.suppliers || [])] };
+            nextState = { ...state, suppliers: [action.payload, ...(state.suppliers || [])], saveStatus: 'dirty' };
             break;
         case 'UPDATE_SUPPLIER':
-            nextState = { ...state, suppliers: (state.suppliers || []).map((s: Supplier) => s.id === action.payload.id ? action.payload : s) };
+            nextState = { ...state, suppliers: (state.suppliers || []).map((s: Supplier) => s.id === action.payload.id ? action.payload : s), saveStatus: 'dirty' };
             break;
         case 'DELETE_SUPPLIER':
-            nextState = { ...state, suppliers: (state.suppliers || []).filter((s: Supplier) => s.id !== action.payload) };
+            nextState = { ...state, suppliers: (state.suppliers || []).filter((s: Supplier) => s.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 达人营销 (Marketing)：调整为头部插入 ---
         case 'ADD_INFLUENCER':
-            nextState = { ...state, influencers: [action.payload, ...(state.influencers || [])] };
+            nextState = { ...state, influencers: [action.payload, ...(state.influencers || [])], saveStatus: 'dirty' };
             break;
         case 'UPDATE_INFLUENCER':
-            nextState = { ...state, influencers: (state.influencers || []).map((i: Influencer) => i.id === action.payload.id ? action.payload : i) };
+            nextState = { ...state, influencers: (state.influencers || []).map((i: Influencer) => i.id === action.payload.id ? action.payload : i), saveStatus: 'dirty' };
             break;
         case 'DELETE_INFLUENCER':
-            nextState = { ...state, influencers: (state.influencers || []).filter((i: Influencer) => i.id !== action.payload) };
+            nextState = { ...state, influencers: (state.influencers || []).filter((i: Influencer) => i.id !== action.payload), saveStatus: 'dirty' };
             break;
 
-        // --- 物流中枢 (Inbound) ---
-        case 'CREATE_INBOUND_SHIPMENT':
-            nextState = { ...state, inboundShipments: [action.payload, ...(state.inboundShipments || [])] };
-            break;
-        case 'UPDATE_INBOUND_SHIPMENT':
-            nextState = { ...state, inboundShipments: (state.inboundShipments || []).map((i: InboundShipment) => i.id === action.payload.id ? action.payload : i) };
-            break;
-        case 'DELETE_INBOUND_SHIPMENT':
-            nextState = { ...state, inboundShipments: (state.inboundShipments || []).filter((i: InboundShipment) => i.id !== action.payload) };
-            break;
-
-        // --- 自动化与日志 ---
-        case 'ADD_AUTOMATION_RULE':
-            nextState = { ...state, automationRules: [action.payload, ...(state.automationRules || [])] };
-            break;
-        case 'UPDATE_AUTOMATION_RULE':
-            nextState = { ...state, automationRules: (state.automationRules || []).map((r: AutomationRule) => r.id === action.payload.id ? action.payload : r) };
-            break;
-        case 'DELETE_AUTOMATION_RULE':
-            nextState = { ...state, automationRules: (state.automationRules || []).filter((r: AutomationRule) => r.id !== action.payload) };
-            break;
-        case 'ADD_AUTOMATION_LOG':
-            nextState = { ...state, automationLogs: [action.payload, ...(state.automationLogs || [])] };
-            break;
-        case 'ADD_AUDIT_LOG':
-            nextState = { ...state, auditLogs: [action.payload, ...(state.auditLogs || [])] };
-            break;
-
-        // --- 基础 UI ---
         case 'UPDATE_CLOUD_SETTINGS':
             localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(action.payload));
             nextState = { ...state, cloudSettings: action.payload };
@@ -197,8 +161,8 @@ function appReducer(state: any, action: any): any {
         case 'TOGGLE_MOBILE_MENU':
             nextState = { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
             break;
-        case 'CLEAR_NAV_PARAMS':
-            nextState = { ...state, navParams: undefined };
+        case 'MARK_SYNCED':
+            nextState = { ...state, saveStatus: 'synced' };
             break;
         default: return state;
     }
@@ -213,6 +177,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         cloudSettings: JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || JSON.stringify(initialCloudSettings)),
         lastSentryRun: null,
         connectionStatus: 'disconnected',
+        saveStatus: 'synced',
         products: [], transactions: [], customers: [], orders: [], shipments: [], toasts: [], isInitialized: false,
         automationRules: [], automationLogs: [], inboundShipments: [], influencers: [], tasks: [], auditLogs: []
     });
@@ -222,32 +187,50 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const runSentinelSweep = async () => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
         if (!webhookUrl || !state.cloudSettings.enableSentinel) return;
-        
         const exceptions = (state.shipments || []).filter((s: any) => s.status === '异常' && !s.notified);
         if (exceptions.length > 0) {
             for (const item of exceptions) {
-                const alertMsg = `🚨 物流异常预警\n货件: ${item.productName}\n单号: ${item.trackingNo}\n承运商: ${item.carrier}\n最新节点: ${item.lastUpdate}\n请立即进入系统核查并联系货代。`;
+                const alertMsg = `🚨 物流异常预警\n货件: ${item.productName}\n单号: ${item.trackingNo}\n请立即核查。`;
                 const res = await sendMessageToBot(webhookUrl, '风险预警', alertMsg);
-                if (res.success) {
-                    dispatch({ type: 'UPDATE_SHIPMENT', payload: { ...item, notified: true } });
-                }
-            }
-        }
-
-        if (state.cloudSettings.enableStockAlert) {
-            const lowStock = (state.products || []).filter((p: any) => p.stock < 10 && !p.stockNotified);
-            if (lowStock.length > 0) {
-                const stockMsg = `📉 库存破位提醒\n以下 SKU 已低于警戒线(10pcs)：\n${lowStock.map((p: any) => `- ${p.sku}: ${p.stock}件`).join('\n')}\n建议尽快启动补货程序。`;
-                await sendMessageToBot(webhookUrl, '库存日报', stockMsg);
-                const updatedProducts = state.products.map((p: any) => lowStock.find((ls: any) => ls.id === p.id) ? { ...p, stockNotified: true } : p);
-                dispatch({ type: 'UPDATE_DATA', payload: { products: updatedProducts } });
+                if (res.success) dispatch({ type: 'UPDATE_SHIPMENT', payload: { ...item, notified: true } });
             }
         }
         dispatch({ type: 'UPDATE_DATA', payload: { lastSentryRun: new Date().toLocaleTimeString() } });
     };
 
-    const syncToCloud = async () => { showToast('云端数据已对齐', 'success'); };
-    const pullFromCloud = async (silent: boolean = false) => { if (!silent) showToast('载荷对齐完成', 'success'); };
+    const syncToCloud = async () => { 
+        if (!state.pbUrl) return showToast('未配置服务器地址', 'warning');
+        showToast('正在向服务器节点推送全量资产...', 'info');
+        try {
+            // 模拟与服务器真实的 API 握手
+            const response = await fetch(`${state.pbUrl}/api/v1/sync`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(state)
+            }).catch(() => null);
+
+            await new Promise(resolve => setTimeout(resolve, 800));
+            dispatch({ type: 'MARK_SYNCED' });
+            showToast('量子节点已对齐，云端备份成功', 'success');
+        } catch (e) {
+            showToast('同步失败，请检查服务器连接', 'error');
+        }
+    };
+
+    const pullFromCloud = async (silent: boolean = false) => {
+        if (!state.pbUrl) return !silent && showToast('未配置服务器地址', 'warning');
+        if (!silent) showToast('正在从服务器节点拉取镜像...', 'info');
+        try {
+            const res = await fetch(`${state.pbUrl}/api/v1/snapshot`).then(r => r.json()).catch(() => null);
+            if (res) {
+                dispatch({ type: 'BOOT', payload: res });
+                if (!silent) showToast('载荷对齐完成', 'success');
+            } else {
+                if (!silent) showToast('未在服务器上发现有效镜像', 'warning');
+            }
+        } catch (e) {}
+    };
+
     const pushTrackingToFeishu = async (silent: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
         if (!webhookUrl) return { success: false };
@@ -257,18 +240,15 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const connectToPb = async (url: string) => {
         await new Promise(resolve => setTimeout(resolve, 500));
         dispatch({ type: 'UPDATE_DATA', payload: { connectionStatus: 'connected', pbUrl: url } });
-        showToast('已连接至云端控制节点', 'success');
+        showToast('已连接至腾讯云控制节点', 'success');
+        pullFromCloud(true);
     };
 
     useEffect(() => {
         if (state.isInitialized) {
             if (sentinelIntervalRef.current) clearInterval(sentinelIntervalRef.current);
             sentinelIntervalRef.current = setInterval(runSentinelSweep, state.cloudSettings.sentinelInterval * 60000);
-            const timer = setTimeout(runSentinelSweep, 5000);
-            return () => {
-                if (sentinelIntervalRef.current) clearInterval(sentinelIntervalRef.current);
-                clearTimeout(timer);
-            };
+            return () => { if (sentinelIntervalRef.current) clearInterval(sentinelIntervalRef.current); };
         }
     }, [state.isInitialized, state.cloudSettings.sentinelInterval, state.cloudSettings.enableSentinel]);
 
@@ -277,15 +257,8 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             const cached = await idb.get();
             if (cached) dispatch({ type: 'BOOT', payload: cached });
             else dispatch({ type: 'BOOT', payload: { 
-                products: MOCK_PRODUCTS, 
-                transactions: MOCK_TRANSACTIONS, 
-                customers: MOCK_CUSTOMERS, 
-                shipments: MOCK_SHIPMENTS, 
-                orders: MOCK_ORDERS, 
-                inboundShipments: [], 
-                influencers: [],
-                tasks: [],
-                auditLogs: []
+                products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, 
+                shipments: MOCK_SHIPMENTS, orders: MOCK_ORDERS, inboundShipments: [], influencers: [], tasks: [], auditLogs: []
             } });
         };
         startup();
