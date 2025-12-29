@@ -137,7 +137,9 @@ const Settings: React.FC = () => {
                       <AlertTriangle className="w-6 h-6 text-amber-500 shrink-0" />
                       <div className="text-xs space-y-2">
                           <p className="text-amber-200 font-bold uppercase tracking-widest">警告：检测到不安全的连接请求 (Mixed Content)</p>
-                          <p className="text-slate-400">由于本程序运行在 HTTPS，而您的节点是 HTTP。如果无法同步，请点击地址栏左侧的“锁头”图标 -> 【网站设置】 -> 在底部找到【不安全内容】 -> 选择【允许】。然后刷新页面。</p>
+                          <p className="text-slate-400">
+                            由于本程序运行在 HTTPS，而您的节点是 HTTP。如果无法同步，请点击地址栏左侧的“锁头”图标 &rarr; 【网站设置】 &rarr; 在底部找到【不安全内容】 &rarr; 选择【允许】。然后刷新页面。
+                          </p>
                       </div>
                   </div>
               )}
