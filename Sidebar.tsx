@@ -46,7 +46,7 @@ const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) =
                         <Hexagon className="w-6 h-6 fill-current" />
                     </div>
                     <div>
-                        <div className="font-display font-bold text-2xl text-white tracking-wide leading-none uppercase italic">TANXING</div>
+                        <div className="font-display font-bold text-2xl text-white tracking-wide leading-none uppercase">TANXING</div>
                         <div className="text-[9px] text-indigo-400 font-mono tracking-[0.3em] mt-1.5 uppercase opacity-80">Quantum ERP</div>
                     </div>
                 </div>

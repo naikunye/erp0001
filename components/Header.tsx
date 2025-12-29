@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Globe, WifiOff, Loader2, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload, Users2, ShieldCheck } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Globe, WifiOff, Loader2, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload, Users2, ShieldCheck, Menu as MenuIcon } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -51,10 +51,10 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
     <header className="h-20 flex items-center justify-between px-8 border-b border-white/5 relative z-30">
       <div className="flex items-center gap-4">
         <button className="lg:hidden p-2 text-white/60 hover:text-white" onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU' })}>
-            <Menu className="w-6 h-6" />
+            <MenuIcon className="w-6 h-6" />
         </button>
         <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-white tracking-wide uppercase italic">{title}</h1>
+            <h1 className="text-xl font-bold text-white tracking-wide uppercase">{title}</h1>
             <div className="flex items-center gap-2 mt-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></span>
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">NODE://{SESSION_ID}</span>
@@ -69,7 +69,6 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       </div>
 
       <div className="flex items-center space-x-6">
-        {/* 全球多维时间矩阵 */}
         <div className="hidden xl:flex items-center gap-6 pr-8 border-r border-white/5 font-mono">
             <div className="flex flex-col items-end">
                 <span className="text-[9px] text-slate-500 font-bold">美国日期</span>
