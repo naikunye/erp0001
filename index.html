@@ -32,8 +32,8 @@
                 '100%': { transform: 'translate(0px, 0px) scale(1) rotate(0deg)', borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%' },
               },
               'pulse-glow': {
-                '0%': { boxShadow: '0 0 10px rgba(16, 185, 129, 0.1), inset 0 0 5px rgba(16, 185, 129, 0.05)' },
-                '100%': { boxShadow: '0 0 25px rgba(16, 185, 129, 0.3), inset 0 0 15px rgba(16, 185, 129, 0.15)' }
+                '0%': { boxShadow: '0 0 10px rgba(var(--theme-rgb), 0.1), inset 0 0 5px rgba(var(--theme-rgb), 0.05)' },
+                '100%': { boxShadow: '0 0 25px rgba(var(--theme-rgb), 0.3), inset 0 0 15px rgba(var(--theme-rgb), 0.15)' }
               },
               'aurora': {
                 '0%': { backgroundPosition: '0% 50%' },
@@ -50,24 +50,78 @@
       }
     </script>
     <style>
-      :root {
+      /* --- 多维度主题系统核心变量 --- */
+      
+      /* 默认: Quantum (量子深邃) */
+      .theme-quantum {
         --theme-primary: #6366f1;
-        --glass-bg: rgba(10, 10, 15, 0.7);
+        --theme-rgb: 99, 102, 241;
+        --glass-bg: rgba(10, 10, 15, 0.75);
+        --blob-1: #312e81;
+        --blob-2: #1e1b4b;
+        --blob-3: #4338ca;
+        --bg-main: #02040a;
+      }
+
+      /* Cyberpunk (赛博霓虹) */
+      .theme-cyber {
+        --theme-primary: #ff007f;
+        --theme-rgb: 255, 0, 127;
+        --glass-bg: rgba(15, 5, 20, 0.8);
+        --blob-1: #5a002d;
+        --blob-2: #001a1a;
+        --blob-3: #2d005a;
+        --bg-main: #05010a;
+      }
+
+      /* Emerald (翡翠矩阵) */
+      .theme-emerald {
+        --theme-primary: #10b981;
+        --theme-rgb: 16, 185, 129;
+        --glass-bg: rgba(5, 15, 10, 0.75);
+        --blob-1: #064e3b;
+        --blob-2: #022c22;
+        --blob-3: #059669;
+        --bg-main: #010503;
+      }
+
+      /* Amber (余晖落日) */
+      .theme-amber {
+        --theme-primary: #f59e0b;
+        --theme-rgb: 245, 158, 11;
+        --glass-bg: rgba(15, 10, 5, 0.75);
+        --blob-1: #78350f;
+        --blob-2: #451a03;
+        --blob-3: #b45309;
+        --bg-main: #080401;
+      }
+
+      /* OLED (极致纯黑) */
+      .theme-oled {
+        --theme-primary: #94a3b8;
+        --theme-rgb: 148, 163, 184;
+        --glass-bg: rgba(0, 0, 0, 0.9);
+        --blob-1: #111;
+        --blob-2: #050505;
+        --blob-3: #1a1a1a;
+        --bg-main: #000000;
+      }
+
+      :root {
         --glass-border: rgba(255, 255, 255, 0.08);
-        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
       }
 
       body { 
         height: 100%; 
         overflow: hidden; 
         -webkit-font-smoothing: antialiased; 
-        background-color: #02040a; 
+        background-color: var(--bg-main); 
         color: #f8fafc; 
-        transition: background-color 0.8s ease;
+        transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
       *:focus { outline: none !important; }
-      svg, rect, path, circle { outline: none !important; }
 
       .ambient-bg {
         position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
@@ -76,15 +130,15 @@
 
       .blob {
         position: absolute;
-        filter: blur(80px);
-        opacity: 0.4;
-        transition: all 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+        filter: blur(100px);
+        opacity: 0.5;
+        transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
         will-change: transform, border-radius;
       }
 
-      .blob-1 { top: -10%; left: -5%; width: 50vw; height: 50vw; background: #312e81; animation: blob-dance 20s infinite ease-in-out; }
-      .blob-2 { bottom: -10%; right: -5%; width: 55vw; height: 55vw; background: #1e1b4b; animation: blob-dance 25s infinite ease-in-out reverse; }
-      .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: #4338ca; animation: blob-dance 18s infinite ease-in-out alternate; }
+      .blob-1 { top: -10%; left: -5%; width: 50vw; height: 50vw; background: var(--blob-1); animation: blob-dance 20s infinite ease-in-out; }
+      .blob-2 { bottom: -10%; right: -5%; width: 55vw; height: 55vw; background: var(--blob-2); animation: blob-dance 25s infinite ease-in-out reverse; }
+      .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: var(--blob-3); animation: blob-dance 18s infinite ease-in-out alternate; }
 
       .ios-glass-panel {
         background: var(--glass-bg);
@@ -102,34 +156,22 @@
         transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
       }
 
-      .roi-high-glow {
-        border-color: rgba(16, 185, 129, 0.4) !important;
-        animation: pulse-glow 3s infinite alternate;
-        position: relative;
-      }
-      
-      .roi-high-glow::after {
-        content: '';
-        position: absolute;
-        inset: -2px;
-        background: linear-gradient(45deg, #10b98122, #6366f122, #10b98122);
-        background-size: 200% 200%;
-        animation: aurora 5s linear infinite;
-        border-radius: inherit;
-        z-index: -1;
-      }
-
       .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
       .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
       
       .ambient-grid {
         position: fixed; inset: 0;
-        background-image: linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
         background-size: 60px 60px;
         z-index: -1;
         pointer-events: none;
         opacity: 0.3;
       }
+      
+      /* 为主题色提供辅助工具类 */
+      .bg-theme-main { background-color: var(--theme-primary); }
+      .text-theme-main { color: var(--theme-primary); }
+      .border-theme-main { border-color: var(--theme-primary); }
     </style>
   <script type="importmap">
 {
@@ -146,7 +188,7 @@
 }
 </script>
 </head>
-  <body class="theme-ios-glass"> 
+  <body class="theme-quantum"> 
     <div class="ambient-bg">
       <div class="blob blob-1"></div>
       <div class="blob blob-2"></div>

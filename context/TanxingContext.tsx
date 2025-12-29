@@ -3,7 +3,7 @@ import React, { createContext, useContext, useReducer, useEffect, useRef } from 
 import PocketBase from 'pocketbase';
 import { 
     Product, Transaction, Toast, Customer, Shipment, Task, Page, 
-    InboundShipment, Order, AutomationRule, Supplier, Influencer, AutomationLog
+    InboundShipment, Order, AutomationRule, Supplier, Influencer, AutomationLog, Theme
 } from '../types';
 import { 
     MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, 
@@ -14,6 +14,7 @@ const DB_NAME = 'TANXING_V6_CORE';
 const STORE_NAME = 'GLOBAL_STATE';
 const CONFIG_KEY = 'PB_URL_NODE'; 
 const PAGE_CACHE_KEY = 'TX_ACTIVE_PAGE';
+const THEME_CACHE_KEY = 'TX_ACTIVE_THEME';
 export const SESSION_ID = 'TX-' + Math.random().toString(36).substring(2, 8).toUpperCase();
 
 const idb = {
@@ -36,7 +37,6 @@ const idb = {
             const db = await this.init();
             const tx = db.transaction(STORE_NAME, 'readwrite');
             const store = tx.objectStore(STORE_NAME);
-            // 存入前进行深拷贝，确保纯净数据
             const cleanData = JSON.parse(JSON.stringify(val));
             store.put({ ...cleanData, lastLocalUpdate: Date.now() }, 'LATEST');
         } catch (e) { console.warn("IDB Cache Ignored", e); }
@@ -59,6 +59,7 @@ export type SaveStatus = 'idle' | 'dirty' | 'saving' | 'saved' | 'error';
 
 interface AppState {
     activePage: Page;
+    theme: Theme;
     pbUrl: string;
     connectionStatus: ConnectionStatus;
     saveStatus: SaveStatus;
@@ -85,6 +86,7 @@ interface AppState {
 
 const initialState: AppState = {
     activePage: (localStorage.getItem(PAGE_CACHE_KEY) as Page) || 'dashboard', 
+    theme: (localStorage.getItem(THEME_CACHE_KEY) as Theme) || 'quantum',
     pbUrl: '',
     connectionStatus: 'disconnected', saveStatus: 'idle', exchangeRate: 7.2,
     products: [], transactions: [], customers: [], orders: [], shipments: [], 
@@ -96,6 +98,7 @@ const initialState: AppState = {
 type Action =
     | { type: 'BOOT'; payload: Partial<AppState> }
     | { type: 'NAVIGATE'; payload: { page: Page; params?: any } }
+    | { type: 'SET_THEME'; payload: Theme }
     | { type: 'SET_CONN'; payload: ConnectionStatus }
     | { type: 'UPDATE_DATA'; payload: Partial<AppState> }
     | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
@@ -134,14 +137,11 @@ type Action =
 
 function appReducer(state: AppState, action: Action): AppState {
     let nextState = { ...state };
-    
-    // 助手函数：安全地更新/删除数组中的项
     const updateInArray = (arr: any[], item: any) => (arr || []).map(i => i.id === item.id ? item : i);
     const deleteInArray = (arr: any[], id: string) => (arr || []).filter(i => i.id !== id);
 
     switch (action.type) {
         case 'BOOT':
-            // 移除 return，改为赋值并 break，确保触发末尾的 idb.set
             nextState = { 
                 ...state, 
                 ...action.payload, 
@@ -156,6 +156,10 @@ function appReducer(state: AppState, action: Action): AppState {
         case 'NAVIGATE':
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
             nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
+            break;
+        case 'SET_THEME':
+            localStorage.setItem(THEME_CACHE_KEY, action.payload);
+            nextState = { ...state, theme: action.payload };
             break;
         case 'SET_CONN':
             nextState = { ...state, connectionStatus: action.payload };
@@ -211,7 +215,6 @@ function appReducer(state: AppState, action: Action): AppState {
         default: return state;
     }
     
-    // 关键修复：确保所有状态变更（包括 BOOT）都能立即同步到本地磁盘缓存
     if (nextState !== state) {
         idb.set(nextState);
     }
@@ -236,15 +239,16 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         const startup = async () => {
             const cached = await idb.get();
             const lastUrl = localStorage.getItem(CONFIG_KEY) || '';
+            const lastTheme = localStorage.getItem(THEME_CACHE_KEY) || 'quantum';
             if (cached) {
-                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl } });
+                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl, theme: lastTheme as Theme } });
             } else {
                 dispatch({ 
                     type: 'BOOT', 
                     payload: { 
                         products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, 
                         customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, 
-                        orders: MOCK_ORDERS, pbUrl: lastUrl 
+                        orders: MOCK_ORDERS, pbUrl: lastUrl, theme: lastTheme as Theme
                     } 
                 });
             }

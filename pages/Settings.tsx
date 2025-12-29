@@ -7,13 +7,22 @@ import {
     Lock, Unlock, CheckCircle2, AlertTriangle, MousePointerClick, HelpCircle,
     Shield, Monitor, Globe, Settings2, Command, Search, Fingerprint, ChevronRight,
     Upload, Download, FileUp, FileDown, AlertOctagon, Power, CloudUpload, CloudDownload,
-    Wifi, WifiOff, Fingerprint as ScanIcon
+    Wifi, WifiOff, Fingerprint as ScanIcon, Palette, Sparkles, Box, Check
 } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
+import { Theme } from '../types';
+
+const THEMES: { id: Theme; name: string; desc: string; colors: string[] }[] = [
+    { id: 'quantum', name: '量子深邃 (Default)', desc: '经典靛蓝与紫罗兰的科技平衡', colors: ['#6366f1', '#312e81', '#1e1b4b'] },
+    { id: 'cyber', name: '赛博霓虹 (Cyber)', desc: '高对比度的玫红与电光青', colors: ['#ff007f', '#5a002d', '#00ffff'] },
+    { id: 'emerald', name: '翡翠矩阵 (Emerald)', desc: '舒适自然的森林绿意', colors: ['#10b981', '#064e3b', '#022c22'] },
+    { id: 'amber', name: '余晖落日 (Amber)', desc: '温暖和煦的琥珀色调', colors: ['#f59e0b', '#78350f', '#451a03'] },
+    { id: 'oled', name: '极致纯黑 (OLED)', desc: '深邃沉稳，节省能耗', colors: ['#94a3b8', '#111', '#000'] },
+];
 
 const Settings: React.FC = () => {
   const { state, dispatch, showToast, connectToPb, syncToCloud, pullFromCloud } = useTanxing();
-  const [activeTab, setActiveTab] = useState<'cloud' | 'data'>('cloud'); 
+  const [activeTab, setActiveTab] = useState<'cloud' | 'appearance' | 'data'>('cloud'); 
   const [pbInput, setPbInput] = useState(state.pbUrl || '');
   const [isTesting, setIsTesting] = useState(false);
   const [isPushing, setIsPushing] = useState(false);
@@ -92,6 +101,11 @@ const Settings: React.FC = () => {
       reader.readAsText(file);
   };
 
+  const handleThemeChange = (id: Theme) => {
+      dispatch({ type: 'SET_THEME', payload: id });
+      showToast(`主题已切换为: ${id}`, 'success');
+  };
+
   return (
     <div className="space-y-8 max-w-5xl mx-auto pb-20 animate-in fade-in duration-500">
       <div className="flex justify-between items-end">
@@ -106,6 +120,9 @@ const Settings: React.FC = () => {
       <div className="flex gap-2 bg-black/40 p-1.5 rounded-2xl border border-white/5 w-fit">
           <button onClick={() => setActiveTab('cloud')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'cloud' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
               <Cloud className="w-4 h-4" /> 实时协同云 (Live Sync)
+          </button>
+          <button onClick={() => setActiveTab('appearance')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'appearance' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
+              <Palette className="w-4 h-4" /> 视觉外观 (Appearance)
           </button>
           <button onClick={() => setActiveTab('data')} className={`px-8 py-3 text-[11px] font-black rounded-xl transition-all flex items-center gap-2 ${activeTab === 'data' ? 'bg-indigo-600 text-white shadow-lg' : 'text-slate-500 hover:text-white'}`}>
               <Database className="w-4 h-4" /> 物理资产管理
@@ -201,30 +218,6 @@ const Settings: React.FC = () => {
                                   </button>
                               </div>
                           </div>
-
-                          <div className="bg-black/60 rounded-[1.5rem] border border-white/5 p-6 space-y-4">
-                                <div className="flex items-center gap-2 mb-2">
-                                    <ScanIcon className="w-4 h-4 text-slate-500" />
-                                    <span className="text-[10px] text-slate-500 font-black uppercase tracking-widest">节点诊断详情</span>
-                                </div>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Cloud ID</span>
-                                        <span className="text-xs text-white font-mono truncate">{state.cloudRecordId || 'N/A'}</span>
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Asset Version</span>
-                                        <span className="text-xs text-white font-mono">v{state.remoteVersion}</span>
-                                    </div>
-                                    <div className="flex flex-col col-span-2">
-                                        <span className="text-[9px] text-slate-600 font-bold uppercase">Last Heartbeat</span>
-                                        <span className="text-xs text-slate-400 font-mono italic">{state.lastSyncTime ? new Date(state.lastSyncTime).toLocaleString() : 'NEVER'}</span>
-                                    </div>
-                                </div>
-                                <div className="pt-2 border-t border-white/5">
-                                    <p className="text-[9px] text-slate-600 leading-relaxed font-bold italic">提示：如果两台电脑显示的 Cloud ID 相同且 Version 不同，点击“从云端抓取”即可对齐。</p>
-                                </div>
-                          </div>
                       </div>
                   )}
 
@@ -236,6 +229,52 @@ const Settings: React.FC = () => {
                       <div className="flex items-center gap-3 justify-end text-right">
                           <Activity className="w-5 h-5 text-indigo-500" />
                           <span className="text-[10px] text-slate-500 font-bold uppercase tracking-widest">LATENCY: ~20MS</span>
+                      </div>
+                  </div>
+              </div>
+          </div>
+      )}
+
+      {activeTab === 'appearance' && (
+          <div className="space-y-6 animate-in fade-in zoom-in-95">
+              <div className="ios-glass-panel p-10 rounded-[2.5rem] border-white/5 bg-black/40 space-y-10">
+                  <div>
+                      <h3 className="text-xl font-bold text-white flex items-center gap-3 uppercase italic">
+                          <Palette className="w-6 h-6 text-indigo-500" /> 视觉元空间配置
+                      </h3>
+                      <p className="text-[10px] text-slate-500 mt-2 font-mono uppercase tracking-[0.2em]">Quantum UI Customization v1.0</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      {THEMES.map(t => (
+                          <button 
+                            key={t.id} 
+                            onClick={() => handleThemeChange(t.id)}
+                            className={`p-6 rounded-[2rem] border-2 transition-all flex flex-col gap-4 text-left group relative overflow-hidden ${state.theme === t.id ? 'bg-indigo-600/10 border-indigo-500 shadow-xl' : 'bg-white/2 border-white/5 hover:border-white/20'}`}
+                          >
+                              {state.theme === t.id && <div className="absolute top-4 right-4 bg-indigo-600 p-1.5 rounded-full text-white shadow-lg z-10 animate-in zoom-in"><Check className="w-4 h-4" /></div>}
+                              
+                              <div className="flex items-center gap-4 relative z-10">
+                                  <div className="flex -space-x-2">
+                                      {t.colors.map((c, i) => (
+                                          <div key={i} className="w-8 h-8 rounded-full border-2 border-black" style={{ backgroundColor: c }}></div>
+                                      ))}
+                                  </div>
+                                  <div>
+                                      <div className="text-sm font-bold text-white uppercase italic">{t.name}</div>
+                                      <div className="text-[10px] text-slate-500 font-bold">{t.desc}</div>
+                                  </div>
+                              </div>
+                              <div className={`mt-2 h-1 w-full rounded-full bg-gradient-to-r ${t.id === state.theme ? 'opacity-100' : 'opacity-20 group-hover:opacity-100 transition-opacity'}`} style={{ backgroundImage: `linear-gradient(to right, ${t.colors.join(', ')})` }}></div>
+                          </button>
+                      ))}
+                  </div>
+
+                  <div className="p-6 bg-indigo-900/10 border border-indigo-500/20 rounded-[2rem] flex items-center gap-6">
+                      <Sparkles className="w-8 h-8 text-indigo-400" />
+                      <div>
+                          <div className="text-indigo-300 font-bold text-sm uppercase">动态光场背景</div>
+                          <p className="text-[10px] text-slate-500 font-medium">主题切换将重构环境光场（Ambient Blobs），确保长时间操作时的舒适度。所有颜色均经过量子色彩对齐校验。</p>
                       </div>
                   </div>
               </div>
@@ -258,7 +297,7 @@ const Settings: React.FC = () => {
                         <FileDown className="w-10 h-10 text-emerald-500 mb-6" />
                         <div className="text-white font-bold text-lg mb-2 uppercase tracking-tight">导出快照包</div>
                         <p className="text-[11px] text-slate-500 mb-6">下载当前系统的全量数据包，可作为冷备份存档。</p>
-                        <button onClick={handleExportJson} className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl text-xs font-black uppercase tracking-widest">执行导出</button>
+                        <button onClick={handleExportJson} className="w-full py-4 bg-white/5 border border-white/10 text-white rounded-xl font-black text-xs uppercase tracking-widest">执行导出</button>
                     </div>
                   </div>
                   

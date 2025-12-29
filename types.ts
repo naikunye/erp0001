@@ -1,4 +1,6 @@
 
+export type Theme = 'quantum' | 'cyber' | 'emerald' | 'amber' | 'oled';
+
 export interface Influencer {
   id: string;
   name: string;
