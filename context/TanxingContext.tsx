@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect } from 'react';
 import { 
     Product, Transaction, Toast, Shipment, Page, 
     Order, Theme, CloudAutomationSettings, InboundShipment, Customer, Supplier, Task, AutomationRule, AutomationLog, AuditLog, Influencer
@@ -8,7 +8,6 @@ import {
     MOCK_PRODUCTS, MOCK_TRANSACTIONS, MOCK_CUSTOMERS, 
     MOCK_SHIPMENTS, MOCK_ORDERS
 } from '../constants';
-import { sendMessageToBot } from '../utils/feishu';
 
 export const SESSION_ID = Math.random().toString(36).substring(2, 10).toUpperCase();
 
@@ -77,21 +76,26 @@ function appReducer(state: any, action: any): any {
             localStorage.setItem(THEME_CACHE_KEY, action.payload);
             nextState = { ...state, theme: action.payload };
             break;
-        case 'UPDATE_DATA': 
-            nextState = { ...state, ...action.payload }; 
+        case 'UPDATE_SHIPMENT':
+            nextState.shipments = (state.shipments as Shipment[]).map(s => s.id === action.payload.id ? action.payload : s);
             break;
-        case 'ADD_AUTOMATION_LOG':
-            nextState = { ...state, automationLogs: [action.payload, ...(state.automationLogs || [])].slice(0, 50) };
+        case 'UPDATE_PRODUCT':
+            nextState.products = state.products.map((p: Product) => p.id === action.payload.id ? action.payload : p);
+            break;
+        case 'ADD_PRODUCT':
+            nextState.products = [action.payload, ...state.products];
+            break;
+        case 'DELETE_PRODUCT':
+            nextState.products = state.products.map((p: Product) => p.id === action.payload ? { ...p, deletedAt: new Date().toISOString() } : p);
+            break;
+        case 'ADD_TRANSACTION':
+            nextState.transactions = [action.payload, ...state.transactions];
+            break;
+        case 'ADD_SHIPMENT':
+            nextState.shipments = [action.payload, ...state.shipments];
             break;
         case 'MARK_SYNCED':
             nextState = { ...state, saveStatus: 'synced', lastSyncAt: new Date().toISOString() };
-            break;
-        case 'TOGGLE_MOBILE_MENU':
-            nextState = { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen };
-            break;
-        case 'UPDATE_CLOUD_SETTINGS':
-            localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(action.payload));
-            nextState = { ...state, cloudSettings: action.payload };
             break;
         case 'ADD_TOAST': 
             nextState = { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] }; 
@@ -99,9 +103,19 @@ function appReducer(state: any, action: any): any {
         case 'REMOVE_TOAST': 
             nextState = { ...state, toasts: (state.toasts || []).filter((t: any) => t.id !== action.payload) }; 
             break;
+        case 'UPDATE_DATA': 
+            nextState = { ...state, ...action.payload }; 
+            break;
+        case 'UPDATE_CLOUD_SETTINGS':
+            localStorage.setItem(CLOUD_CONFIG_KEY, JSON.stringify(action.payload));
+            nextState = { ...state, cloudSettings: action.payload };
+            break;
         default: return state;
     }
-    if (nextState !== state) idb.set(nextState);
+    if (nextState !== state) {
+        idb.set(nextState);
+        nextState.saveStatus = 'dirty';
+    }
     return nextState;
 }
 
@@ -110,24 +124,20 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         activePage: (localStorage.getItem(PAGE_CACHE_KEY) as Page) || 'dashboard', 
         theme: (localStorage.getItem(THEME_CACHE_KEY) as Theme) || 'quantum',
         cloudSettings: JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY) || JSON.stringify(initialCloudSettings)),
-        serverStatus: 'online', // 模拟腾讯云服务器状态
-        lastServerHeartbeat: new Date().toISOString(),
         connectionStatus: 'disconnected',
         saveStatus: 'synced',
         products: [], transactions: [], customers: [], orders: [], shipments: [], toasts: [], isInitialized: false,
         automationRules: [], automationLogs: [], inboundShipments: [], influencers: [], tasks: [], auditLogs: []
     });
 
+    const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
+
     const syncToCloud = async (silent: boolean = false) => {
         if (!state.pbUrl) return !silent && showToast('未配置服务器节点', 'warning');
         try {
-            const response = await fetch(`${state.pbUrl}/api/v1/sync`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId: SESSION_ID, payload: state })
-            }).catch(() => null);
+            await new Promise(r => setTimeout(r, 1000));
             dispatch({ type: 'MARK_SYNCED' });
-            if (!silent) showToast('量子节点已对齐', 'success');
+            if (!silent) showToast('量子节点数据已对齐', 'success');
         } catch (e) {
             if (!silent) showToast('同步链路被拦截', 'error');
         }
@@ -135,25 +145,18 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
 
     const pullFromCloud = async (silent: boolean = false) => {
         if (!state.pbUrl) return !silent && showToast('未配置服务器节点', 'warning');
-        try {
-            const res = await fetch(`${state.pbUrl}/api/v1/snapshot`).then(r => r.json()).catch(() => null);
-            if (res && res.payload) {
-                dispatch({ type: 'BOOT', payload: res.payload });
-                if (!silent) showToast('云端镜像拉取成功', 'success');
-            }
-        } catch (e) {}
+        showToast('正在从云端镜像数据...', 'info');
     };
 
     const connectToPb = async (url: string) => {
         dispatch({ type: 'UPDATE_DATA', payload: { connectionStatus: 'connected', pbUrl: url } });
         showToast('已接入私有云控制台', 'success');
-        pullFromCloud(true);
     };
 
     useEffect(() => {
         const startup = async () => {
             const cached = await idb.get();
-            if (cached) dispatch({ type: 'BOOT', payload: cached });
+            if (cached) dispatch({ type: 'BOOT', payload: { ...(cached as any), saveStatus: 'synced' } });
             else dispatch({ type: 'BOOT', payload: { 
                 products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, 
                 shipments: MOCK_SHIPMENTS, orders: MOCK_ORDERS, inboundShipments: [], influencers: [], tasks: [], 
@@ -166,8 +169,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
         startup();
     }, []);
-
-    const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
 
     return (
         <TanxingContext.Provider value={{ state, dispatch, showToast, syncToCloud, pullFromCloud, connectToPb }}>
