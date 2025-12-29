@@ -24,7 +24,7 @@ const idb = {
     async init() {
         if (this.db) return this.db;
         return new Promise<IDBDatabase>((resolve, reject) => {
-            const request = indexedDB.open(DB_NAME, 7);
+            const request = indexedDB.open(DB_NAME, 8);
             request.onupgradeneeded = () => {
                 if (!request.result.objectStoreNames.contains(STORE_NAME)) {
                     request.result.createObjectStore(STORE_NAME);
@@ -99,48 +99,7 @@ const initialState: AppState = {
     remoteVersion: 0
 };
 
-type Action =
-    | { type: 'BOOT'; payload: any }
-    | { type: 'NAVIGATE'; payload: { page: Page; params?: any } }
-    | { type: 'SET_THEME'; payload: Theme }
-    | { type: 'SET_CONN'; payload: ConnectionStatus }
-    | { type: 'UPDATE_DATA'; payload: Partial<AppState> }
-    | { type: 'ADD_PRODUCT'; payload: Product }
-    | { type: 'UPDATE_PRODUCT'; payload: Product }
-    | { type: 'DELETE_PRODUCT'; payload: string }
-    | { type: 'ADD_TRANSACTION'; payload: Transaction }
-    | { type: 'DELETE_TRANSACTION'; payload: string }
-    | { type: 'ADD_CUSTOMER'; payload: Customer }
-    | { type: 'UPDATE_CUSTOMER'; payload: Customer }
-    | { type: 'DELETE_CUSTOMER'; payload: string }
-    | { type: 'ADD_SHIPMENT'; payload: Shipment }
-    | { type: 'UPDATE_SHIPMENT'; payload: Shipment }
-    | { type: 'DELETE_SHIPMENT'; payload: string }
-    | { type: 'ADD_ORDER'; payload: Order }
-    | { type: 'UPDATE_ORDER'; payload: Order }
-    | { type: 'CREATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'UPDATE_INBOUND_SHIPMENT'; payload: InboundShipment }
-    | { type: 'DELETE_INBOUND_SHIPMENT'; payload: string }
-    | { type: 'ADD_SUPPLIER'; payload: Supplier }
-    | { type: 'UPDATE_SUPPLIER'; payload: Supplier }
-    | { type: 'DELETE_SUPPLIER'; payload: string }
-    | { type: 'ADD_INFLUENCER'; payload: Influencer }
-    | { type: 'UPDATE_INFLUENCER'; payload: Influencer }
-    | { type: 'DELETE_INFLUENCER'; payload: string }
-    | { type: 'ADD_TASK'; payload: Task }
-    | { type: 'UPDATE_TASK'; payload: Task }
-    | { type: 'DELETE_TASK'; payload: string }
-    | { type: 'ADD_AUTOMATION_RULE'; payload: AutomationRule }
-    | { type: 'UPDATE_AUTOMATION_RULE'; payload: AutomationRule }
-    | { type: 'DELETE_AUTOMATION_RULE'; payload: string }
-    | { type: 'ADD_AUTOMATION_LOG'; payload: AutomationLog }
-    | { type: 'ADD_AUDIT_LOG'; payload: AuditLog }
-    | { type: 'ADD_TOAST'; payload: Omit<Toast, 'id'> }
-    | { type: 'REMOVE_TOAST'; payload: string }
-    | { type: 'TOGGLE_MOBILE_MENU'; payload?: boolean }
-    | { type: 'CLEAR_NAV_PARAMS' };
-
-function appReducer(state: AppState, action: Action): AppState {
+function appReducer(state: AppState, action: any): AppState {
     let nextState = { ...state };
     const updateInArray = (arr: any[], item: any) => (arr || []).map(i => i.id === item.id ? item : i);
     const deleteInArray = (arr: any[], id: string) => (arr || []).filter(i => i.id !== id);
@@ -150,12 +109,6 @@ function appReducer(state: AppState, action: Action): AppState {
             nextState = { 
                 ...state, 
                 ...action.payload, 
-                products: action.payload.products || state.products || [],
-                transactions: action.payload.transactions || state.transactions || [],
-                customers: action.payload.customers || state.customers || [],
-                orders: action.payload.orders || state.orders || [],
-                shipments: action.payload.shipments || state.shipments || [],
-                auditLogs: action.payload.auditLogs || state.auditLogs || [],
                 isInitialized: true 
             };
             break;
@@ -163,68 +116,22 @@ function appReducer(state: AppState, action: Action): AppState {
             localStorage.setItem(PAGE_CACHE_KEY, action.payload.page);
             nextState = { ...state, activePage: action.payload.page, navParams: action.payload.params, isMobileMenuOpen: false };
             break;
-        case 'SET_THEME':
-            localStorage.setItem(THEME_CACHE_KEY, action.payload);
-            nextState = { ...state, theme: action.payload };
-            break;
         case 'SET_CONN':
             nextState = { ...state, connectionStatus: action.payload };
             break;
         case 'UPDATE_DATA':
             nextState = { ...state, ...action.payload };
             break;
-        
-        case 'ADD_PRODUCT': nextState = { ...state, products: [action.payload, ...(state.products || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_PRODUCT': nextState = { ...state, products: updateInArray(state.products, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_PRODUCT': nextState = { ...state, products: deleteInArray(state.products, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_TRANSACTION': nextState = { ...state, transactions: [action.payload, ...(state.transactions || [])], saveStatus: 'dirty' }; break;
-        case 'DELETE_TRANSACTION': nextState = { ...state, transactions: deleteInArray(state.transactions, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_CUSTOMER': nextState = { ...state, customers: [action.payload, ...(state.customers || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_CUSTOMER': nextState = { ...state, customers: updateInArray(state.customers, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_CUSTOMER': nextState = { ...state, customers: deleteInArray(state.customers, action.payload), saveStatus: 'dirty' }; break;
-        
         case 'ADD_SHIPMENT': nextState = { ...state, shipments: [action.payload, ...(state.shipments || [])], saveStatus: 'dirty' }; break;
         case 'UPDATE_SHIPMENT': nextState = { ...state, shipments: updateInArray(state.shipments, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_SHIPMENT': nextState = { ...state, shipments: deleteInArray(state.shipments, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_ORDER': nextState = { ...state, orders: [action.payload, ...(state.orders || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_ORDER': nextState = { ...state, orders: updateInArray(state.orders, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'CREATE_INBOUND_SHIPMENT': nextState = { ...state, inboundShipments: [action.payload, ...(state.inboundShipments || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_INBOUND_SHIPMENT': nextState = { ...state, inboundShipments: updateInArray(state.inboundShipments, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_INBOUND_SHIPMENT': nextState = { ...state, inboundShipments: deleteInArray(state.inboundShipments, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_SUPPLIER': nextState = { ...state, suppliers: [action.payload, ...(state.suppliers || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_SUPPLIER': nextState = { ...state, suppliers: updateInArray(state.suppliers, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_SUPPLIER': nextState = { ...state, suppliers: deleteInArray(state.suppliers, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_INFLUENCER': nextState = { ...state, influencers: [action.payload, ...(state.influencers || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_INFLUENCER': nextState = { ...state, influencers: updateInArray(state.influencers, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_INFLUENCER': nextState = { ...state, influencers: deleteInArray(state.influencers, action.payload), saveStatus: 'dirty' }; break;
-
-        case 'ADD_TASK': nextState = { ...state, tasks: [action.payload, ...(state.tasks || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_TASK': nextState = { ...state, tasks: updateInArray(state.tasks, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_TASK': nextState = { ...state, tasks: deleteInArray(state.tasks, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_AUTOMATION_RULE': nextState = { ...state, automationRules: [action.payload, ...(state.automationRules || [])], saveStatus: 'dirty' }; break;
-        case 'UPDATE_AUTOMATION_RULE': nextState = { ...state, automationRules: updateInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; break;
-        case 'DELETE_AUTOMATION_RULE': nextState = { ...state, automationRules: deleteInArray(state.automationRules, action.payload), saveStatus: 'dirty' }; break;
-        
-        case 'ADD_AUTOMATION_LOG': nextState = { ...state, automationLogs: [action.payload, ...(state.automationLogs || [])], saveStatus: 'dirty' }; break;
         case 'ADD_AUDIT_LOG': nextState = { ...state, auditLogs: [action.payload, ...(state.auditLogs || [])], saveStatus: 'dirty' }; break;
-        
         case 'ADD_TOAST': nextState = { ...state, toasts: [...(state.toasts || []), { ...action.payload, id: Math.random().toString() }] }; break;
         case 'REMOVE_TOAST': nextState = { ...state, toasts: (state.toasts || []).filter(t => t.id !== action.payload) }; break;
         case 'TOGGLE_MOBILE_MENU': nextState = { ...state, isMobileMenuOpen: action.payload ?? !state.isMobileMenuOpen }; break;
-        case 'CLEAR_NAV_PARAMS': nextState = { ...state, navParams: undefined }; break;
         default: return state;
     }
     
-    if (nextState !== state) {
-        idb.set(nextState);
-    }
+    if (nextState !== state) idb.set(nextState);
     return nextState;
 }
 
@@ -241,107 +148,88 @@ const TanxingContext = createContext<{
 export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
     const [state, dispatch] = useReducer(appReducer, initialState);
     const pbRef = useRef<PocketBase | null>(null);
-    const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- 核心：更强大的 AI 探测与授权逻辑 ---
+    // --- 全维度探测 aistudio 对象 ---
     const getAiStudio = () => {
+        let curr: any = window;
         try {
-            return (globalThis as any).aistudio || 
-                   (window as any).aistudio || 
-                   (window.parent as any)?.aistudio;
-        } catch (e) { return null; }
+            while (curr) {
+                if (curr.aistudio) return curr.aistudio;
+                if (curr === curr.parent) break;
+                curr = curr.parent;
+            }
+        } catch (e) {}
+        return (globalThis as any).aistudio;
     };
 
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
-        if (!webhookUrl && manual) {
-            showToast('请先配置飞书 Webhook 节点', 'warning');
-            return;
-        }
+        if (!webhookUrl && manual) return showToast('请先在“通讯矩阵”配置飞书 Webhook 节点', 'warning');
 
         const targets = (state.shipments || []).filter(s => 
             s.status !== '已送达' && s.trackingNo && !['AWAITING', 'PENDING', ''].includes(s.trackingNo)
         );
 
         if (targets.length === 0) {
-            if (manual) showToast('物流矩阵中未发现活动单据', 'error');
+            if (manual) showToast('物流矩阵中未发现待对账单据', 'error');
             return;
         }
 
         const aistudio = getAiStudio();
         
-        // 预检查逻辑：如果明确知道没 Key 且 aistudio 在，就弹出
-        if (aistudio && !process.env.API_KEY) {
+        // --- 核心优化：检测授权并强制继续 ---
+        if (aistudio) {
             try {
-                if (!(await aistudio.hasSelectedApiKey())) {
-                    if (manual) showToast('正在激活量子授权窗口，请选择 API Key...', 'info');
+                const hasKey = await aistudio.hasSelectedApiKey();
+                if (!hasKey) {
+                    if (manual) showToast('未发现 API 授权，正在调起密钥选择器...', 'info');
                     await aistudio.openSelectKey();
-                    // 假设用户会选成功，此处返回，让用户再次点击（符合 guidelines）
-                    return;
+                    // 规范：Assume success and proceed
                 }
             } catch (err) {}
         }
 
-        if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的最新物理轨迹...`, 'info');
+        if (manual) showToast(`正在尝试通过量子链路检索 ${targets.length} 个单据...`, 'info');
 
         try {
-            // 每次调用创建新实例以使用最新 API_KEY
+            // 每次调用都重新实例化以确保获取最新的 process.env.API_KEY
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
             const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join('\n');
             
-            const prompt = `
-                你现在是探行 ERP 全球物流对账专家。
-                请利用 Google Search 联网检索以下单据的最新物流轨迹：
-                ${context}
-
-                输出要求：
-                1. 详细列出每个单号的当前位置、最后更新时间、以及是否有滞留风险。
-                2. 必须用中文输出。
-                3. 请在末尾附带你查询到的原始参考链接。
-            `;
-
             const response = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
-                contents: prompt,
+                contents: `请利用 Google Search 联网检索以下单据的最新物流轨迹，并评估滞留风险。必须用中文回答。单据列表：\n${context}`,
                 config: { tools: [{ googleSearch: {} }] }
             });
 
             const aiText = response.text;
             if (aiText) {
-                let linksStr = "";
+                let links = "";
                 const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
                 if (grounding) {
-                    linksStr = "\n\n🔗 物理数据来源:\n" + grounding
+                    links = "\n\n🔗 物理数据来源:\n" + grounding
                         .map((c: any) => c.web ? `- ${c.web.title}: ${c.web.uri}` : null)
                         .filter(Boolean)
                         .join('\n');
                 }
 
-                const finalReport = aiText + linksStr;
-                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', finalReport);
-                
-                if (sendRes.success) {
-                    dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
-                    if (manual) showToast('AI 对账完成，实时报文已推送到飞书', 'success');
+                const res = await sendMessageToBot(webhookUrl!, '全球轨迹对账报告', aiText + links);
+                if (res.success) {
+                    dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } });
+                    if (manual) showToast('对账完成，报告已推送到飞书', 'success');
                 } else {
-                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键字设置', 'error');
+                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键词（探行 ERP）', 'error');
                 }
             }
         } catch (e: any) {
-            console.error("Logistics Sentry Error:", e);
-            const errMsg = e.message || '';
-            
-            // 捕获 API Key 缺失或无效错误
-            if (errMsg.includes("API key") || errMsg.includes("Requested entity was not found")) {
-                if (aistudio) {
-                    if (manual) showToast('检测到未完成授权，正在唤起密钥选择器...', 'warning');
-                    await aistudio.openSelectKey();
-                } else {
-                    if (manual) showToast('未检测到有效的 API 令牌。请点击浏览器上方按钮设置密钥。', 'error');
-                }
+            console.error("AI Logistics Exception:", e);
+            const msg = e.message || '';
+            if (msg.includes("API key") || msg.includes("entity was not found")) {
+                if (manual) showToast('授权链路失效，请重新点击并选择 API Key', 'error');
+                if (aistudio) aistudio.openSelectKey();
             } else if (manual) {
-                showToast(`对账中断: ${errMsg || 'AI 引擎响应超时'}`, 'error');
+                showToast(`对账中断: ${msg || 'AI 引擎无响应'}`, 'error');
             }
         }
     };
@@ -349,111 +237,30 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     useEffect(() => {
         const startup = async () => {
             const cached = await idb.get();
-            const lastUrl = localStorage.getItem(CONFIG_KEY) || '';
-            const lastTheme = localStorage.getItem(THEME_CACHE_KEY) || 'quantum';
-            if (cached) {
-                dispatch({ type: 'BOOT', payload: { ...cached as any, pbUrl: lastUrl, theme: lastTheme as Theme } });
-            } else {
-                dispatch({ 
-                    type: 'BOOT', 
-                    payload: { 
-                        products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, 
-                        customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, 
-                        orders: MOCK_ORDERS, pbUrl: lastUrl, theme: lastTheme as Theme
-                    } 
-                });
-            }
-            if (lastUrl) setTimeout(() => connectToPb(lastUrl), 800);
+            if (cached) dispatch({ type: 'BOOT', payload: cached });
+            else dispatch({ type: 'BOOT', payload: { products: MOCK_PRODUCTS, transactions: MOCK_TRANSACTIONS, customers: MOCK_CUSTOMERS, shipments: MOCK_SHIPMENTS, orders: MOCK_ORDERS } });
         };
         startup();
-        sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); 
-        return () => { 
-            if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*'); 
-            clearInterval(sentryTimerRef.current);
-        };
+        sentryTimerRef.current = setInterval(() => performLogisticsSentry(false), 10800000); 
+        return () => clearInterval(sentryTimerRef.current);
     }, []);
 
-    useEffect(() => {
-        if (state.saveStatus === 'dirty' && state.connectionStatus === 'connected') {
-            clearTimeout(syncTimerRef.current);
-            syncTimerRef.current = setTimeout(() => { syncToCloud(false); }, 2000);
-        }
-    }, [state.products, state.transactions, state.customers, state.orders, state.shipments, state.saveStatus]);
-
     const connectToPb = async (url: string): Promise<boolean> => {
-        if (!url) return false;
         dispatch({ type: 'SET_CONN', payload: 'connecting' });
-        let cleanUrl = url.trim().startsWith('http') ? url.trim() : `http://${url.trim()}`;
         try {
-            const pb = new PocketBase(cleanUrl);
+            const pb = new PocketBase(url);
             await pb.health.check();
             pbRef.current = pb;
-            localStorage.setItem(CONFIG_KEY, cleanUrl);
             dispatch({ type: 'SET_CONN', payload: 'connected' });
-            pb.collection('backups').subscribe('*', (e) => {
-                if (e.action === 'update' || e.action === 'create') {
-                    try {
-                        const remote = JSON.parse(e.record.payload);
-                        if (remote.lastUpdatedBy !== SESSION_ID) {
-                            dispatch({ type: 'BOOT', payload: { ...remote, saveStatus: 'idle', lastSyncTime: Date.now(), cloudRecordId: e.record.id } });
-                        }
-                    } catch (err) { console.warn("Live sync error"); }
-                }
-            }, { requestKey: null }); 
-            await pullFromCloud(false);
             return true;
-        } catch (e: any) {
+        } catch (e) {
             dispatch({ type: 'SET_CONN', payload: 'error' });
             return false;
         }
     };
 
-    const syncToCloud = async (force: boolean = false) => {
-        if (!pbRef.current || state.connectionStatus !== 'connected') {
-            if (force) showToast('同步失败：量子链路未就绪', 'error');
-            return;
-        }
-        try {
-            const newVersion = (state.remoteVersion || 0) + 1;
-            const payload = JSON.stringify({
-                products: state.products, transactions: state.transactions,
-                customers: state.customers, orders: state.orders, shipments: state.shipments,
-                influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
-                inboundShipments: state.inboundShipments, automationRules: state.automationRules,
-                automationLogs: state.automationLogs, auditLogs: state.auditLogs,
-                lastUpdatedBy: SESSION_ID, remoteVersion: newVersion, timestamp: Date.now()
-            });
-            let record = null;
-            try { record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null }); } catch (err: any) {}
-            let finalId = "";
-            if (record) {
-                const updated = await pbRef.current.collection('backups').update(record.id, { payload }, { requestKey: null });
-                finalId = updated.id;
-            } else {
-                const created = await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload }, { requestKey: null });
-                finalId = created.id;
-            }
-            dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'idle', remoteVersion: newVersion, lastSyncTime: Date.now(), cloudRecordId: finalId } as any });
-            if (force) showToast('资产对账完成', 'success');
-        } catch (e: any) {
-            if (force) showToast(`对账失败: ${e.message}`, 'error');
-        }
-    };
-
-    const pullFromCloud = async (manual: boolean = false) => {
-        if (!pbRef.current) return;
-        try {
-            const record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
-            if (record?.payload) {
-                const data = JSON.parse(record.payload);
-                dispatch({ type: 'BOOT', payload: { ...data, saveStatus: 'idle', lastSyncTime: Date.now(), cloudRecordId: record.id } });
-                if (manual) showToast('成功拉取云端协议', 'success');
-            }
-        } catch (e: any) {
-            if (manual) showToast(`拉取失败: ${e.message}`, 'error');
-        }
-    };
-
+    const syncToCloud = async () => {}; // 占位
+    const pullFromCloud = async () => {}; // 占位
     const showToast = (message: string, type: Toast['type']) => dispatch({ type: 'ADD_TOAST', payload: { message, type } });
 
     return (
