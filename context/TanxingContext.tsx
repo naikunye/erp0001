@@ -244,12 +244,11 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
     const syncTimerRef = useRef<any>(null);
     const sentryTimerRef = useRef<any>(null);
 
-    // --- 核心修复：更鲁棒的物流哨兵逻辑（防御性 aistudio 访问） ---
+    // --- Refined Logistics Sentry Logic with Authentication Support ---
     const performLogisticsSentry = async (manual: boolean = false) => {
         const webhookUrl = localStorage.getItem('TX_FEISHU_URL');
-        
         if (!webhookUrl && manual) {
-            showToast('请先在“通讯矩阵”配置飞书 Webhook 节点', 'warning');
+            showToast('请先配置飞书 Webhook 节点', 'warning');
             return;
         }
 
@@ -258,92 +257,88 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
         );
 
         if (targets.length === 0) {
-            if (manual) showToast('物流矩阵中未发现待核账单据（单号为空或已送达）', 'error');
+            if (manual) showToast('物流矩阵中未发现活动单据', 'error');
             return;
         }
 
-        // --- 深度修复：极其严谨的 API KEY 检查流程 ---
+        // --- Exhaustive Search for aistudio Interface ---
         const win = window as any;
-        const hasAiStudio = typeof win.aistudio !== 'undefined' && win.aistudio !== null;
+        const aistudio = win.aistudio || win.parent?.aistudio;
         
-        if (hasAiStudio) {
+        if (aistudio) {
             try {
-                const hasKey = await win.aistudio.hasSelectedApiKey();
-                if (!hasKey) {
-                    if (manual) showToast('正在激活量子授权对话框，请选择 API Key...', 'info');
-                    await win.aistudio.openSelectKey();
-                    // 根据规范：触发后假设成功并允许用户再次触发，此处直接返回
+                if (!(await aistudio.hasSelectedApiKey())) {
+                    if (manual) showToast('正在激活授权窗口，请选择 API Key...', 'info');
+                    await aistudio.openSelectKey();
+                    // Assume success and let user click again or proceed
                     return;
                 }
             } catch (err) {
-                console.warn("aistudio check failed, falling back to process.env", err);
+                console.warn("aistudio interface present but check failed:", err);
             }
         }
 
-        // 最后一道防线：检查 process.env 是否已被注入
+        // Final check for process.env.API_KEY
         if (!process.env.API_KEY) {
-            if (manual) showToast('未检测到有效的 API 令牌，请点击浏览器上方设置密钥。', 'error');
+            if (manual) {
+                if (aistudio) {
+                    showToast('检测到未完成授权，请点击上方“授权”并重新尝试。', 'warning');
+                    await aistudio.openSelectKey();
+                } else {
+                    showToast('未检测到有效的 API 令牌，请点击浏览器上方设置密钥。', 'error');
+                }
+            }
             return;
         }
 
-        if (manual) showToast(`正在通过量子链路检索 ${targets.length} 个单据的最新物理轨迹...`, 'info');
+        if (manual) showToast(`量子链路正在联网检索 ${targets.length} 个单据...`, 'info');
 
         try {
-            // 每次调用都重新实例化，确保使用最新的 process.env.API_KEY
+            // New instance per call for fresh key
             const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-            const context = targets.map(s => `[${s.carrier || '未知'}] 单号: ${s.trackingNo}`).join('\n');
+            const context = targets.map(s => `[${s.carrier}] 单号: ${s.trackingNo}`).join('\n');
             
             const prompt = `
-                你现在是探行 ERP 全球物流对账专家。
+                你现在是探行 ERP 全球对账专家。
                 请利用 Google Search 联网检索以下单据的最新物流轨迹：
                 ${context}
-
-                输出要求：
-                1. 详细列出每个单号的当前位置、最后更新时间、以及是否有滞留风险。
-                2. 必须用中文输出。
-                3. 请在末尾附带你查询到的原始参考链接。
+                1. 详细列出每个单号的当前位置、最后更新时间。
+                2. 若发生滞留请警告。
+                3. 中文输出。
             `;
 
             const response = await ai.models.generateContent({ 
                 model: 'gemini-3-flash-preview', 
                 contents: prompt,
-                config: {
-                    tools: [{ googleSearch: {} }] // 确保启用 Google Search 搜索能力
-                }
+                config: { tools: [{ googleSearch: {} }] }
             });
 
             const aiText = response.text;
             if (aiText) {
-                // 提取引用链接（如果存在）
-                let linksStr = "";
+                let links = "";
                 const grounding = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
                 if (grounding) {
-                    linksStr = "\n\n🔗 物理数据来源:\n" + grounding
+                    links = "\n\n🔗 物理数据来源:\n" + grounding
                         .map((c: any) => c.web ? `- ${c.web.title}: ${c.web.uri}` : null)
                         .filter(Boolean)
                         .join('\n');
                 }
 
-                const finalReport = aiText + linksStr;
-                const sendRes = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', finalReport);
-                
-                if (sendRes.success) {
+                const res = await sendMessageToBot(webhookUrl!, '全球轨迹联网核账报告', aiText + links);
+                if (res.success) {
                     dispatch({ type: 'UPDATE_DATA', payload: { lastLogisticsCheck: Date.now() } as any });
-                    if (manual) showToast('AI 对账完成，实时报文已推送到飞书', 'success');
+                    if (manual) showToast('AI 对账完成，报文已同步至飞书', 'success');
                 } else {
-                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全关键词设置（必须包含：探行）', 'error');
+                    if (manual) showToast('飞书机器人拒绝了消息，请检查安全设置', 'error');
                 }
-            } else {
-                if (manual) showToast('AI 引擎响应为空，请稍后重试', 'warning');
             }
         } catch (e: any) {
-            console.error("Logistics Sentry Critical Error:", e);
-            const msg = e.message || '未知异常';
-            if (msg.includes("API key")) {
-                if (manual) showToast('对账中断: API Key 授权失效，请重新选择。', 'error');
-                if (hasAiStudio) win.aistudio.openSelectKey();
-            } else {
-                if (manual) showToast(`对账异常: ${msg}`, 'error');
+            const msg = e.message || '';
+            if (msg.includes("Requested entity was not found") && aistudio) {
+                showToast('授权实体失效，请重新选择 API Key', 'error');
+                await aistudio.openSelectKey();
+            } else if (manual) {
+                showToast(`对账中断: ${msg || 'AI 引擎响应超时'}`, 'error');
             }
         }
     };
@@ -368,10 +363,7 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (lastUrl) setTimeout(() => connectToPb(lastUrl), 800);
         };
         startup();
-
-        // 哨兵定时任务：每 3 小时执行一次
         sentryTimerRef.current = setInterval(() => { performLogisticsSentry(false); }, 10800000); 
-
         return () => { 
             if (pbRef.current) pbRef.current.collection('backups').unsubscribe('*'); 
             clearInterval(sentryTimerRef.current);
@@ -395,7 +387,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             pbRef.current = pb;
             localStorage.setItem(CONFIG_KEY, cleanUrl);
             dispatch({ type: 'SET_CONN', payload: 'connected' });
-            
             pb.collection('backups').subscribe('*', (e) => {
                 if (e.action === 'update' || e.action === 'create') {
                     try {
@@ -406,7 +397,6 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                     } catch (err) { console.warn("Live sync error"); }
                 }
             }, { requestKey: null }); 
-            
             await pullFromCloud(false);
             return true;
         } catch (e: any) {
@@ -428,16 +418,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 influencers: state.influencers, tasks: state.tasks, suppliers: state.suppliers,
                 inboundShipments: state.inboundShipments, automationRules: state.automationRules,
                 automationLogs: state.automationLogs, auditLogs: state.auditLogs,
-                lastUpdatedBy: SESSION_ID,
-                remoteVersion: newVersion,
-                timestamp: Date.now()
+                lastUpdatedBy: SESSION_ID, remoteVersion: newVersion, timestamp: Date.now()
             });
-
             let record = null;
-            try {
-                record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null });
-            } catch (err: any) {}
-            
+            try { record = await pbRef.current.collection('backups').getFirstListItem('unique_id="GLOBAL_V1"', { requestKey: null }); } catch (err: any) {}
             let finalId = "";
             if (record) {
                 const updated = await pbRef.current.collection('backups').update(record.id, { payload }, { requestKey: null });
@@ -446,12 +430,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
                 const created = await pbRef.current.collection('backups').create({ unique_id: 'GLOBAL_V1', payload }, { requestKey: null });
                 finalId = created.id;
             }
-            
             dispatch({ type: 'UPDATE_DATA', payload: { saveStatus: 'idle', remoteVersion: newVersion, lastSyncTime: Date.now(), cloudRecordId: finalId } as any });
-            if (force) showToast('通讯链路已激活，数据完成全域同步', 'success');
+            if (force) showToast('全域资产同步完成', 'success');
         } catch (e: any) {
-            console.error("Cloud push error:", e);
-            if (force) showToast(`资产对账失败: ${e.message}`, 'error');
+            if (force) showToast(`对账失败: ${e.message}`, 'error');
         }
     };
 
@@ -462,10 +444,10 @@ export const TanxingProvider: React.FC<{ children: React.ReactNode }> = ({ child
             if (record?.payload) {
                 const data = JSON.parse(record.payload);
                 dispatch({ type: 'BOOT', payload: { ...data, saveStatus: 'idle', lastSyncTime: Date.now(), cloudRecordId: record.id } });
-                if (manual) showToast('已成功从云端拉取全域资产协议', 'success');
+                if (manual) showToast('成功从云端拉取协议', 'success');
             }
         } catch (e: any) {
-            if (manual) showToast(`数据拉取失败: ${e.message}`, 'error');
+            if (manual) showToast(`拉取失败: ${e.message}`, 'error');
         }
     };
 
