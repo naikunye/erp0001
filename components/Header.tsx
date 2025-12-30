@@ -54,7 +54,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
             <MenuIcon className="w-6 h-6" />
         </button>
         <div className="flex flex-col">
-            <h1 className="text-xl font-bold text-white tracking-wide uppercase">{title}</h1>
+            <h1 className="text-xl font-black text-white tracking-wide uppercase">{title}</h1>
             <div className="flex items-center gap-2 mt-1">
                 <span className={`w-1.5 h-1.5 rounded-full ${state.connectionStatus === 'connected' ? 'bg-emerald-500 animate-pulse' : 'bg-slate-700'}`}></span>
                 <span className="text-[9px] font-black text-slate-500 uppercase tracking-widest font-mono">NODE://{SESSION_ID}</span>
@@ -71,25 +71,25 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
       <div className="flex items-center space-x-6">
         <div className="hidden xl:flex items-center gap-6 pr-8 border-r border-white/5 font-mono">
             <div className="flex flex-col items-end">
-                <span className="text-[9px] text-slate-500 font-bold">美国日期</span>
-                <span className="text-xs text-white">{formatDate('America/New_York')}</span>
+                <span className="text-[9px] text-slate-500 font-black uppercase">美国日期</span>
+                <span className="text-xs text-white font-black">{formatDate('America/New_York')}</span>
             </div>
             
             <div className="w-px h-6 bg-white/10"></div>
             
             <div className="flex flex-col items-end">
-                <span className="text-[9px] text-indigo-400 font-bold">美西 (PST)</span>
-                <span className="text-xs text-white">{formatTime('America/Los_Angeles')}</span>
+                <span className="text-[9px] text-indigo-400 font-black uppercase">美西 (PST)</span>
+                <span className="text-xs text-white font-black">{formatTime('America/Los_Angeles')}</span>
             </div>
             
             <div className="flex flex-col items-end border-l border-white/10 pl-6">
-                <span className="text-[9px] text-amber-400 font-bold">美中 (CST)</span>
-                <span className="text-xs text-white">{formatTime('America/Chicago')}</span>
+                <span className="text-[9px] text-amber-400 font-black uppercase">美中 (CST)</span>
+                <span className="text-xs text-white font-black">{formatTime('America/Chicago')}</span>
             </div>
             
             <div className="flex flex-col items-end border-l border-white/10 pl-6">
-                <span className="text-[9px] text-rose-400 font-bold">美东 (EST)</span>
-                <span className="text-xs text-white">{formatTime('America/New_York')}</span>
+                <span className="text-[9px] text-rose-400 font-black uppercase">美东 (EST)</span>
+                <span className="text-xs text-white font-black">{formatTime('America/New_York')}</span>
             </div>
         </div>
 
