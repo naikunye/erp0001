@@ -81,7 +81,8 @@ const InboundShipments: React.FC = () => {
                   origin: shipment.sourceWarehouseId,
                   destination: shipment.destinationWarehouseId,
                   productName: `批次: ${shipment.name} (${skuSummary})`,
-                  lastUpdate: `数据已同步修正 (TS: ${new Date().toLocaleTimeString()})`
+                  // Fixed: Shipment uses lastUpdateAt
+                  lastUpdateAt: new Date().toISOString()
               };
               dispatch({ type: 'UPDATE_SHIPMENT', payload: updatedTracking });
               showToast('物流追踪节点已同步更新', 'success');
@@ -90,12 +91,15 @@ const InboundShipments: React.FC = () => {
                   id: `SH-${Date.now()}`,
                   trackingNo: shipment.trackingNumber || 'PENDING',
                   carrier: shipment.carrier || 'Global Carrier',
-                  status: '运输中',
+                  // Fixed: status must match 'Pending' | 'InTransit' | 'Delivered' | 'Exception'
+                  status: 'InTransit',
                   origin: shipment.sourceWarehouseId,
                   destination: shipment.destinationWarehouseId,
                   productName: `批次: ${shipment.name} (${skuSummary})`,
+                  // Fixed: added missing properties to match Shipment interface
                   shipDate: shipment.shippedDate || new Date().toISOString().split('T')[0],
                   lastUpdate: '资产离场，同步至全球追踪矩阵',
+                  lastUpdateAt: new Date().toISOString(),
                   events: [
                       { date: shipment.shippedDate || shipment.createdDate, time: '10:00', location: shipment.sourceWarehouseId, description: '货件协议激活，同步至追踪系统', status: 'Normal' }
                   ],
@@ -294,7 +298,7 @@ const InboundShipments: React.FC = () => {
                             <div className="flex bg-black/40 p-1 rounded-xl border border-white/10">
                                 <button onClick={() => setActiveDocTab('details')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${activeDocTab === 'details' ? 'bg-blue-600 text-white shadow-lg' : 'text-slate-500 hover:text-slate-300'}`}>路由与载荷</button>
                                 <button onClick={() => setActiveDocTab('ci')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${activeDocTab === 'ci' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>商业发票 (CI)</button>
-                                <button onClick={() => setActiveDocTab('pl')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${activeDocTab === 'pl' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>装箱单 (PL)</button>
+                                <button onClick={() => setActiveDocTab('pl')} className={`px-4 py-2 rounded-lg text-[10px] font-bold uppercase transition-all ${activeDocTab === 'pl' ? 'bg-blue-600 text-white' : 'text-slate-500 hover:text-slate-300'}`}>裝箱单 (PL)</button>
                             </div>
                             <div className="flex gap-2">
                                 {activeDocTab !== 'details' && (

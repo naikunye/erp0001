@@ -53,7 +53,7 @@ const Tracking: React.FC = () => {
             <div>
                 <h2 className="text-white font-bold text-xl uppercase italic tracking-tight">物理链路全球追踪</h2>
                 <div className="flex items-center gap-2 mt-1 text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                    <Zap className="w-3 h-3 text-emerald-500"/> 在途批次: {state.shipments?.filter((s:any)=>s.status!=='已送达').length || 0}
+                    <Zap className="w-3 h-3 text-emerald-500"/> 在途批次: {state.shipments?.filter((s:any)=>s.status!=='Delivered').length || 0}
                 </div>
             </div>
         </div>
@@ -62,7 +62,8 @@ const Tracking: React.FC = () => {
                 <Search className="w-4 h-4 text-slate-500 absolute left-4 top-1/2 -translate-y-1/2" />
                 <input type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} placeholder="搜索单号..." className="w-64 pl-12 pr-4 py-2.5 bg-black/60 border border-white/10 rounded-xl text-xs text-white outline-none focus:border-indigo-500 transition-all" />
             </div>
-            <button onClick={() => { setEditForm({ carrier: 'UPS', status: '待处理' }); setShowEditModal(true); }} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold uppercase flex items-center gap-2">
+            {/* Added: use correct status 'Pending' instead of '待处理' to match Shipment status type */}
+            <button onClick={() => { setEditForm({ carrier: 'UPS', status: 'Pending' }); setShowEditModal(true); }} className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold uppercase flex items-center gap-2">
                 <Plus className="w-4 h-4" /> 部署物流
             </button>
         </div>
@@ -74,7 +75,7 @@ const Tracking: React.FC = () => {
                   <div key={shipment.id} onClick={() => setSelectedShipmentId(shipment.id)} className={`p-4 rounded-2xl border transition-all cursor-pointer flex flex-col gap-3 group ${selectedShipmentId === shipment.id ? 'bg-indigo-600/10 border-indigo-500' : 'bg-white/2 border-white/5 hover:border-white/20'}`}>
                       <div className="flex justify-between items-center">
                           <span className="text-[9px] px-2 py-0.5 bg-black/60 text-slate-400 rounded-lg border border-white/10 font-mono">{shipment.carrier}</span>
-                          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase ${shipment.status === '已送达' ? 'text-emerald-400 border-emerald-500/30' : 'text-blue-400 border-blue-500/30'}`}>{shipment.status}</span>
+                          <span className={`text-[9px] px-2 py-0.5 rounded-full border font-bold uppercase ${shipment.status === 'Delivered' ? 'text-emerald-400 border-emerald-500/30' : 'text-blue-400 border-blue-500/30'}`}>{shipment.status}</span>
                       </div>
                       <div>
                           <div className="text-sm font-bold text-white truncate uppercase italic">{shipment.productName}</div>
@@ -90,9 +91,10 @@ const Tracking: React.FC = () => {
                        <div>
                            <h3 className="text-4xl font-black text-white font-mono tracking-tighter mb-4">{selectedShipment.trackingNo}</h3>
                            <div className="flex gap-2">
-                               <button onClick={() => handleUpdateStatus('运输中')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${selectedShipment.status === '运输中' ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-500'}`}>标记运输</button>
-                               <button onClick={() => handleUpdateStatus('已送达')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${selectedShipment.status === '已送达' ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-500'}`}>标记签收</button>
-                               <button onClick={() => handleUpdateStatus('异常')} className="px-4 py-1.5 bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg text-[10px] font-bold uppercase">报告异常</button>
+                               {/* Fix: changed handleUpdateStatus arguments to match enum type 'InTransit' | 'Delivered' | 'Exception' */}
+                               <button onClick={() => handleUpdateStatus('InTransit')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${selectedShipment.status === 'InTransit' ? 'bg-blue-600 text-white' : 'bg-white/5 text-slate-500'}`}>标记运输</button>
+                               <button onClick={() => handleUpdateStatus('Delivered')} className={`px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all ${selectedShipment.status === 'Delivered' ? 'bg-emerald-600 text-white' : 'bg-white/5 text-slate-500'}`}>标记签收</button>
+                               <button onClick={() => handleUpdateStatus('Exception')} className="px-4 py-1.5 bg-red-600/20 text-red-400 border border-red-500/30 rounded-lg text-[10px] font-bold uppercase">报告异常</button>
                            </div>
                        </div>
                        <button onClick={() => setShowEditModal(true)} className="px-4 py-2 border border-white/10 text-slate-400 hover:text-white rounded-xl text-[10px] font-bold uppercase transition-all">编辑详情</button>

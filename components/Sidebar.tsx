@@ -1,12 +1,11 @@
 
 import React from 'react';
 import { 
-    LayoutDashboard, Users, Settings, LogOut, Hexagon, 
-    Wallet, Map, CalendarDays, Megaphone, PieChart, 
-    PackageCheck
+    LayoutDashboard, Package, Wallet, BarChart3, 
+    Truck, LogOut, Command, Settings,
+    Sparkles, Users
 } from 'lucide-react';
 import { Page } from '../types';
-import { useTanxing } from '../context/TanxingContext';
 
 interface SidebarProps {
   activePage: Page;
@@ -15,65 +14,93 @@ interface SidebarProps {
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, onLogout }) => {
-  const { state, dispatch } = useTanxing();
-  const isOpen = state.isMobileMenuOpen;
-
-  const menuItems = [
-    { id: 'dashboard', label: '总览仪表盘', subLabel: 'Dashboard', icon: LayoutDashboard },
-    { id: 'inventory', label: '智能备货清单', subLabel: 'Inventory', icon: PackageCheck },
-    { id: 'finance', label: '财务穿透审计', subLabel: 'Audit', icon: Wallet },
-    { id: 'analytics', label: '盈利分析矩阵', subLabel: 'Analytics', icon: PieChart }, 
-    { id: 'tracking', label: '物流全球追踪', subLabel: 'Tracking', icon: Map },
-    { id: 'calendar', label: '运营全景日历', subLabel: 'Calendar', icon: CalendarDays },
-    { id: 'marketing', label: '红人营销建联', subLabel: 'Influencers', icon: Megaphone },
-    { id: 'customers', label: '客户资产管理', subLabel: 'CRM', icon: Users },
-    { id: 'settings', label: '系统核心设置', subLabel: 'Settings', icon: Settings },
+  const menuGroups = [
+    {
+      title: 'Overview',
+      items: [
+        { id: 'dashboard', icon: LayoutDashboard, label: '仪表盘' },
+        { id: 'product_ai', icon: Sparkles, label: '视觉实验室', isNew: true },
+      ]
+    },
+    {
+      title: 'Operations',
+      items: [
+        { id: 'inventory', icon: Package, label: '智能备货' },
+        { id: 'logistics', icon: Truck, label: '全球物流' },
+        { id: 'customers', icon: Users, label: '客户关系' },
+      ]
+    },
+    {
+      title: 'Intelligence',
+      items: [
+        { id: 'finance', icon: Wallet, label: '财务审计' },
+        { id: 'analytics', icon: BarChart3, label: '数据洞察' },
+      ]
+    }
   ];
 
-  const handleNav = (page: Page) => {
-      onNavigate(page);
-      if (window.innerWidth < 1024) dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: false });
-  };
-
   return (
-    <>
-        {isOpen && <div className="fixed inset-0 bg-black/60 z-40 lg:hidden backdrop-blur-md" onClick={() => dispatch({ type: 'TOGGLE_MOBILE_MENU', payload: false })} />}
-        <div className={`fixed lg:static inset-y-6 left-6 w-[280px] flex flex-col z-50 transition-transform duration-500 cubic-bezier(0.2, 0.8, 0.2, 1) ${isOpen ? 'translate-x-0' : '-translate-x-[120%] lg:translate-x-0'}`}>
-            <div className="ios-glass-panel h-full flex flex-col p-5 rounded-3xl relative overflow-hidden">
-                <div className="flex items-center gap-4 mb-6 px-2 relative z-10">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center shadow-lg shadow-indigo-500/20 text-white">
-                        <Hexagon className="w-6 h-6 fill-current" />
-                    </div>
-                    <div>
-                        <div className="font-display font-bold text-2xl text-white tracking-wide leading-none uppercase italic">TANXING</div>
-                        <div className="text-[9px] text-indigo-400 font-mono tracking-[0.3em] mt-1.5 uppercase opacity-80">Quantum ERP</div>
-                    </div>
+    <div className="w-[280px] h-full flex flex-col p-4 shrink-0 z-50">
+        <div className="flex flex-col h-full bg-[#1c1c1e]/40 backdrop-blur-xl border border-white/10 rounded-[24px] p-4 shadow-2xl transition-all duration-500 hover:bg-[#1c1c1e]/60">
+            {/* Header */}
+            <div className="px-4 py-4 flex items-center gap-3 mb-6">
+                <div className="w-8 h-8 bg-white text-black rounded-lg flex items-center justify-center shadow-lg shadow-white/10">
+                    <Command className="w-4 h-4" strokeWidth={3} />
                 </div>
-                <nav className="flex-1 space-y-1 overflow-y-auto scrollbar-none px-1 relative z-10">
-                    {menuItems.map((item) => {
-                        const Icon = item.icon;
-                        const isActive = activePage === item.id;
-                        return (
-                            <button key={item.id} onClick={() => handleNav(item.id as Page)} className={`w-full flex items-center gap-4 px-4 py-2.5 rounded-xl transition-all duration-300 group relative overflow-hidden ${isActive ? 'text-white' : 'text-slate-400 hover:text-slate-200 hover:bg-white/5'}`}>
-                                {isActive && <div className="absolute inset-0 bg-gradient-to-r from-indigo-600/20 to-transparent border-l-2 border-violet-500 opacity-100"></div>}
-                                <Icon className={`w-5 h-5 relative z-10 transition-colors ${isActive ? 'text-indigo-400' : 'text-slate-500 group-hover:text-slate-300'}`} />
-                                <div className="flex flex-col items-start relative z-10">
-                                    <span className={`text-sm font-medium leading-none ${isActive ? 'font-bold' : ''}`}>{item.label}</span>
-                                    <span className={`text-[8px] mt-1 font-mono tracking-wide uppercase ${isActive ? 'text-indigo-300/70' : 'text-slate-600 group-hover:text-slate-500'}`}>{item.subLabel}</span>
-                                </div>
-                            </button>
-                        );
-                    })}
-                </nav>
-                <div className="pt-4 mt-auto border-t border-white/5 relative z-10">
-                    <button onClick={onLogout} className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-xl hover:bg-red-500/10 hover:text-red-400 text-slate-500 transition-all text-[10px] font-bold border border-transparent hover:border-red-500/20 active:scale-95 uppercase tracking-widest">
-                        <LogOut className="w-4 h-4" />
-                        <span>退出系统 (Logout)</span>
-                    </button>
+                <div>
+                  <h1 className="font-semibold text-[15px] tracking-tight text-white leading-none">Tanxing OS</h1>
+                  <span className="text-[10px] font-mono text-white/40 font-medium tracking-wide">PRO v2.0</span>
                 </div>
             </div>
+
+            {/* Nav */}
+            <nav className="flex-1 overflow-y-auto custom-scrollbar space-y-6 px-1">
+                {menuGroups.map((group, idx) => (
+                  <div key={idx}>
+                    <div className="px-3 mb-2">
+                      <span className="text-[10px] font-bold text-white/20 uppercase tracking-[0.1em]">{group.title}</span>
+                    </div>
+                    <div className="space-y-1">
+                      {group.items.map((item) => {
+                          const Icon = item.icon;
+                          const isActive = activePage === item.id;
+                          return (
+                              <button 
+                                  key={item.id}
+                                  onClick={() => onNavigate(item.id as Page)}
+                                  className={`w-full flex items-center justify-between px-3 py-2.5 rounded-[12px] transition-all duration-200 apple-btn ${
+                                    isActive 
+                                      ? 'bg-ios-blue text-white shadow-lg shadow-blue-500/20 font-medium' 
+                                      : 'text-white/60 hover:bg-white/5 hover:text-white'
+                                  }`}
+                              >
+                                  <div className="flex items-center gap-3">
+                                      <Icon size={18} strokeWidth={isActive ? 2.5 : 2} className={isActive ? 'text-white' : 'text-white/50 group-hover:text-white'} />
+                                      <span className="text-[13px] tracking-tight">{item.label}</span>
+                                  </div>
+                                  {(item as any).isNew && !isActive && (
+                                    <span className="w-1.5 h-1.5 rounded-full bg-ios-purple shadow-[0_0_8px_rgba(175,82,222,0.6)]"></span>
+                                  )}
+                              </button>
+                          );
+                      })}
+                    </div>
+                  </div>
+                ))}
+            </nav>
+
+            {/* Footer */}
+            <div className="mt-2 pt-4 border-t border-white/5 space-y-1">
+                 <button 
+                    onClick={() => onNavigate('settings')}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-[12px] transition-all duration-200 text-white/60 hover:bg-white/5 hover:text-white apple-btn ${activePage === 'settings' ? 'bg-white/10 text-white' : ''}`}
+                  >
+                    <Settings size={18} strokeWidth={2} className="text-white/50" />
+                    <span className="text-[13px] font-medium">系统设置</span>
+                </button>
+            </div>
         </div>
-    </>
+    </div>
   );
 };
 

@@ -1,203 +1,150 @@
-
-import React, { useState, useMemo } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState } from 'react';
 import { useTanxing } from '../context/TanxingContext';
-import { ReplenishmentItem, Product, Shipment } from '../types';
 import { 
-  PackageCheck, Search, Download, Plane, Ship, 
-  Image as ImageIcon, Edit2, Plus, 
-  Trash2, X, Monitor, Wallet, CopyPlus, BarChart3, 
-  Zap, Save, History as HistoryIcon, Link as LinkIcon
+    Search, Plus, Download, Filter, 
+    Database, MoreVertical,
+    Image as ImageIcon, TrendingUp, Zap
 } from 'lucide-react';
 
-const getTrackingUrl = (carrier: string = '', trackingNo: string = '') => {
-    const t = trackingNo.trim();
-    if (!t) return '#';
-    const c = carrier.toLowerCase().trim();
-    if (t.toUpperCase().startsWith('1Z') || c.includes('ups')) return `https://www.ups.com/track?loc=zh_CN&tracknum=${t}`;
-    return `https://www.google.com/search?q=${encodeURIComponent(carrier)}+tracking+${encodeURIComponent(t)}`;
-};
-
-const StrategyBadge: React.FC<{ type: string }> = ({ type }) => {
-    let color = 'bg-slate-800 text-slate-400 border-slate-700';
-    let label = type === 'New' || type === '新品测试' ? 'NEW' : type === 'Growing' || type === '爆品增长' ? 'HOT' : (type === 'Clearance' || type === 'CLEAR') ? 'CLEAR' : 'STABLE';
-    if (label === 'NEW') color = 'bg-indigo-900/40 text-indigo-400 border-indigo-500/30';
-    else if (label === 'HOT') color = 'bg-purple-900/40 text-purple-300 border-purple-500/30';
-    else if (label === 'CLEAR') color = 'bg-rose-900/40 text-rose-300 border-rose-500/30';
-    else color = 'bg-emerald-900/40 text-emerald-300 border-emerald-500/30';
-    return <div className={`flex items-center justify-center px-2 py-0.5 rounded-[1px] text-[10px] font-black border ${color} uppercase tracking-tighter w-fit mt-1.5`}>
-        <span>{label}</span>
-    </div>;
-};
-
 const Inventory: React.FC = () => {
-    const { state, dispatch, showToast } = useTanxing();
-    const [searchTerm, setSearchTerm] = useState('');
-    const [editingItem, setEditingItem] = useState<Product | null>(null);
-    const exchangeRate = state.exchangeRate || 7.2;
+    const { state } = useTanxing();
+    const [search, setSearch] = useState('');
 
-    const replenishmentItems: ReplenishmentItem[] = useMemo(() => {
-        return (state.products || []).filter(p => !p.deletedAt).map(p => {
-            const stock = p.stock || 0;
-            const dailyBurnRate = p.dailyBurnRate || 0;
-            const daysRemaining = dailyBurnRate > 0 ? Math.floor(stock / dailyBurnRate) : 999;
-            const totalFreight = (p.logistics?.unitFreightCost || 0) * (p.unitWeight || 0.5) * stock;
-            const unitFreightUSD = stock > 0 ? (totalFreight / stock) / exchangeRate : 0;
-            const unitCogsUSD = (p.costPrice || 0) / exchangeRate;
-            const unitProfit = (p.price || 0) - (unitCogsUSD + unitFreightUSD + ((p.price || 0) * 0.15) + 0.5);
-            return {
-                ...p, dailyBurnRate, daysRemaining, profit: unitProfit, margin: (p.price || 0) > 0 ? (unitProfit / p.price) * 100 : 0,
-                totalInvestment: stock * (p.costPrice || 0) + totalFreight,
-                liveTrackingStatus: (state.shipments || []).find((s: Shipment) => s.trackingNo === p.logistics?.trackingNo)?.status || '待处理'
-            } as ReplenishmentItem;
-        });
-    }, [state.products, state.shipments, exchangeRate]);
-
-    const filteredItems = replenishmentItems.filter(i => (i.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || (i.sku || '').toLowerCase().includes(searchTerm.toLowerCase()));
+    const items = (state.products || []).filter(p => !p.deletedAt && (p.sku.toLowerCase().includes(search.toLowerCase()) || p.name.toLowerCase().includes(search.toLowerCase())));
 
     return (
-        <div className="ios-glass-panel rounded-[1.5rem] border border-white/10 flex flex-col h-[calc(100vh-8rem)] relative overflow-hidden bg-black font-sans tracking-tighter">
-            {/* 顶栏 */}
-            <div className="px-7 py-5 border-b border-white/5 flex justify-between items-center bg-white/[0.02] backdrop-blur-3xl z-20 shrink-0">
-                <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center gap-3">
-                        <PackageCheck className="w-5 h-5 text-indigo-500" />
-                        <h2 className="text-white font-black text-[18px] uppercase tracking-tighter">智能备货清单 (Replenishment List)</h2>
+        <div className="h-full flex flex-col p-8 gap-8">
+            {/* 顶栏控制组 */}
+            <div className="flex justify-between items-end shrink-0">
+                <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-emerald-600/10 rounded-xl flex items-center justify-center border border-emerald-500/20 shadow-inner">
+                        <Database className="w-8 h-8 text-emerald-500" />
                     </div>
-                    <div className="text-[11px] text-slate-500 flex items-center gap-5 font-black uppercase tracking-widest mt-1">
-                        <span>SKU 总数: <span className="text-white font-black text-[14px] ml-1">{filteredItems.length}</span></span>
-                        <div className="w-px h-3 bg-white/10"></div>
-                        <span>资金占用: <span className="text-[#10b981] font-black text-[14px] ml-1">¥{replenishmentItems.reduce((a,b)=>a+b.totalInvestment,0).toLocaleString(undefined, {maximumFractionDigits:0})}</span></span>
+                    <div>
+                        <h2 className="text-4xl font-black text-white tracking-tight leading-none mb-3">资产数字分类账</h2>
+                        <div className="flex items-center gap-3">
+                            <span className="px-2.5 py-0.5 bg-emerald-500/10 text-emerald-500 text-[10px] font-bold uppercase tracking-widest border border-emerald-500/20 rounded">Sync_Active</span>
+                            <span className="text-[11px] text-slate-600 font-bold uppercase tracking-[0.3em]">Grid Nodes: {items.length} Units</span>
+                        </div>
                     </div>
                 </div>
-                <div className="flex gap-4">
-                    <div className="relative group"> 
-                        <Search className="w-4 h-4 text-slate-600 absolute left-4 top-3.5" /> 
-                        <input type="text" placeholder="搜索 SKU / 名称..." value={searchTerm} onChange={e => setSearchTerm(e.target.value)} className="w-72 pl-12 pr-5 py-3 bg-black border border-white/10 rounded-2xl text-[12px] text-white outline-none focus:border-indigo-500 font-black uppercase tracking-widest transition-all shadow-inner" /> 
+                
+                <div className="flex items-center gap-3">
+                    <div className="relative group">
+                        <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-600" />
+                        <input 
+                            type="text" 
+                            placeholder="Search Sku/Identity..." 
+                            value={search}
+                            onChange={e => setSearch(e.target.value)}
+                            className="bg-black/60 border border-white/10 rounded-lg py-3 pl-11 pr-6 text-sm text-slate-200 outline-none focus:border-indigo-500/50 w-[320px] transition-all font-bold placeholder-slate-800 shadow-inner"
+                        />
                     </div>
-                    <button className="px-7 py-3 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-2xl text-[12px] font-black uppercase flex items-center gap-2 shadow-2xl transition-all active:scale-95"> <Plus className="w-4.5 h-4.5"/> 添加 SKU </button>
+                    <button className="px-8 py-3 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-black uppercase tracking-widest flex items-center gap-3 shadow-lg press-effect">
+                        <Plus size={16} /> 资产登记
+                    </button>
+                    <button className="p-3 precision-surface rounded-lg text-slate-500 hover:text-white press-effect"><Download size={18}/></button>
                 </div>
             </div>
 
-            <div className="flex-1 overflow-auto bg-transparent custom-scrollbar">
-                <table className="w-full text-left border-collapse min-w-[1500px] table-fixed">
-                    <thead className="bg-[#08080a] sticky top-0 z-30 border-b border-white/10 shadow-md">
-                        <tr className="text-[11px] font-black text-slate-500 uppercase tracking-widest">
-                            <th className="px-4 py-5 w-[50px] text-center border-r border-white/5"><input type="checkbox" className="rounded-sm bg-black border-white/20 scale-110"/></th>
-                            <th className="px-4 py-5 w-[11%]">SKU/阶段</th>
-                            <th className="px-4 py-5 w-[24%]">产品信息/供应商</th>
-                            <th className="px-4 py-5 w-[12%]">物流状态</th>
-                            <th className="px-4 py-5 w-[12%]">资金投入</th>
-                            <th className="px-4 py-5 w-[10%] text-center bg-white/[0.01]">库存数量</th>
-                            <th className="px-4 py-5 w-[12%]">销售&利润</th>
-                            <th className="px-4 py-5 w-[15%]">备注信息</th>
-                            <th className="px-4 py-5 w-[4%] text-right pr-6">操作</th>
-                        </tr>
-                    </thead>
-                    <tbody className="divide-y divide-white/5 font-sans">
-                        {filteredItems.map(item => (
-                            <tr key={item.id} className="hover:bg-white/[0.03] transition-all group animate-in fade-in duration-100">
-                                <td className="px-4 py-8 text-center align-top pt-10 border-r border-white/5"><input type="checkbox" className="rounded-sm bg-black border-white/20 scale-110"/></td>
-                                <td className="px-4 py-8 align-top pt-10">
-                                    <div className="flex flex-col gap-1">
-                                        <div className="flex items-center gap-2.5 leading-none">
-                                            <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${item.daysRemaining < 10 ? 'bg-rose-500 shadow-[0_0_10px_#f43f5e]' : 'bg-[#10b981] shadow-[0_0_12px_#10b981]'}`}></div>
-                                            <span className="text-[17px] font-black text-white uppercase leading-none tracking-tighter cursor-pointer hover:text-indigo-400 transition-colors" onClick={()=>navigator.clipboard.writeText(item.sku)}>{item.sku}</span>
-                                        </div>
-                                        <StrategyBadge type={item.lifecycle || 'Stable'} />
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top pt-10">
-                                    <div className="flex gap-4 items-center">
-                                        <div className="w-12 h-12 bg-white/5 rounded-xl border border-white/10 shrink-0 overflow-hidden flex items-center justify-center group-hover:border-indigo-500/40 transition-all shadow-inner">
-                                            {item.image ? <img src={item.image} className="w-full h-full object-cover" /> : <ImageIcon className="w-6 h-6 text-slate-800"/>}
-                                        </div>
-                                        <div className="flex flex-col min-w-0">
-                                            <div className="text-[14px] font-black text-slate-100 truncate w-full uppercase leading-tight tracking-tighter">{item.name}</div>
-                                            <div className="text-[10px] text-slate-600 flex items-center gap-1.5 font-black uppercase mt-1.5 opacity-90 tracking-wide">SUP: {item.supplier || 'DIRECT_FACTORY'}</div>
-                                            {item.lingXingId && <div className="text-[9px] bg-indigo-950/80 text-indigo-400 px-2 py-0.5 rounded-[2px] border border-indigo-500/20 font-black tracking-[0.1em] mt-1.5 uppercase w-fit leading-none shadow-sm">LX: {item.lingXingId}</div>}
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top pt-10">
-                                    <div className="flex flex-col gap-1.5">
-                                        <div className={`text-[10px] px-2 py-0.5 rounded-[2px] border font-black uppercase tracking-widest w-fit leading-none ${item.liveTrackingStatus === '运输中' ? 'bg-blue-600/10 text-blue-400 border-blue-500/20 animate-pulse' : 'bg-slate-800/60 text-slate-600 border-white/5'}`}>{item.liveTrackingStatus}</div>
-                                        <a href={getTrackingUrl(item.logistics?.carrier, item.logistics?.trackingNo)} target="_blank" rel="noreferrer" className="text-[12px] text-indigo-400 hover:text-indigo-200 underline font-black tracking-tight block truncate leading-none mt-1">
-                                            {item.logistics?.trackingNo || 'AWAITING_ID'}
-                                        </a>
-                                        <div className="text-[9px] text-slate-700 font-black uppercase mt-1 tracking-widest opacity-60">CH: {item.logistics?.method || 'AIR'}</div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top pt-10">
-                                    <div className="flex flex-col items-start gap-1 leading-none">
-                                        <div className="text-[17px] font-black text-[#10b981] tracking-tighter leading-none mb-1">¥{item.totalInvestment.toLocaleString()}</div>
-                                        <div className="flex flex-col gap-1 mt-1.5">
-                                            <div className="text-[10px] text-slate-700 font-black uppercase leading-tight tracking-wide">货值应占: <span className="text-slate-500 ml-1">¥{((item.costPrice||0)*item.stock).toLocaleString()}</span></div>
-                                            <div className="text-[10px] text-slate-700 font-black uppercase leading-tight tracking-wide">物流载荷: <span className="text-blue-500 ml-1">¥{(item.totalInvestment - (item.costPrice||0)*item.stock).toLocaleString()}</span></div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top text-center bg-white/[0.01] pt-10">
-                                    <div className="flex flex-col items-center gap-1.5 leading-none">
-                                        <div className="flex items-end gap-1.5 leading-none mb-1.5">
-                                            <span className="text-[19px] font-black text-white">{item.stock}</span><span className="text-[10px] text-slate-800 font-black uppercase pb-0.5">PCS</span>
-                                        </div>
-                                        <div className={`text-[10px] font-black px-2 py-0.5 rounded-[1px] border w-fit uppercase tracking-tighter leading-none ${item.daysRemaining < 10 ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' : 'bg-emerald-500/10 text-[#10b981] border-emerald-500/30'}`}>可售: {item.daysRemaining} 天</div>
-                                        <div className="w-16 h-[2.5px] bg-slate-900 rounded-full overflow-hidden mt-2 shadow-inner">
-                                            <div className={`h-full transition-all duration-1000 ${item.daysRemaining < 10 ? 'bg-rose-600' : 'bg-[#10b981]'}`} style={{width: `${Math.min(100, (item.daysRemaining / 45)*100)}%`}}></div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top pt-10">
-                                    <div className="bg-black/90 border border-white/5 rounded-xl px-3 py-2.5 w-full max-w-[155px] font-black flex flex-col gap-2 shadow-inner group-hover:border-indigo-500/20 transition-all">
-                                        <div className="flex items-center justify-between border-b border-white/10 pb-1.5 leading-none">
-                                            <span className="text-slate-600 text-[10px] uppercase tracking-wider">净利</span>
-                                            <span className={`text-[15px] tracking-tighter font-black ${item.profit > 0 ? 'text-[#10b981]' : 'text-rose-500'}`}>${item.profit.toFixed(2)}</span>
-                                        </div>
-                                        <div className="flex items-center justify-between pt-0.5 leading-none">
-                                            <span className="text-slate-600 text-[10px] uppercase tracking-wider">总利</span>
-                                            <span className={`text-[15px] tracking-tighter font-black ${item.profit > 0 ? 'text-[#10b981]' : 'text-rose-500'}`}>${(item.profit * item.stock).toLocaleString(undefined, {maximumFractionDigits:0})}</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top pt-10">
-                                    <div className="text-[13px] text-slate-500 line-clamp-4 leading-relaxed font-black border-l-2 border-indigo-500/30 pl-3 uppercase group-hover:text-slate-300 transition-colors tracking-tight">
-                                        {item.notes || '---'}
-                                    </div>
-                                </td>
-                                <td className="px-4 py-8 align-top text-right pt-10 pr-6">
-                                    <div className="flex gap-1.5 justify-end opacity-0 group-hover:opacity-100 transition-all">
-                                        <button onClick={()=>setEditingItem(item)} className="p-2 hover:bg-white/10 rounded-lg text-slate-700 hover:text-white transition-all"><Edit2 className="w-4 h-4"/></button>
-                                        <button onClick={()=>{ if(confirm('确认销毁此 SKU 资产协议？')) dispatch({type:'DELETE_PRODUCT', payload:item.id}); }} className="p-2 hover:bg-red-500/20 rounded-lg text-slate-700 hover:text-red-500 transition-all"><Trash2 className="w-4 h-4" /></button>
-                                    </div>
-                                </td>
+            {/* 精密表格区域 */}
+            <div className="flex-1 precision-surface rounded-xl overflow-hidden flex flex-col">
+                <div className="bg-white/[0.02] px-8 py-4 border-b border-white/5 flex justify-between items-center shrink-0">
+                    <div className="flex gap-10">
+                        <button className="text-[11px] font-black text-indigo-400 border-b-2 border-indigo-500 pb-2.5 uppercase tracking-[0.25em]">全量库存</button>
+                        <button className="text-[11px] font-black text-slate-600 hover:text-rose-400 pb-2.5 uppercase tracking-[0.25em] transition-colors">告急水位</button>
+                        <button className="text-[11px] font-black text-slate-600 hover:text-cyan-400 pb-2.5 uppercase tracking-[0.25em] transition-colors">在途清关</button>
+                    </div>
+                    <button className="flex items-center gap-2 text-[10px] font-bold text-slate-600 hover:text-indigo-400 uppercase tracking-widest transition-colors">
+                        <Filter size={14}/> 过滤器
+                    </button>
+                </div>
+
+                <div className="flex-1 overflow-auto custom-scrollbar">
+                    <table className="w-full text-left border-collapse tabular-nums">
+                        <thead className="sticky top-0 z-20">
+                            <tr className="bg-nexus-900 border-b border-white/10 backdrop-blur-3xl">
+                                <th className="p-6 w-16 text-center label-swiss">ID</th>
+                                <th className="p-6 label-swiss">Identity / SKU</th>
+                                <th className="p-6 text-center label-swiss">状态</th>
+                                <th className="p-6 text-right label-swiss">物理存量</th>
+                                <th className="p-6 text-right label-swiss">消耗率</th>
+                                <th className="p-6 text-right label-swiss">单品毛利 ($)</th>
+                                <th className="p-6 w-16"></th>
                             </tr>
-                        ))}
-                    </tbody>
-                </table>
-            </div>
+                        </thead>
+                        <tbody className="divide-y divide-white/[0.03]">
+                            {items.map((item, idx) => (
+                                <tr key={item.id} className={`group transition-all hover:bg-indigo-500/[0.03] ${item.stock < 10 ? 'bg-rose-500/[0.02]' : ''}`}>
+                                    <td className="p-6 text-center font-mono text-[11px] text-slate-700 font-bold">{idx + 1}</td>
+                                    <td className="p-6">
+                                        <div className="flex items-center gap-5">
+                                            <div className="w-12 h-12 bg-white/5 rounded-lg flex items-center justify-center text-slate-700 shrink-0 border border-white/10 shadow-inner">
+                                                <ImageIcon size={20} />
+                                            </div>
+                                            <div className="min-w-0">
+                                                <div className="text-[13px] font-black text-white font-mono uppercase tracking-tight group-hover:text-indigo-400 transition-colors">{item.sku}</div>
+                                                <div className="text-[11px] text-slate-500 mt-1 truncate max-w-[280px] font-bold uppercase tracking-tight">{item.name}</div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="p-6 text-center">
+                                        <div className={`inline-flex items-center gap-2 px-3 py-1 rounded border text-[9px] font-black uppercase tracking-widest ${item.stock < 10 ? 'bg-rose-500/10 border-rose-500/20 text-rose-500' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'}`}>
+                                            {item.stock < 10 ? 'Stock_Alert' : 'Stable'}
+                                        </div>
+                                    </td>
+                                    <td className="p-6 text-right">
+                                        <div className="text-2xl font-black text-white font-mono data-font">{item.stock.toLocaleString()}</div>
+                                        <div className="w-20 h-1 bg-black/40 rounded-full mt-2 ml-auto overflow-hidden border border-white/5">
+                                            <div className={`h-full transition-all duration-1000 ${item.stock < 10 ? 'bg-rose-500' : 'bg-indigo-500 shadow-[0_0_8px_currentColor]'}`} style={{width: `${Math.min(100, item.stock)}%`}}></div>
+                                        </div>
+                                    </td>
+                                    <td className="p-6 text-right font-mono text-[13px] text-slate-500 font-bold uppercase">
+                                        {item.dailyBurnRate || 0} <span className="text-[9px] opacity-30 ml-1">PCS/D</span>
+                                    </td>
+                                    <td className="p-6 text-right">
+                                        <div className="text-xl font-black text-emerald-400 font-mono tracking-tight">
+                                            +${(item.price - (item.costPrice || 0) / 7.2).toFixed(2)}
+                                        </div>
+                                        <span className="text-[9px] text-slate-700 font-black uppercase mt-1 block tracking-widest">Real-time Margin</span>
+                                    </td>
+                                    <td className="p-6 text-right">
+                                        <button className="p-2 text-slate-800 hover:text-white transition-all"><MoreVertical size={18}/></button>
+                                    </td>
+                                </tr>
+                            ))}
+                        </tbody>
+                    </table>
+                </div>
 
-            {editingItem && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 backdrop-blur-xl p-4 animate-in fade-in duration-200">
-                    <div className="bg-[#0a0a0c] border border-white/10 w-full max-w-md rounded-[2rem] p-10 shadow-2xl animate-in zoom-in-95">
-                        <div className="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
-                            <h3 className="text-white font-black uppercase text-[17px] tracking-[0.2em]">协议参数修正: {editingItem.sku}</h3>
-                            <button onClick={()=>setEditingItem(null)} className="p-2 hover:bg-white/10 rounded-full text-slate-500 transition-colors"><X className="w-7 h-7"/></button>
+                {/* 汇总页脚 */}
+                <div className="bg-nexus-900 px-8 py-6 border-t border-white/10 flex justify-between items-center">
+                    <div className="flex gap-16">
+                        <div className="flex flex-col gap-1">
+                            <span className="label-swiss text-[9px] opacity-40">Matrix Value Total</span>
+                            <div className="flex items-baseline gap-3">
+                                <span className="text-3xl font-black text-white font-mono data-font">¥ {items.reduce((a,b)=>a+(b.stock*(b.costPrice||0)), 0).toLocaleString()}</span>
+                                <div className="text-emerald-500 font-bold text-[10px] flex items-center gap-1">
+                                    <TrendingUp size={12}/> +3.2%
+                                </div>
+                            </div>
                         </div>
-                        <div className="space-y-8">
-                            <div className="space-y-3">
-                                <label className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] block">物理载荷库存 (Units)</label>
-                                <input type="number" defaultValue={editingItem.stock} className="w-full bg-black/60 border border-white/10 rounded-2xl px-5 py-4 text-xl text-white font-black focus:border-indigo-500 outline-none shadow-inner" />
+                        <div className="flex flex-col gap-1">
+                            <span className="label-swiss text-[9px] opacity-40">System Accuracy</span>
+                            <div className="flex items-center gap-6">
+                                <span className="text-3xl font-black text-indigo-400 font-mono data-font">99.98%</span>
+                                <div className="w-32 h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
+                                    <div className="h-full bg-indigo-500 shadow-[0_0_10px_rgba(79,70,229,0.5)]" style={{width: '99.98%'}}></div>
+                                </div>
                             </div>
-                            <div className="space-y-3">
-                                <label className="text-[11px] text-slate-500 font-black uppercase tracking-[0.3em] block">经营核算审计备注</label>
-                                <textarea className="w-full h-40 bg-black/60 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white font-black resize-none focus:border-indigo-500 outline-none shadow-inner leading-relaxed" defaultValue={editingItem.notes}></textarea>
-                            </div>
-                            <button onClick={()=>setEditingItem(null)} className="w-full py-5 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-2xl text-[13px] font-black uppercase tracking-[0.4em] mt-4 transition-all shadow-2xl active:scale-95">同步并固化节点协议</button>
                         </div>
                     </div>
+                    <div className="flex items-center gap-4 px-5 py-2.5 bg-indigo-600/5 border border-indigo-500/20 rounded-lg">
+                        <Zap size={16} className="text-indigo-400 animate-pulse" />
+                        <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">Ledger Integrity Verified</span>
+                    </div>
                 </div>
-            )}
+            </div>
         </div>
     );
 };

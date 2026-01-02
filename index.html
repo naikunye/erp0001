@@ -1,48 +1,30 @@
-
 <!DOCTYPE html>
 <html lang="zh-CN" class="dark">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Tanxing OS | Quantum Edition</title>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>探行 OS | Intelligent Apple-Style ERP</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
       tailwind.config = {
         darkMode: 'class',
         theme: {
           extend: {
-            fontFamily: {
-              sans: ['"Inter"', 'sans-serif'],
-              mono: ['"JetBrains Mono"', 'monospace'],
+            fontFamily: { 
+              sans: ['"SF Pro Display"', '"SF Pro Text"', '"Inter"', 'system-ui', 'sans-serif'],
+              mono: ['"SF Mono"', '"Fira Code"', 'monospace']
             },
-            animation: {
-              'blob': 'blob-dance 25s infinite alternate',
-              'spin-slow': 'spin 12s linear infinite',
-              'scan': 'scan 3s linear infinite',
-              'pulse-glow': 'pulse-glow 4s infinite alternate',
-              'aurora': 'aurora 10s linear infinite',
-            },
-            keyframes: {
-              'blob-dance': {
-                '0%': { transform: 'translate(0px, 0px) scale(1) rotate(0deg)', borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%' },
-                '33%': { transform: 'translate(30px, -50px) scale(1.1) rotate(45deg)', borderRadius: '50% 50% 20% 80% / 20% 80% 20% 80%' },
-                '66%': { transform: 'translate(-20px, 20px) scale(0.9) rotate(-45deg)', borderRadius: '80% 20% 50% 50% / 50% 20% 80% 50%' },
-                '100%': { transform: 'translate(0px, 0px) scale(1) rotate(0deg)', borderRadius: '30% 70% 70% 30% / 30% 30% 70% 70%' },
-              },
-              'pulse-glow': {
-                '0%': { boxShadow: '0 0 10px rgba(var(--theme-rgb), 0.1), inset 0 0 5px rgba(var(--theme-rgb), 0.05)' },
-                '100%': { boxShadow: '0 0 25px rgba(var(--theme-rgb), 0.3), inset 0 0 15px rgba(var(--theme-rgb), 0.15)' }
-              },
-              'aurora': {
-                '0%': { backgroundPosition: '0% 50%' },
-                '50%': { backgroundPosition: '100% 50%' },
-                '100%': { backgroundPosition: '0% 50%' }
-              },
-              scan: {
-                '0%': { transform: 'translateY(-100%)' },
-                '100%': { transform: 'translateY(400%)' }
+            colors: {
+              ios: {
+                blue: '#007AFF',
+                purple: '#AF52DE',
+                red: '#FF3B30',
+                orange: '#FF9500',
+                green: '#34C759',
+                gray: '#8E8E93',
+                bg: '#000000',
+                surface: 'rgba(28, 28, 30, 0.4)'
               }
             }
           }
@@ -50,152 +32,155 @@
       }
     </script>
     <style>
-      /* --- 多维度主题系统核心变量 --- */
-      
-      /* 默认: Quantum (量子深邃) */
-      .theme-quantum {
-        --theme-primary: #6366f1;
-        --theme-rgb: 99, 102, 241;
-        --glass-bg: rgba(10, 10, 15, 0.75);
-        --blob-1: #312e81;
-        --blob-2: #1e1b4b;
-        --blob-3: #4338ca;
-        --bg-main: #02040a;
-      }
-
-      /* Cyberpunk (赛博霓虹) */
-      .theme-cyber {
-        --theme-primary: #ff007f;
-        --theme-rgb: 255, 0, 127;
-        --glass-bg: rgba(15, 5, 20, 0.8);
-        --blob-1: #5a002d;
-        --blob-2: #001a1a;
-        --blob-3: #2d005a;
-        --bg-main: #05010a;
-      }
-
-      /* Emerald (翡翠矩阵) */
-      .theme-emerald {
-        --theme-primary: #10b981;
-        --theme-rgb: 16, 185, 129;
-        --glass-bg: rgba(5, 15, 10, 0.75);
-        --blob-1: #064e3b;
-        --blob-2: #022c22;
-        --blob-3: #059669;
-        --bg-main: #010503;
-      }
-
-      /* Amber (余晖落日) */
-      .theme-amber {
-        --theme-primary: #f59e0b;
-        --theme-rgb: 245, 158, 11;
-        --glass-bg: rgba(15, 10, 5, 0.75);
-        --blob-1: #78350f;
-        --blob-2: #451a03;
-        --blob-3: #b45309;
-        --bg-main: #080401;
-      }
-
-      /* OLED (极致纯黑) */
-      .theme-oled {
-        --theme-primary: #94a3b8;
-        --theme-rgb: 148, 163, 184;
-        --glass-bg: rgba(0, 0, 0, 0.9);
-        --blob-1: #111;
-        --blob-2: #050505;
-        --blob-3: #1a1a1a;
-        --bg-main: #000000;
-      }
-
       :root {
-        --glass-border: rgba(255, 255, 255, 0.08);
-        --glass-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
+        --glass: rgba(255, 255, 255, 0.03);
+        --glass-border: 1px solid rgba(255, 255, 255, 0.08);
       }
 
-      body { 
-        height: 100%; 
-        overflow: hidden; 
-        -webkit-font-smoothing: antialiased; 
-        background-color: var(--bg-main); 
-        color: #f8fafc; 
-        transition: all 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+      html, body {
+        height: 100%;
+        margin: 0;
+        background-color: #000;
+        color: #fff;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
       }
 
-      *:focus { outline: none !important; }
+      #root { height: 100%; width: 100%; position: relative; z-index: 10; }
 
-      .ambient-bg {
-        position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; 
-        z-index: -1; overflow: hidden; 
-      }
-
-      .blob {
-        position: absolute;
-        filter: blur(100px);
-        opacity: 0.5;
-        transition: all 1.5s cubic-bezier(0.4, 0, 0.2, 1);
-        will-change: transform, border-radius;
-      }
-
-      .blob-1 { top: -10%; left: -5%; width: 50vw; height: 50vw; background: var(--blob-1); animation: blob-dance 20s infinite ease-in-out; }
-      .blob-2 { bottom: -10%; right: -5%; width: 55vw; height: 55vw; background: var(--blob-2); animation: blob-dance 25s infinite ease-in-out reverse; }
-      .blob-3 { top: 40%; left: 30%; width: 30vw; height: 30vw; background: var(--blob-3); animation: blob-dance 18s infinite ease-in-out alternate; }
-
-      .ios-glass-panel {
-        background: var(--glass-bg);
-        border: 1px solid var(--glass-border);
-        backdrop-filter: blur(45px) saturate(210%) contrast(98%);
-        -webkit-backdrop-filter: blur(45px) saturate(210%) contrast(98%);
-        box-shadow: var(--glass-shadow);
-      }
-
-      .ios-glass-card {
-        background: rgba(255, 255, 255, 0.04);
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        backdrop-filter: blur(25px) saturate(180%);
-        -webkit-backdrop-filter: blur(25px) saturate(180%);
-        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
-      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius: 10px; }
-      
-      .ambient-grid {
-        position: fixed; inset: 0;
-        background-image: linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
-        background-size: 60px 60px;
-        z-index: -1;
+      /* Apple Dynamic Background */
+      .apple-aurora {
+        position: fixed;
+        inset: 0;
+        background: radial-gradient(circle at 0% 0%, rgba(88, 86, 214, 0.15) 0%, transparent 45%),
+                    radial-gradient(circle at 100% 0%, rgba(0, 122, 255, 0.1) 0%, transparent 45%),
+                    radial-gradient(circle at 50% 100%, rgba(255, 45, 85, 0.05) 0%, transparent 60%);
+        filter: blur(80px);
+        z-index: 0;
         pointer-events: none;
-        opacity: 0.3;
+      }
+
+      /* Premium Glassmorphism - Base */
+      .ios-glass {
+        background: rgba(30, 30, 35, 0.5);
+        backdrop-filter: blur(40px) saturate(200%);
+        -webkit-backdrop-filter: blur(40px) saturate(200%);
+        border: var(--glass-border);
+        box-shadow: inset 0 1px 1px rgba(255,255,255,0.05), 0 20px 40px rgba(0,0,0,0.3);
       }
       
-      /* 为主题色提供辅助工具类 */
-      .bg-theme-main { background-color: var(--theme-primary); }
-      .text-theme-main { color: var(--theme-primary); }
-      .border-theme-main { border-color: var(--theme-primary); }
+      .ios-glass-card {
+        background: rgba(30, 30, 35, 0.3);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.05);
+        border-radius: 24px;
+      }
+      
+      .ios-glass-panel {
+        background: rgba(20, 20, 25, 0.4);
+        backdrop-filter: blur(30px);
+        -webkit-backdrop-filter: blur(30px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+
+      /* Compatibility Classes for Dashboard Components */
+      .glass-card {
+        background: rgba(30, 30, 35, 0.6);
+        backdrop-filter: blur(25px);
+        -webkit-backdrop-filter: blur(25px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+      }
+      .rounded-apple { border-radius: 32px; }
+      .rounded-apple-inner { border-radius: 20px; }
+      .data-font { font-family: "SF Mono", "Fira Code", monospace; letter-spacing: -0.05em; }
+
+      /* Apple Vibrancy Effects */
+      .apple-vibrancy {
+        background: rgba(30, 30, 35, 0.7);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .apple-vibrancy-regular {
+        background: rgba(20, 20, 22, 0.7);
+        backdrop-filter: blur(25px) saturate(200%);
+        -webkit-backdrop-filter: blur(25px) saturate(200%);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .apple-vibrancy-thin {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+      }
+      .apple-platter {
+        background: #1c1c1e;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+
+      /* Apple Squircle Design */
+      .squircle { border-radius: 24px; }
+      .squircle-lg { border-radius: 38px; }
+      .squircle-large { border-radius: 32px; }
+      .squircle-pro { border-radius: 20px; }
+      .squircle-xl { border-radius: 48px; }
+      
+      /* Utilities */
+      .border-hairline { border: 0.5px solid rgba(255, 255, 255, 0.1); }
+      
+      .apple-btn-compact {
+        padding: 6px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+        font-weight: 600;
+        transition: all 0.2s;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .apple-btn-compact:active { transform: scale(0.95); opacity: 0.8; }
+
+      /* Interactions */
+      .apple-tap { transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
+      .apple-tap:active { transform: scale(0.96); opacity: 0.8; }
+      
+      /* Animations */
+      @keyframes springIn {
+        0% { opacity: 0; transform: scale(0.9) translateY(10px); }
+        100% { opacity: 1; transform: scale(1) translateY(0); }
+      }
+      .spring-in { animation: springIn 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; opacity: 0; }
+      
+      .animate-spin-slow { animation: spin 8s linear infinite; }
+      @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+      /* Scrollbars */
+      .no-scrollbar::-webkit-scrollbar { display: none; }
+      .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+      
+      .custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+      .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
     </style>
-  <script type="importmap">
+    <script type="importmap">
 {
   "imports": {
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom": "https://esm.sh/react-dom@^19.2.3",
+    "react": "https://esm.sh/react@18.3.1",
+    "react-dom/client": "https://esm.sh/react-dom@18.3.1/client",
+    "react-dom": "https://esm.sh/react-dom@18.3.1",
+    "lucide-react": "https://esm.sh/lucide-react@0.330.0",
+    "recharts": "https://esm.sh/recharts@2.12.0?deps=react@18.3.1,react-dom@18.3.1",
+    "@google/genai": "https://esm.sh/@google/genai@0.1.0",
     "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "pocketbase": "https://esm.sh/pocketbase@0.21.3"
+    "react/": "https://esm.sh/react@^19.2.3/"
   }
 }
 </script>
-</head>
-  <body class="theme-quantum"> 
-    <div class="ambient-bg">
-      <div class="blob blob-1"></div>
-      <div class="blob blob-2"></div>
-      <div class="blob blob-3"></div>
-      <div class="ambient-grid"></div>
-    </div>
-    <div id="root" class="h-full w-full relative z-10 antialiased selection:bg-indigo-500/30"></div>
+  </head>
+  <body>
+    <div class="apple-aurora"></div>
+    <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
