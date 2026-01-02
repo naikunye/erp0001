@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Bell, Menu, Cloud, RefreshCw, Globe, WifiOff, Loader2, Zap, CheckCircle2, Radio, ShieldAlert, CloudDownload, Users2, ShieldCheck, Menu as MenuIcon } from 'lucide-react';
+import { Bell, Menu, Cloud, RefreshCw, Globe, WifiOff, Loader2, Zap, CheckCircle2, Radio, ShieldAlert, DownloadCloud, Users2, ShieldCheck, Menu as MenuIcon } from 'lucide-react';
 import { useTanxing, SESSION_ID } from '../context/TanxingContext';
 
 interface HeaderProps {
@@ -104,7 +104,7 @@ const Header: React.FC<HeaderProps> = ({ title }) => {
                     className={`p-2 rounded-lg transition-all hover:bg-white/10 ${isPulling ? 'text-indigo-400 animate-spin' : 'text-slate-400'}`}
                     title="强制从云端对齐最新数据"
                 >
-                    <CloudDownload className="w-4.5 h-4.5" />
+                    <DownloadCloud className="w-4.5 h-4.5" />
                 </button>
                 <div 
                     className={`p-2 rounded-lg transition-all ${state.saveStatus === 'dirty' ? 'text-indigo-400' : 'text-emerald-500'}`}
